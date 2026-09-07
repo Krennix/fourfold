@@ -9,6 +9,7 @@ import { MatrixProvider } from './state/MatrixContext';
 import { GoogleAuthProvider } from './state/GoogleAuthContext';
 import { CalendarProvider } from './state/CalendarContext';
 import { CountdownsProvider } from './state/CountdownsContext';
+import { PomodoroProvider } from './state/PomodoroContext';
 import { HomePage } from './pages/Home';
 import { MatrixPage } from './pages/Matrix';
 import { HabitsPage } from './pages/Habits';
@@ -29,6 +30,7 @@ function App() {
           <GoogleAuthProvider>
           <CalendarProvider>
             <CountdownsProvider>
+            <PomodoroProvider>
               <BrowserRouter>
                 <Sidebar />
                 <main className="content">
@@ -44,6 +46,7 @@ function App() {
                   </Routes>
                 </main>
               </BrowserRouter>
+            </PomodoroProvider>
             </CountdownsProvider>
           </CalendarProvider>
           </GoogleAuthProvider>

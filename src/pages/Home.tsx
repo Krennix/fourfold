@@ -9,6 +9,7 @@ import { useHabits } from '../state/HabitsContext';
 import { useMatrix, type QuadKey } from '../state/MatrixContext';
 import { useCalendarEvents } from '../state/CalendarContext';
 import { useCountdowns, type Countdown } from '../state/CountdownsContext';
+import { usePomodoro, POMODORO_MODES, POMODORO_MODE_LABELS } from '../state/PomodoroContext';
 import './Home.css';
 import './Countdowns.css';
 
@@ -39,12 +40,19 @@ export function HomePage() {
   const { tasks } = useMatrix();
   const { eventsByDate } = useCalendarEvents();
   const { countdowns, addCountdown, updateCountdown, removeCountdown } = useCountdowns();
+  const { mode: pomoMode, secondsLeft: pomoSecondsLeft, isRunning: pomoRunning, start: startPomodoro, toggleRun: togglePomodoro } = usePomodoro();
   const [cdDialogState, setCdDialogState] = useState<'add' | Countdown | null>(null);
   const [cdMenu, setCdMenu] = useState<{ x: number; y: number; countdown: Countdown } | null>(null);
 
   const doneCount = habits.filter((h) => h.done).length;
   const pct = habits.length ? Math.round((doneCount / habits.length) * 100) : 0;
   const todaysEvents = eventsByDate(todayKey);
+
+  const pomoMm = Math.floor(pomoSecondsLeft / 60);
+  const pomoSs = pomoSecondsLeft % 60;
+  const pomoTimeLabel = `${pomoMm}:${pomoSs < 10 ? '0' : ''}${pomoSs}`;
+  const pomoFrac = pomoSecondsLeft / POMODORO_MODES[pomoMode];
+  const pomoCircumference = 2 * Math.PI * 36;
 
   const upcomingCountdowns = [...countdowns]
     .sort((a, b) => daysUntilNext(a.month, a.day) - daysUntilNext(b.month, b.day))
@@ -80,7 +88,7 @@ export function HomePage() {
         kicker={todayLabel}
         title={`Good ${dayPart}`}
         actions={
-          <button className="btn btn-primary" type="button">
+          <button className="btn btn-primary" type="button" onClick={startPomodoro}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2h4" /><path d="M12 14v-4" /><circle cx="12" cy="14" r="8" /></svg>
             Start Pomodoro
           </button>
@@ -89,6 +97,42 @@ export function HomePage() {
 
       <div className="home-grid">
         <div className="home-col">
+          <Widget>
+            <div className="widget-head">
+              <h4>Pomodoro</h4>
+              <Link className="btn btn-ghost" style={{ fontSize: 12 }} to="/pomodoro">
+                Open timer
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+              </Link>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <div style={{ position: 'relative', width: 88, height: 88, flex: 'none' }}>
+                <svg viewBox="0 0 88 88" width="88" height="88">
+                  <circle cx="44" cy="44" r="36" fill="none" stroke="var(--color-neutral-200)" strokeWidth="8" />
+                  <circle
+                    cx="44" cy="44" r="36" fill="none" stroke="var(--color-accent)" strokeWidth="8"
+                    strokeLinecap="round" transform="rotate(-90 44 44)"
+                    strokeDasharray={`${pomoCircumference} ${pomoCircumference}`}
+                    strokeDashoffset={pomoCircumference * (1 - pomoFrac)}
+                  />
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600 }}>
+                  {pomoTimeLabel}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
+                <span className="text-muted" style={{ fontSize: 12 }}>{POMODORO_MODE_LABELS[pomoMode]}</span>
+                <button className="btn btn-secondary" type="button" onClick={pomoRunning || pomoSecondsLeft !== POMODORO_MODES[pomoMode] ? togglePomodoro : startPomodoro} style={{ alignSelf: 'flex-start' }}>
+                  {pomoRunning ? (
+                    <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="5" width="4" height="14" /><rect x="14" y="5" width="4" height="14" /></svg>Pause</>
+                  ) : (
+                    <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m7 4 13 8-13 8z" /></svg>{pomoSecondsLeft !== POMODORO_MODES[pomoMode] ? 'Resume' : 'Start'}</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </Widget>
+
           <Widget>
             <div className="widget-head">
               <h4>Priority Matrix</h4>

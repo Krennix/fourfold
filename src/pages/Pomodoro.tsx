@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Widget } from '../components/Widget';
+import { usePomodoro, POMODORO_MODES as MODES, POMODORO_MODE_LABELS as MODE_LABELS, type PomodoroMode as Mode } from '../state/PomodoroContext';
 import './Pomodoro.css';
-
-type Mode = 'focus' | 'short' | 'long';
-
-const MODES: Record<Mode, number> = { focus: 25 * 60, short: 5 * 60, long: 15 * 60 };
-const MODE_LABELS: Record<Mode, string> = { focus: 'Focus', short: 'Short break', long: 'Long break' };
 
 const SOUND_DEFS = [
   { key: 'rain', label: 'Rain' },
@@ -188,20 +184,15 @@ function SoundIcon({ soundKey }: { soundKey: SoundKey }) {
 }
 
 export function PomodoroPage() {
-  const [mode, setMode] = useState<Mode>('focus');
-  const [secondsLeft, setSecondsLeft] = useState(MODES.focus);
-  const [isRunning, setIsRunning] = useState(false);
-  const [sessionsDone, setSessionsDone] = useState(0);
+  const { mode, secondsLeft, isRunning, sessionsDone, toggleRun, reset, selectMode } = usePomodoro();
   const [activeSound, setActiveSound] = useState<SoundKey | null>(null);
   const [volume, setVolume] = useState(60);
-  const timerRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
   const soundHandleRef = useRef<SoundHandle | null>(null);
 
   useEffect(() => {
     return () => {
-      if (timerRef.current) window.clearInterval(timerRef.current);
       soundHandleRef.current?.stop();
       audioCtxRef.current?.close();
     };
@@ -234,48 +225,6 @@ export function PomodoroPage() {
   useEffect(() => {
     if (masterGainRef.current) masterGainRef.current.gain.value = volume / 100;
   }, [volume]);
-
-  const tick = () => {
-    setSecondsLeft((s) => {
-      if (s <= 1) {
-        if (timerRef.current) window.clearInterval(timerRef.current);
-        timerRef.current = null;
-        setIsRunning(false);
-        setMode((m) => {
-          if (m === 'focus') setSessionsDone((n) => n + 1);
-          return m;
-        });
-        return 0;
-      }
-      return s - 1;
-    });
-  };
-
-  const toggleRun = () => {
-    setIsRunning((running) => {
-      const next = !running;
-      if (next) {
-        timerRef.current = window.setInterval(tick, 1000);
-      } else if (timerRef.current) {
-        window.clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      return next;
-    });
-  };
-
-  const reset = () => {
-    if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null; }
-    setSecondsLeft(MODES[mode]);
-    setIsRunning(false);
-  };
-
-  const selectMode = (m: Mode) => {
-    if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null; }
-    setMode(m);
-    setSecondsLeft(MODES[m]);
-    setIsRunning(false);
-  };
 
   const selectSound = (key: SoundKey) => {
     setActiveSound((s) => (s === key ? null : key));
