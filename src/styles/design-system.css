@@ -148,6 +148,7 @@ figcaption {
   border-radius: var(--radius-md);
 }
 .btn svg { display: block; }
+.btn { white-space: nowrap; flex: none; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-primary { background: var(--color-accent); color: var(--color-bg); }
 .btn-primary:hover { background: var(--color-accent-600); }

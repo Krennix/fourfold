@@ -1,0 +1,24 @@
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.dow {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent); text-align: left; padding: 2px 4px;
+}
+.day-cell {
+  min-height: 104px; border: 1px solid var(--color-divider); border-radius: var(--radius-sm);
+  padding: 6px; display: flex; flex-direction: column; gap: 4px; background: transparent;
+}
+.day-cell.blank { border-color: transparent; }
+.day-cell.today { border-color: var(--color-accent); border-width: 1.5px; }
+.day-num { font-family: var(--font-heading); font-size: 13px; font-weight: 600; }
+.day-cell.today .day-num { color: var(--color-accent-700); }
+.evt-chip {
+  font-size: 10.5px; padding: 2px 6px; border-radius: var(--radius-sm);
+  background: var(--color-accent-100); color: var(--color-accent-800);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 3px;
+}
+.evt-chip.google { background: var(--color-neutral-200); color: var(--color-neutral-800); }
+.evt-chip svg { width: 9px; height: 9px; flex: none; }

@@ -1,0 +1,47 @@
+.matrix-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+.matrix-grid .widget {
+  min-height: 280px;
+  position: relative;
+}
+
+.qhead { display: flex; align-items: center; gap: var(--space-2); }
+.qbadge {
+  width: 24px; height: 24px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-heading); font-weight: 600; font-size: 13px; flex: none;
+}
+.qlabel { font-family: var(--font-heading); font-weight: 600; font-size: 17px; }
+.qsub { font-size: 11px; color: color-mix(in srgb, var(--color-text) 55%, transparent); margin-left: auto; }
+
+.task-row {
+  display: flex; align-items: center; gap: var(--space-2); padding: 6px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+.tcheck {
+  width: 19px; height: 19px; flex: none;
+  border: 1.5px solid var(--color-divider); border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.tcheck.done { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
+.tcheck svg { width: 12px; height: 12px; }
+.ttitle { flex: 1; min-width: 0; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ttitle.done { text-decoration: line-through; color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+.tmeta { display: flex; align-items: center; gap: 6px; flex: none; }
+
+.completed-head {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 12px; font-weight: 600; color: color-mix(in srgb, var(--color-text) 60%, transparent); padding: 4px 0;
+}
+.completed-head svg { width: 13px; height: 13px; transition: transform 0.15s; }
+
+.empty-msg { font-size: 12px; color: color-mix(in srgb, var(--color-text) 40%, transparent); text-align: center; padding: var(--space-4) 0; }
+.qaddbtn { margin-top: auto; align-self: flex-start; font-size: 12px; }
+
+@media (max-width: 900px) {
+  .matrix-grid { grid-template-columns: 1fr; }
+}
