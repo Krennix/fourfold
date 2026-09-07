@@ -2,7 +2,24 @@ import { useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, WEEKDAYS, type Weekday, type SchoolClass, type Preset } from '../state/SchoolContext';
 import { useGoogleAuth } from '../state/GoogleAuthContext';
+import { useAuth } from '../state/AuthContext';
 import './Settings.css';
+
+function AccessSettings() {
+  const { email, logout } = useAuth();
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Access</h4>
+        <button className="btn btn-ghost" type="button" onClick={logout}>Sign out</button>
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Signed in as <strong>{email}</strong>. To let someone else in, add their Google account email to{' '}
+        <code>VITE_ALLOWED_EMAILS</code> and redeploy.
+      </p>
+    </Widget>
+  );
+}
 
 function GoogleCalendarSettings() {
   const { status, email, error, connect, disconnect } = useGoogleAuth();
@@ -149,6 +166,7 @@ export function SettingsPage() {
     <div className="page">
       <PageHeader kicker="Preferences" title="Settings" />
 
+      <AccessSettings />
       <GoogleCalendarSettings />
 
       <Widget>

@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
+import { LoginGate } from './components/LoginGate';
+import { AuthProvider } from './state/AuthContext';
 import { ThemeProvider } from './state/ThemeContext';
 import { SchoolProvider } from './state/SchoolContext';
 import { HabitsProvider } from './state/HabitsContext';
@@ -19,6 +21,8 @@ import { SettingsPage } from './pages/Settings';
 function App() {
   return (
     <ThemeProvider>
+    <AuthProvider>
+    <LoginGate>
     <SchoolProvider>
       <HabitsProvider>
         <MatrixProvider>
@@ -46,6 +50,8 @@ function App() {
         </MatrixProvider>
       </HabitsProvider>
     </SchoolProvider>
+    </LoginGate>
+    </AuthProvider>
     </ThemeProvider>
   );
 }
