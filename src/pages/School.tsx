@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, WEEKDAYS, type Weekday } from '../state/SchoolContext';
+import { fetchBellSchedule, isNoSchoolDay, isoToLocalHour, type BellSchedule } from '../lib/harkerBell';
 import './School.css';
 
 interface Homework {
@@ -55,6 +56,7 @@ export function SchoolPage() {
   const [openClassId, setOpenClassId] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [menuDate, setMenuDate] = useState<string | null>(null);
+  const [bellSchedules, setBellSchedules] = useState<Record<string, BellSchedule | null>>({});
 
   const titleRef = useRef<HTMLInputElement>(null);
   const dueRef = useRef<HTMLInputElement>(null);
@@ -75,25 +77,45 @@ export function SchoolPage() {
     if (dueRef.current) dueRef.current.value = '';
   };
 
-  const allTimes = [
-    ...classes.flatMap((c) => c.meetings.flatMap((m) => [m.start, m.end])),
-    ...presets.flatMap((p) => p.meetings.flatMap((m) => [m.start, m.end])),
-  ];
-  const START_HOUR = allTimes.length ? Math.max(SCHOOL_START, Math.min(...allTimes)) : SCHOOL_START;
-  const END_HOUR = allTimes.length ? Math.min(SCHOOL_END, Math.max(...allTimes)) : SCHOOL_END;
-  const totalHours = END_HOUR - START_HOUR;
-
-  const hourLabels: { h: number; label: string }[] = [];
-  for (let h = Math.ceil(START_HOUR); h < END_HOUR; h++) {
-    hourLabels.push({ h, label: h > 12 ? `${h - 12}pm` : h === 12 ? '12pm' : `${h}am` });
-  }
-
   const weekDates = WEEKDAYS.map((_, i) => {
     const d = new Date(weekStart);
     d.setDate(weekStart.getDate() + i);
     return d;
   });
   const today = new Date();
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(weekDates.map((d) => fetchBellSchedule(d).then((sched) => [dateKey(d), sched] as const).catch(() => [dateKey(d), null] as const)))
+      .then((entries) => {
+        if (cancelled) return;
+        setBellSchedules((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart]);
+
+  const bellHours = weekDates.flatMap((d) => {
+    const sched = bellSchedules[dateKey(d)];
+    if (!sched || isNoSchoolDay(sched)) return [];
+    return sched.schedule.flatMap((p) => [isoToLocalHour(p.start), isoToLocalHour(p.end)]);
+  });
+
+  const allTimes = [
+    ...classes.flatMap((c) => c.meetings.flatMap((m) => [m.start, m.end])),
+    ...presets.flatMap((p) => p.meetings.flatMap((m) => [m.start, m.end])),
+    ...bellHours,
+  ];
+  const START_HOUR = allTimes.length ? Math.min(SCHOOL_START, ...allTimes) : SCHOOL_START;
+  const END_HOUR = allTimes.length ? Math.max(SCHOOL_END, ...allTimes) : SCHOOL_END;
+  const totalHours = END_HOUR - START_HOUR;
+
+  const hourLabels: { h: number; label: string }[] = [];
+  for (let h = Math.ceil(START_HOUR); h < END_HOUR; h++) {
+    hourLabels.push({ h, label: h > 12 ? `${h - 12}pm` : h === 12 ? '12pm' : `${h}am` });
+  }
 
   const classById = Object.fromEntries(classes.map((c) => [c.id, c]));
 
@@ -129,7 +151,29 @@ export function SchoolPage() {
         };
       });
 
-    return { day, date, key, isOverridden: !!override, isSpecialNoSchool: override ? !presets.find((p) => p.id === override.presetId) : false, classes: positioned };
+    const bell = bellSchedules[key];
+    const bellNoSchool = bell ? isNoSchoolDay(bell) : false;
+    const bellPeriods = bell && !bellNoSchool
+      ? bell.schedule.map((p, idx) => {
+          const start = isoToLocalHour(p.start);
+          const end = isoToLocalHour(p.end);
+          return {
+            key: `${key}-bell-${idx}`,
+            name: p.name,
+            posStyle: { top: `${((start - START_HOUR) / totalHours) * 100}%`, height: `${((end - start) / totalHours) * 100}%` },
+          };
+        })
+      : [];
+
+    return {
+      day, date, key,
+      isOverridden: !!override,
+      isSpecialNoSchool: override ? !presets.find((p) => p.id === override.presetId) : false,
+      classes: positioned,
+      bell,
+      bellNoSchool,
+      bellPeriods,
+    };
   });
 
   const cls = classes.find((c) => c.id === openClassId);
@@ -189,6 +233,16 @@ export function SchoolPage() {
                   </div>
                 )}
               </div>
+              {col.bell && (
+                col.bellNoSchool ? (
+                  <span className="tag bell-badge bell-badge-off">{col.bell.name || 'No school'}</span>
+                ) : (
+                  <span className="tag bell-badge" title={col.bell.name}>
+                    {col.bell.code.trim() ? `${col.bell.code.trim()} Day` : 'Bell schedule'}
+                    {col.bell.variant ? ` · ${col.bell.name || col.bell.variant}` : ''}
+                  </span>
+                )
+              )}
             </div>
           ))}
           <div style={{ gridColumn: '1/2', position: 'relative', height: totalHours * 56 }}>
@@ -198,6 +252,11 @@ export function SchoolPage() {
           </div>
           {dayColumns.map((col) => (
             <div className="day-col" style={{ height: totalHours * 56 }} key={col.key}>
+              {col.bellPeriods.map((p) => (
+                <div className="bell-block" style={p.posStyle} key={p.key} title={p.name}>
+                  <span className="bb-name">{p.name}</span>
+                </div>
+              ))}
               {col.classes.map((c) => (
                 <div className="class-block" style={c.posStyle} onClick={() => setOpenClassId(c.classId)} key={`${col.key}-${c.classId}-${c.start}`}>
                   <span className="cb-name">{c.name}</span>

@@ -32,8 +32,22 @@
 }
 .day-menu-item:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
 .day-menu-divider { height: 1px; background: var(--color-divider); margin: 4px 0; }
+.bell-badge {
+  font-size: 9.5px; text-transform: none; letter-spacing: 0; padding: 1px 6px; border-radius: var(--radius-sm);
+  background: var(--color-neutral-200); color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bell-badge-off { background: var(--color-accent-100); color: var(--color-accent-800); }
 .time-label { font-size: 10.5px; color: color-mix(in srgb, var(--color-text) 45%, transparent); text-align: right; padding-right: 6px; padding-top: 2px; }
 .day-col { position: relative; border-left: 1px solid var(--color-divider); }
+.bell-block {
+  position: absolute; left: 0; right: 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-text) 12%, transparent);
+  padding: 1px 4px; overflow: hidden; pointer-events: none;
+}
+.bell-block .bb-name {
+  font-size: 9px; color: color-mix(in srgb, var(--color-text) 35%, transparent); text-transform: uppercase; letter-spacing: 0.03em;
+}
 .class-block {
   position: absolute; left: 2px; right: 2px;
   border: 1px solid var(--color-accent); background: var(--color-accent-100); color: var(--color-accent-800);
