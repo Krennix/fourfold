@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
-import { useSchool } from '../state/SchoolContext';
+import { useSchool, WEEKDAYS, type Weekday } from '../state/SchoolContext';
 import './School.css';
 
 interface Homework {
@@ -11,7 +11,6 @@ interface Homework {
   done: boolean;
 }
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const START_HOUR = 8;
 const END_HOUR = 18;
 const PRIORITY_LABEL: Record<Homework['priority'], string> = { high: 'High', med: 'Medium', low: 'Low' };
@@ -31,10 +30,29 @@ function fmtHour(h: number) {
   return `${hour12}:${mins}`;
 }
 
+function dateKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function mondayOf(d: Date) {
+  const date = new Date(d);
+  const dow = date.getDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function isSameDate(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 export function SchoolPage() {
-  const { classes } = useSchool();
+  const { classes, presets, overrides, setOverride } = useSchool();
   const [homework, setHomework] = useState(INITIAL_HOMEWORK);
   const [openClassId, setOpenClassId] = useState<string | null>(null);
+  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+  const [menuDate, setMenuDate] = useState<string | null>(null);
 
   const titleRef = useRef<HTMLInputElement>(null);
   const dueRef = useRef<HTMLInputElement>(null);
@@ -57,41 +75,116 @@ export function SchoolPage() {
 
   const hourLabels: string[] = [];
   for (let h = START_HOUR; h < END_HOUR; h++) hourLabels.push(h > 12 ? `${h - 12}pm` : h === 12 ? '12pm' : `${h}am`);
-
   const totalHours = END_HOUR - START_HOUR;
-  const dayColumns = DAYS.map((day) => {
-    const dayClasses = classes.filter((c) => c.days.includes(day)).map((c) => {
-      const topPct = ((c.start - START_HOUR) / totalHours) * 100;
-      const heightPct = ((c.end - c.start) / totalHours) * 100;
-      const hw = homework[c.id] || [];
+
+  const weekDates = WEEKDAYS.map((_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  });
+  const today = new Date();
+
+  const classById = Object.fromEntries(classes.map((c) => [c.id, c]));
+
+  const dayColumns = WEEKDAYS.map((day: Weekday, i) => {
+    const date = weekDates[i];
+    const key = dateKey(date);
+    const override = overrides[key];
+
+    let blocks: { classId: string; name: string; room: string; start: number; end: number }[];
+    if (override) {
+      const preset = presets.find((p) => p.id === override.presetId);
+      blocks = preset
+        ? preset.meetings.map((m) => {
+            const cls = classById[m.classId];
+            return { classId: m.classId, name: cls?.name ?? 'Unknown', room: cls?.room ?? '', start: m.start, end: m.end };
+          })
+        : [];
+    } else {
+      blocks = classes.flatMap((c) => c.meetings.filter((m) => m.day === day).map((m) => ({ classId: c.id, name: c.name, room: c.room, start: m.start, end: m.end })));
+    }
+
+    const positioned = blocks.map((b) => {
+      const topPct = ((b.start - START_HOUR) / totalHours) * 100;
+      const heightPct = ((b.end - b.start) / totalHours) * 100;
+      const hw = homework[b.classId] || [];
       return {
-        ...c,
-        time: `${fmtHour(c.start)}–${fmtHour(c.end)}`,
+        ...b,
+        time: `${fmtHour(b.start)}–${fmtHour(b.end)}`,
         posStyle: { top: `${topPct}%`, height: `${heightPct}%` },
         hasHomework: hw.some((h) => !h.done),
       };
     });
-    return { day, classes: dayClasses };
+
+    return { day, date, key, isOverridden: !!override, isSpecialNoSchool: override ? !presets.find((p) => p.id === override.presetId) : false, classes: positioned };
   });
 
   const cls = classes.find((c) => c.id === openClassId);
   const panelHomework = cls ? (homework[cls.id] || []) : [];
+
+  const weekLabel = `${weekDates[0].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${weekDates[4].toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+  const applyOverride = (dateKeys: string[], presetId: string | null) => {
+    setOverride(dateKeys, { presetId });
+    setMenuDate(null);
+  };
+  const clearOverride = (dateKeys: string[]) => {
+    setOverride(dateKeys, null);
+    setMenuDate(null);
+  };
 
   return (
     <div className="page">
       <PageHeader kicker="School" title="Class Schedule" actions={<span className="tag tag-outline">Fall term</span>} />
 
       <Widget>
+        <div className="widget-head" style={{ justifyContent: 'flex-start', gap: 'var(--space-3)' }}>
+          <button className="btn btn-icon" type="button" onClick={() => setWeekStart((w) => { const d = new Date(w); d.setDate(d.getDate() - 7); return d; })}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 6-6 6 6 6" /></svg>
+          </button>
+          <h3 style={{ minWidth: 220 }}>{weekLabel}</h3>
+          <button className="btn btn-icon" type="button" onClick={() => setWeekStart((w) => { const d = new Date(w); d.setDate(d.getDate() + 7); return d; })}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={() => setWeekStart(mondayOf(new Date()))} style={{ marginLeft: 'var(--space-2)' }}>This week</button>
+        </div>
+
         <div className="week-grid">
           <div />
-          {DAYS.map((d) => <div className="week-head" key={d}>{d}</div>)}
+          {dayColumns.map((col) => (
+            <div className="week-head-cell" key={col.key}>
+              <div className={`week-head${isSameDate(col.date, today) ? ' is-today' : ''}`}>
+                {col.day} <span className="week-head-date">{col.date.getDate()}</span>
+              </div>
+              <div className="day-menu-wrap">
+                <button
+                  className={`day-menu-btn${col.isOverridden ? ' active' : ''}`}
+                  type="button"
+                  onClick={() => setMenuDate(menuDate === col.key ? null : col.key)}
+                >
+                  {col.isOverridden ? (col.isSpecialNoSchool ? 'No school' : 'Special') : 'Normal'}
+                </button>
+                {menuDate === col.key && (
+                  <div className="day-menu">
+                    <button className="day-menu-item" type="button" onClick={() => clearOverride([col.key])}>Normal schedule</button>
+                    {presets.map((p) => (
+                      <button className="day-menu-item" type="button" key={p.id} onClick={() => applyOverride([col.key], p.id)}>{p.name}</button>
+                    ))}
+                    <button className="day-menu-item" type="button" onClick={() => applyOverride([col.key], null)}>No school</button>
+                    <div className="day-menu-divider" />
+                    <button className="day-menu-item" type="button" onClick={() => clearOverride(dayColumns.map((c) => c.key))}>Reset whole week</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
           <div style={{ gridColumn: '1/2', display: 'flex', flexDirection: 'column' }}>
             {hourLabels.map((h) => <div className="time-label" style={{ height: 56 }} key={h}>{h}</div>)}
           </div>
           {dayColumns.map((col) => (
-            <div className="day-col" key={col.day}>
+            <div className="day-col" key={col.key}>
               {col.classes.map((c) => (
-                <div className="class-block" style={c.posStyle} onClick={() => setOpenClassId(c.id)} key={c.id}>
+                <div className="class-block" style={c.posStyle} onClick={() => setOpenClassId(c.classId)} key={`${col.key}-${c.classId}-${c.start}`}>
                   <span className="cb-name">{c.name}</span>
                   <span className="cb-meta">{c.time} &middot; {c.room}</span>
                   {c.hasHomework && <span className="cb-hw" />}
@@ -110,7 +203,9 @@ export function SchoolPage() {
         <div className="dialog-backdrop" onClick={() => setOpenClassId(null)}>
           <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 'min(520px,100%)' }}>
             <div className="dialog-title">{cls.name}</div>
-            <div className="dialog-body" style={{ marginBottom: 4 }}>{fmtHour(cls.start)}&ndash;{fmtHour(cls.end)} &middot; {cls.room} &middot; {cls.days.join('/')}</div>
+            <div className="dialog-body" style={{ marginBottom: 4 }}>
+              {cls.room} &middot; {cls.meetings.map((m) => `${m.day} ${fmtHour(m.start)}–${fmtHour(m.end)}`).join(', ')}
+            </div>
 
             <h4 style={{ marginTop: 8 }}>Homework</h4>
             <div>
