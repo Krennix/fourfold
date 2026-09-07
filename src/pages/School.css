@@ -33,7 +33,7 @@
 .day-menu-item:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
 .day-menu-divider { height: 1px; background: var(--color-divider); margin: 4px 0; }
 .time-label { font-size: 10.5px; color: color-mix(in srgb, var(--color-text) 45%, transparent); text-align: right; padding-right: 6px; padding-top: 2px; }
-.day-col { position: relative; border-left: 1px solid var(--color-divider); min-height: 560px; }
+.day-col { position: relative; border-left: 1px solid var(--color-divider); }
 .class-block {
   position: absolute; left: 2px; right: 2px;
   border: 1px solid var(--color-accent); background: var(--color-accent-100); color: var(--color-accent-800);
