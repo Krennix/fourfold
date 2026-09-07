@@ -44,3 +44,9 @@ export function isoToLocalHour(iso: string): number {
 export function isNoSchoolDay(sched: BellSchedule): boolean {
   return sched.schedule.length === 1 && !!sched.schedule[0].name;
 }
+
+/** Finds the period block for a given class-period number (e.g. 1 -> "Class 1"), if it meets that day. */
+export function findPeriod(sched: BellSchedule, period: number): BellPeriod | undefined {
+  const target = `class ${period}`;
+  return sched.schedule.find((p) => p.name.trim().toLowerCase() === target);
+}

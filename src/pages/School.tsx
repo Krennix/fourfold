@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, WEEKDAYS, type Weekday } from '../state/SchoolContext';
-import { fetchBellSchedule, isNoSchoolDay, isoToLocalHour, type BellSchedule } from '../lib/harkerBell';
+import { fetchBellSchedule, findPeriod, isNoSchoolDay, isoToLocalHour, type BellSchedule } from '../lib/harkerBell';
 import './School.css';
 
 interface Homework {
@@ -104,7 +104,6 @@ export function SchoolPage() {
   });
 
   const allTimes = [
-    ...classes.flatMap((c) => c.meetings.flatMap((m) => [m.start, m.end])),
     ...presets.flatMap((p) => p.meetings.flatMap((m) => [m.start, m.end])),
     ...bellHours,
   ];
@@ -123,6 +122,8 @@ export function SchoolPage() {
     const date = weekDates[i];
     const key = dateKey(date);
     const override = overrides[key];
+    const bell = bellSchedules[key];
+    const bellNoSchool = bell ? isNoSchoolDay(bell) : false;
 
     let blocks: { classId: string; name: string; room: string; start: number; end: number }[];
     if (override) {
@@ -133,8 +134,16 @@ export function SchoolPage() {
             return { classId: m.classId, name: cls?.name ?? 'Unknown', room: cls?.room ?? '', start: m.start, end: m.end };
           })
         : [];
+    } else if (bell && !bellNoSchool) {
+      blocks = classes.flatMap((c) =>
+        c.periods.flatMap((periodNum) => {
+          const period = findPeriod(bell, periodNum);
+          if (!period) return [];
+          return [{ classId: c.id, name: c.name, room: c.room, start: isoToLocalHour(period.start), end: isoToLocalHour(period.end) }];
+        }),
+      );
     } else {
-      blocks = classes.flatMap((c) => c.meetings.filter((m) => m.day === day).map((m) => ({ classId: c.id, name: c.name, room: c.room, start: m.start, end: m.end })));
+      blocks = [];
     }
 
     const positioned = [...blocks]
@@ -151,8 +160,6 @@ export function SchoolPage() {
         };
       });
 
-    const bell = bellSchedules[key];
-    const bellNoSchool = bell ? isNoSchoolDay(bell) : false;
     const bellPeriods = bell && !bellNoSchool
       ? bell.schedule.map((p, idx) => {
           const start = isoToLocalHour(p.start);
@@ -278,7 +285,7 @@ export function SchoolPage() {
           <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 'min(520px,100%)' }}>
             <div className="dialog-title">{cls.name}</div>
             <div className="dialog-body" style={{ marginBottom: 4 }}>
-              {cls.room} &middot; {cls.meetings.map((m) => `${m.day} ${fmtHour(m.start)}–${fmtHour(m.end)}`).join(', ')}
+              {cls.room} &middot; {cls.periods.length ? cls.periods.map((p) => `Period ${p}`).join(', ') : 'No periods assigned'}
             </div>
 
             <h4 style={{ marginTop: 8 }}>Homework</h4>

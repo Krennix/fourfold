@@ -5,17 +5,12 @@ import { useAuth } from './AuthContext';
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 export type Weekday = (typeof WEEKDAYS)[number];
 
-export interface Meeting {
-  day: Weekday;
-  start: number;
-  end: number;
-}
-
 export interface SchoolClass {
   id: string;
   name: string;
   room: string;
-  meetings: Meeting[];
+  /** Bell-schedule period numbers this class meets during (e.g. [1, 3] for "Class 1" and "Class 3"). */
+  periods: number[];
 }
 
 export interface PresetMeeting {
@@ -36,22 +31,17 @@ export interface DayOverride {
 }
 
 const DEFAULT_CLASSES: SchoolClass[] = [
-  { id: 'calc', name: 'Calculus II', room: 'Rm 214', meetings: [
-    { day: 'Mon', start: 9, end: 10 }, { day: 'Wed', start: 9, end: 10 }, { day: 'Fri', start: 9, end: 10 },
-  ] },
-  { id: 'chem', name: 'Chemistry', room: 'Lab B', meetings: [
-    { day: 'Mon', start: 10.5, end: 12 }, { day: 'Wed', start: 10.5, end: 12 },
-  ] },
-  { id: 'hist', name: 'World History', room: 'Rm 108', meetings: [
-    { day: 'Tue', start: 13, end: 14 }, { day: 'Thu', start: 13, end: 14 },
-  ] },
-  { id: 'cs', name: 'Intro to CS', room: 'Rm 301', meetings: [
-    { day: 'Mon', start: 14.5, end: 16 }, { day: 'Wed', start: 14.5, end: 16 }, { day: 'Fri', start: 14.5, end: 16 },
-  ] },
-  { id: 'eng', name: 'English Lit', room: 'Rm 220', meetings: [
-    { day: 'Tue', start: 11, end: 12 }, { day: 'Thu', start: 11, end: 12 },
-  ] },
+  { id: 'calc', name: 'Calculus II', room: 'Rm 214', periods: [1] },
+  { id: 'chem', name: 'Chemistry', room: 'Lab B', periods: [2] },
+  { id: 'hist', name: 'World History', room: 'Rm 108', periods: [5] },
+  { id: 'cs', name: 'Intro to CS', room: 'Rm 301', periods: [3] },
+  { id: 'eng', name: 'English Lit', room: 'Rm 220', periods: [6] },
 ];
+
+/** Migrates legacy classes (day/time `meetings`) to the period-based shape. */
+function normalizeClass(c: SchoolClass | (Omit<SchoolClass, 'periods'> & { periods?: number[] })): SchoolClass {
+  return { id: c.id, name: c.name, room: c.room, periods: Array.isArray(c.periods) ? c.periods : [] };
+}
 
 const DEFAULT_PRESETS: Preset[] = [
   {
@@ -125,7 +115,7 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <SchoolContext.Provider value={{ ...state, addClass, updateClass, removeClass, addPreset, updatePreset, removePreset, setOverride }}>
+    <SchoolContext.Provider value={{ ...state, classes: state.classes.map(normalizeClass), addClass, updateClass, removeClass, addPreset, updatePreset, removePreset, setOverride }}>
       {children}
     </SchoolContext.Provider>
   );
