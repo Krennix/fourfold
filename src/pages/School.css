@@ -1,0 +1,59 @@
+.week-grid {
+  display: grid;
+  grid-template-columns: 56px repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.week-head-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding-bottom: 2px;
+}
+.week-head {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent); padding: 2px 4px; text-align: center;
+}
+.week-head.is-today { color: var(--color-accent-700); font-weight: 700; }
+.week-head-date { font-size: 10px; }
+
+.day-menu-wrap { position: relative; }
+.day-menu-btn {
+  font-size: 10.5px; padding: 2px 8px; border: 1px solid var(--color-divider); border-radius: var(--radius-sm);
+  background: transparent; color: color-mix(in srgb, var(--color-text) 60%, transparent); cursor: pointer;
+  font-family: var(--font-body);
+}
+.day-menu-btn.active { border-color: var(--color-accent); color: var(--color-accent-700); background: var(--color-accent-100); }
+.day-menu {
+  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+  z-index: 10; min-width: 160px; display: flex; flex-direction: column;
+  background: var(--color-bg); border: 1px solid var(--color-divider); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md); padding: 4px;
+}
+.day-menu-item {
+  text-align: left; font-size: 12.5px; padding: 6px 8px; border: none; background: transparent;
+  color: var(--color-text); cursor: pointer; border-radius: var(--radius-sm); font-family: var(--font-body);
+}
+.day-menu-item:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+.day-menu-divider { height: 1px; background: var(--color-divider); margin: 4px 0; }
+.time-label { font-size: 10.5px; color: color-mix(in srgb, var(--color-text) 45%, transparent); text-align: right; padding-right: 6px; padding-top: 2px; }
+.day-col { position: relative; border-left: 1px solid var(--color-divider); min-height: 560px; }
+.class-block {
+  position: absolute; left: 2px; right: 2px;
+  border: 1px solid var(--color-accent); background: var(--color-accent-100); color: var(--color-accent-800);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px; font-size: 12px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; overflow: hidden;
+}
+.class-block:hover { background: var(--color-accent-200); }
+.class-block .cb-name { font-family: var(--font-heading); font-weight: 600; font-size: 13px; line-height: 1.15; }
+.class-block .cb-meta { font-size: 10.5px; opacity: 0.8; }
+.class-block .cb-hw { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--color-accent-700); }
+
+.hw-row { display: flex; align-items: center; gap: var(--space-2); padding: 7px 0; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent); }
+.hw-row:last-child { border-bottom: none; }
+.hw-check { width: 19px; height: 19px; flex: none; border: 1.5px solid var(--color-divider); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.hw-check.done { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
+.hw-check svg { width: 12px; height: 12px; }
+.hw-title { flex: 1; min-width: 0; font-size: 13.5px; }
+.hw-title.done { text-decoration: line-through; color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+
+.pill-high { background: var(--color-accent-800); color: var(--color-bg); }
+.pill-med { background: var(--color-accent-300); color: var(--color-accent-800); }
+.pill-low { background: var(--color-neutral-200); color: var(--color-neutral-800); }
+.empty-msg { font-size: 12px; color: color-mix(in srgb, var(--color-text) 40%, transparent); text-align: center; padding: var(--space-4) 0; }

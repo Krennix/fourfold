@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="./assets/ds/styles.css">
+<script src="_ds/industry-fccfab8c-a272-485d-8ff4-a29b0928eafa/_ds_bundle.js"></script>
+<style>
+.side-link{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3);color:var(--color-text);text-decoration:none;font-family:var(--font-heading);font-weight:600;font-size:14px;letter-spacing:.01em;cursor:pointer;border:1px solid transparent;border-radius:0}
+.side-link:hover{background:color-mix(in srgb, var(--color-text) 6%, transparent)}
+.side-link.active{background:var(--color-accent-100);color:var(--color-accent-800);border-color:var(--color-accent-200)}
+.side-link svg{width:18px;height:18px;flex:none}
+</style>
+</helmet>
+<aside style="width:220px;flex:none;display:flex;flex-direction:column;gap:var(--space-6);padding:var(--space-4);border-right:1px solid var(--color-divider)">
+  <div class="nav-brand" style="padding:0 var(--space-2)">Fourfold</div>
+  <nav style="display:flex;flex-direction:column;gap:2px">
+    <a class="side-link {{ homeClass }}" href="./Home Dashboard.dc.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 3l9 6.5"></path><path d="M5 9v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9"></path></svg>Home</a>
+    <a class="side-link {{ matrixClass }}" href="./Eisenhower Matrix.dc.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>Matrix</a>
+    <a class="side-link {{ habitsClass }}" href="./Habit Tracker.dc.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="m9 12 2 2 4-4"></path></svg>Habits</a>
+    <a class="side-link {{ calendarClass }}" href="./Calendar.dc.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>Calendar</a>
+    <a class="side-link {{ pomodoroClass }}" href="./Pomodoro Timer.dc.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2h4"></path><path d="M12 14v-4"></path><circle cx="12" cy="14" r="8"></circle></svg>Pomodoro</a>
+    <a class="side-link {{ schoolClass }}" href="./School.dc.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m22 10-10-5L2 10l10 5 10-5Z"></path><path d="M6 12v5c0 1.1 2.7 2 6 2s6-.9 6-2v-5"></path></svg>School</a>
+  </nav>
+  <div style="margin-top:auto;display:flex;flex-direction:column;gap:2px">
+    <a class="side-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>Settings</a>
+  </div>
+</aside>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;active&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;home&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;home&quot;,&quot;matrix&quot;,&quot;habits&quot;,&quot;calendar&quot;,&quot;pomodoro&quot;,&quot;school&quot;]}}">
+class Component extends DCLogic {
+  renderVals() {
+    const active = this.props.active || 'home';
+    const cls = k => active === k ? 'active' : '';
+    return {
+      homeClass: cls('home'), matrixClass: cls('matrix'), habitsClass: cls('habits'),
+      calendarClass: cls('calendar'), pomodoroClass: cls('pomodoro'), schoolClass: cls('school'),
+    };
+  }
+}
+
+</script>
+</body>
+</html>
