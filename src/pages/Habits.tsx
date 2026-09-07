@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
+import { StreakFire } from '../components/StreakFire';
 import { useHabits } from '../state/HabitsContext';
 import './Habits.css';
 
@@ -19,19 +20,45 @@ for (let i = 6; i >= 0; i--) {
 }
 
 export function HabitsPage() {
-  const { habits, addHabit, removeHabit, toggleHabit } = useHabits();
+  const { habits, addHabit, removeHabit, toggleHabit, updateHabit } = useHabits();
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
+  const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const nameRef = useRef<HTMLInputElement>(null);
   const timeRef = useRef<HTMLInputElement>(null);
+  const quoteRef = useRef<HTMLInputElement>(null);
+
+  const openAddDialog = () => {
+    setEditingHabitId(null);
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (id: string) => {
+    const h = habits.find((x) => x.id === id);
+    if (!h) return;
+    setEditingHabitId(id);
+    setDialogOpen(true);
+    requestAnimationFrame(() => {
+      if (nameRef.current) nameRef.current.value = h.name;
+      if (timeRef.current) timeRef.current.value = h.time || '';
+      if (quoteRef.current) quoteRef.current.value = h.quote || '';
+    });
+  };
 
   const saveHabit = () => {
     const name = nameRef.current?.value.trim();
-    if (name) addHabit(name, timeRef.current?.value || null);
+    const time = timeRef.current?.value || null;
+    const quote = quoteRef.current?.value.trim() || null;
+    if (name) {
+      if (editingHabitId) updateHabit(editingHabitId, name, time, quote);
+      else addHabit(name, time, quote);
+    }
     if (nameRef.current) nameRef.current.value = '';
     if (timeRef.current) timeRef.current.value = '';
+    if (quoteRef.current) quoteRef.current.value = '';
     setDialogOpen(false);
+    setEditingHabitId(null);
   };
 
   const idHash = (id: string) => {
@@ -79,7 +106,7 @@ export function HabitsPage() {
         kicker="Consistency"
         title="Habit Tracker"
         actions={
-          <button className="btn btn-primary" type="button" onClick={() => setDialogOpen(true)}>
+          <button className="btn btn-primary" type="button" onClick={openAddDialog}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
             Add habit
           </button>
@@ -97,14 +124,15 @@ export function HabitsPage() {
             <div className={`habit-check${h.done ? ' done' : ''}`} onClick={() => toggleHabit(h.id)}>
               {h.done && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
             </div>
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <div
+              style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1, cursor: 'pointer' }}
+              onClick={() => openEditDialog(h.id)}
+            >
               <span style={{ fontSize: 14 }}>{h.name}</span>
+              {h.quote && <span className="habit-quote">"{h.quote}"</span>}
               {h.time && <span style={{ fontSize: 11 }} className="text-muted">Linked to {h.time}</span>}
             </div>
-            <span className="streak">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2c1 4-3 5-3 9a3 3 0 0 0 6 0c0-2-1-3-1-3s2 1 2 4a5 5 0 0 1-10 0c0-5 4-6 4-10z" /></svg>
-              {h.streak} day streak
-            </span>
+            <StreakFire streak={h.streak} done={h.done} />
             <button className="btn btn-icon" type="button" onClick={() => removeHabit(h.id)} aria-label={`Remove ${h.name}`}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
@@ -179,13 +207,14 @@ export function HabitsPage() {
       )}
 
       {dialogOpen && (
-        <div className="dialog-backdrop" onClick={() => setDialogOpen(false)}>
+        <div className="dialog-backdrop" onClick={() => { setDialogOpen(false); setEditingHabitId(null); }}>
           <div className="dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="dialog-title">Add habit</div>
+            <div className="dialog-title">{editingHabitId ? 'Edit habit' : 'Add habit'}</div>
             <div className="field"><label>Name</label><input className="input" type="text" ref={nameRef} placeholder="Habit name" /></div>
+            <div className="field"><label>Motivational quote (optional)</label><input className="input" type="text" ref={quoteRef} placeholder="e.g. Small steps every day" /></div>
             <div className="field"><label>Linked time (optional)</label><input className="input" type="time" ref={timeRef} /></div>
             <div className="dialog-actions">
-              <button className="btn btn-secondary" type="button" onClick={() => setDialogOpen(false)}>Cancel</button>
+              <button className="btn btn-secondary" type="button" onClick={() => { setDialogOpen(false); setEditingHabitId(null); }}>Cancel</button>
               <button className="btn btn-primary" type="button" onClick={saveHabit}>Save</button>
             </div>
           </div>

@@ -1,4 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
+import { useRemoteState } from '../lib/remoteStore';
+import { useAuth } from './AuthContext';
 
 export type QuadKey = 'q1' | 'q2' | 'q3' | 'q4';
 
@@ -9,8 +11,6 @@ export interface Task {
   time: string | null;
   listTag: string;
 }
-
-const STORAGE_KEY = 'fourfold.matrix.v1';
 
 type TaskState = Record<QuadKey, Task[]>;
 
@@ -27,26 +27,9 @@ interface MatrixContextValue {
 
 const MatrixContext = createContext<MatrixContextValue | null>(null);
 
-function loadInitial(): TaskState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...EMPTY_TASKS, ...JSON.parse(raw) };
-  } catch {
-    // ignore malformed storage
-  }
-  return EMPTY_TASKS;
-}
-
 export function MatrixProvider({ children }: { children: ReactNode }) {
-  const [tasks, setTasks] = useState<TaskState>(loadInitial);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-    } catch {
-      // storage unavailable — state still works for this session
-    }
-  }, [tasks]);
+  const { handleSessionExpired } = useAuth();
+  const [tasks, setTasks] = useRemoteState<TaskState>('matrix', EMPTY_TASKS, handleSessionExpired, 'fourfold.matrix.v1');
 
   const addTask: MatrixContextValue['addTask'] = (qkey, title, listTag) => {
     setTasks((s) => ({ ...s, [qkey]: [...s[qkey], { id: `task-${Date.now()}`, title, done: false, time: null, listTag }] }));

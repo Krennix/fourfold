@@ -1,4 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
+import { useRemoteState } from '../lib/remoteStore';
+import { useAuth } from './AuthContext';
 
 export type CountdownType = 'birthday' | 'holiday' | 'anniversary' | 'deadline' | 'event';
 
@@ -10,8 +12,6 @@ export interface Countdown {
   type: CountdownType;
 }
 
-const STORAGE_KEY = 'fourfold.countdowns.v1';
-
 interface CountdownsContextValue {
   countdowns: Countdown[];
   addCountdown: (name: string, month: number, day: number, type: CountdownType) => void;
@@ -21,29 +21,9 @@ interface CountdownsContextValue {
 
 const CountdownsContext = createContext<CountdownsContextValue | null>(null);
 
-function loadInitial(): Countdown[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Countdown[];
-      return parsed.map((c) => ({ ...c, type: c.type ?? 'event' }));
-    }
-  } catch {
-    // ignore malformed storage
-  }
-  return [];
-}
-
 export function CountdownsProvider({ children }: { children: ReactNode }) {
-  const [countdowns, setCountdowns] = useState<Countdown[]>(loadInitial);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(countdowns));
-    } catch {
-      // storage unavailable — state still works for this session
-    }
-  }, [countdowns]);
+  const { handleSessionExpired } = useAuth();
+  const [countdowns, setCountdowns] = useRemoteState<Countdown[]>('countdowns', [], handleSessionExpired, 'fourfold.countdowns.v1');
 
   const addCountdown: CountdownsContextValue['addCountdown'] = (name, month, day, type) => {
     setCountdowns((prev) => [...prev, { id: `countdown-${Date.now()}`, name, month, day, type }]);

@@ -1,57 +1,45 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
+import { useRemoteState } from '../lib/remoteStore';
+import { useAuth } from './AuthContext';
 
 export interface Habit {
   id: string;
   name: string;
   time: string | null;
+  quote: string | null;
   streak: number;
   done: boolean;
 }
 
-const STORAGE_KEY = 'fourfold.habits.v1';
-
 interface HabitsContextValue {
   habits: Habit[];
-  addHabit: (name: string, time: string | null) => void;
+  addHabit: (name: string, time: string | null, quote: string | null) => void;
   removeHabit: (id: string) => void;
   toggleHabit: (id: string) => void;
+  updateHabit: (id: string, name: string, time: string | null, quote: string | null) => void;
 }
 
 const HabitsContext = createContext<HabitsContextValue | null>(null);
 
-function loadInitial(): Habit[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // ignore malformed storage
-  }
-  return [];
-}
-
 export function HabitsProvider({ children }: { children: ReactNode }) {
-  const [habits, setHabits] = useState<Habit[]>(loadInitial);
+  const { handleSessionExpired } = useAuth();
+  const [habits, setHabits] = useRemoteState<Habit[]>('habits', [], handleSessionExpired, 'fourfold.habits.v1');
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
-    } catch {
-      // storage unavailable — state still works for this session
-    }
-  }, [habits]);
-
-  const addHabit: HabitsContextValue['addHabit'] = (name, time) => {
-    setHabits((prev) => [...prev, { id: `habit-${Date.now()}`, name, time, streak: 0, done: false }]);
+  const addHabit: HabitsContextValue['addHabit'] = (name, time, quote) => {
+    setHabits((prev) => [...prev, { id: `habit-${Date.now()}`, name, time, quote, streak: 0, done: false }]);
   };
   const removeHabit = (id: string) => {
     setHabits((prev) => prev.filter((h) => h.id !== id));
+  };
+  const updateHabit: HabitsContextValue['updateHabit'] = (id, name, time, quote) => {
+    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, name, time, quote } : h)));
   };
   const toggleHabit = (id: string) => {
     setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, done: !h.done, streak: !h.done ? h.streak + 1 : Math.max(0, h.streak - 1) } : h)));
   };
 
   return (
-    <HabitsContext.Provider value={{ habits, addHabit, removeHabit, toggleHabit }}>
+    <HabitsContext.Provider value={{ habits, addHabit, removeHabit, toggleHabit, updateHabit }}>
       {children}
     </HabitsContext.Provider>
   );

@@ -5,8 +5,6 @@ import './LoginGate.css';
 function GoogleButton() {
   const { clientId, handleCredential } = useAuth();
   const buttonRef = useRef<HTMLDivElement>(null);
-  const handleCredentialRef = useRef(handleCredential);
-  handleCredentialRef.current = handleCredential;
 
   useEffect(() => {
     if (!clientId) return;
@@ -21,7 +19,7 @@ function GoogleButton() {
       window.google.accounts.id.initialize({
         client_id: clientId,
         callback: (response) => {
-          void handleCredentialRef.current(response.credential);
+          void handleCredential(response.credential);
         },
       });
       window.google.accounts.id.renderButton(buttonRef.current, {
@@ -37,7 +35,7 @@ function GoogleButton() {
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [clientId, handleCredential]);
 
   return <div ref={buttonRef} className="login-gate-button" />;
 }

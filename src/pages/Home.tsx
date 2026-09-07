@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Widget, PageHeader } from '../components/Widget';
+import { StreakFire } from '../components/StreakFire';
 import { CountdownIcon } from '../components/CountdownIcon';
 import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
 import { CountdownDialog } from '../components/CountdownDialog';
@@ -143,12 +144,10 @@ export function HomePage() {
                   </div>
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
                     <span style={{ fontSize: 14 }}>{h.name}</span>
+                    {h.quote && <span className="habit-quote">"{h.quote}"</span>}
                     {h.time && <span style={{ fontSize: 11 }} className="text-muted">Linked to {h.time}</span>}
                   </div>
-                  <span className="streak">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2c1 4-3 5-3 9a3 3 0 0 0 6 0c0-2-1-3-1-3s2 1 2 4a5 5 0 0 1-10 0c0-5 4-6 4-10z" /></svg>
-                    {h.streak}
-                  </span>
+                  <StreakFire streak={h.streak} done={h.done} />
                 </div>
               ))}
             </div>

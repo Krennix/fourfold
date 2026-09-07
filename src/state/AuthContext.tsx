@@ -1,23 +1,24 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-const AUTH_KEY = 'fourfold.auth.email';
+const AUTH_KEY = 'fourfold.auth.session';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
-// Gmail ignores dots and anything after "+" in the local part, so two emails
-// that look different can be the same inbox. Normalize on that basis so the
-// allowlist doesn't reject someone over a typo'd or missing dot.
-function normalizeEmail(raw: string): string {
-  const email = raw.trim().toLowerCase();
-  const [local, domain] = email.split('@');
-  if (domain !== 'gmail.com' && domain !== 'googlemail.com') return email;
-  return `${local.split('+')[0].replace(/\./g, '')}@gmail.com`;
+interface StoredSession {
+  email: string;
+  token: string;
 }
 
-const ALLOWED_EMAILS = ((import.meta.env.VITE_ALLOWED_EMAILS as string | undefined) ?? '')
-  .split(',')
-  .map((e) => e.trim())
-  .filter(Boolean)
-  .map(normalizeEmail);
+export function getStoredSession(): StoredSession | null {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.email === 'string' && typeof parsed?.token === 'string') return parsed;
+  } catch {
+    // ignore malformed/unavailable storage
+  }
+  return null;
+}
 
 export type AuthStatus = 'unconfigured' | 'locked' | 'verifying' | 'unlocked' | 'denied';
 
@@ -28,32 +29,23 @@ interface AuthContextValue {
   clientId: string | undefined;
   handleCredential: (idToken: string) => Promise<void>;
   logout: () => void;
+  /** Called by remote-data hooks when a request comes back 401 (session expired/revoked). */
+  handleSessionExpired: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function verifyIdToken(idToken: string): Promise<{ email: string; email_verified: string; aud: string }> {
-  const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
-  if (!res.ok) throw new Error('Could not verify sign-in with Google.');
-  return res.json();
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<AuthStatus>(CLIENT_ID ? 'locked' : 'unconfigured');
-  const [email, setEmail] = useState<string | null>(null);
+  const initial = getStoredSession();
+  const [status, setStatus] = useState<AuthStatus>(initial ? 'unlocked' : CLIENT_ID ? 'locked' : 'unconfigured');
+  const [email, setEmail] = useState<string | null>(initial?.email ?? null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!CLIENT_ID) return;
-    let stored: string | null = null;
+  const clearSession = useCallback(() => {
     try {
-      stored = localStorage.getItem(AUTH_KEY);
+      localStorage.removeItem(AUTH_KEY);
     } catch {
-      // storage unavailable
-    }
-    if (stored && ALLOWED_EMAILS.includes(normalizeEmail(stored))) {
-      setEmail(stored);
-      setStatus('unlocked');
+      // ignore
     }
   }, []);
 
@@ -61,43 +53,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('verifying');
     setError(null);
     try {
-      const info = await verifyIdToken(idToken);
-      if (info.aud !== CLIENT_ID || info.email_verified !== 'true') {
-        throw new Error('That sign-in could not be verified.');
-      }
-      if (!ALLOWED_EMAILS.includes(normalizeEmail(info.email))) {
-        setStatus('denied');
-        setError(`${info.email} isn't on the access list for this app.`);
+      const res = await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatus(res.status === 403 ? 'denied' : 'locked');
+        setError(body.error ?? 'Sign-in failed.');
         return;
       }
       try {
-        localStorage.setItem(AUTH_KEY, info.email);
+        localStorage.setItem(AUTH_KEY, JSON.stringify({ email: body.email, token: body.token }));
       } catch {
         // storage unavailable — they'll just need to sign in again next visit
       }
-      setEmail(info.email);
+      setEmail(body.email);
       setStatus('unlocked');
-    } catch (e) {
+    } catch {
       setStatus('locked');
-      setError(e instanceof Error ? e.message : 'Sign-in failed.');
+      setError('Could not reach the sign-in server. Try again.');
     }
   }, []);
 
   const logout = useCallback(() => {
-    try {
-      localStorage.removeItem(AUTH_KEY);
-    } catch {
-      // ignore
-    }
+    clearSession();
     window.google?.accounts.id.disableAutoSelect();
     setEmail(null);
     setError(null);
     setStatus(CLIENT_ID ? 'locked' : 'unconfigured');
+  }, [clearSession]);
+
+  const handleSessionExpired = useCallback(() => {
+    clearSession();
+    setEmail(null);
+    setError('Your session expired — sign in again.');
+    setStatus(CLIENT_ID ? 'locked' : 'unconfigured');
+  }, [clearSession]);
+
+  useEffect(() => {
+    // Cross-tab logout/expiry.
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === AUTH_KEY && !e.newValue) {
+        setEmail(null);
+        setStatus(CLIENT_ID ? 'locked' : 'unconfigured');
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const value = useMemo(
-    () => ({ status, email, error, clientId: CLIENT_ID, handleCredential, logout }),
-    [status, email, error, handleCredential, logout],
+    () => ({ status, email, error, clientId: CLIENT_ID, handleCredential, logout, handleSessionExpired }),
+    [status, email, error, handleCredential, logout, handleSessionExpired],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

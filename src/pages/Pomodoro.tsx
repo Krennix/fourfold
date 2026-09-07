@@ -18,6 +18,158 @@ const SOUND_DEFS = [
 
 type SoundKey = (typeof SOUND_DEFS)[number]['key'];
 
+function makeNoiseBuffer(ctx: AudioContext, kind: 'white' | 'brown', seconds = 4) {
+  const buffer = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  if (kind === 'white') {
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  } else {
+    let last = 0;
+    for (let i = 0; i < data.length; i++) {
+      const white = Math.random() * 2 - 1;
+      last = (last + 0.02 * white) / 1.02;
+      data[i] = last * 3.5;
+    }
+  }
+  return buffer;
+}
+
+function playCrackle(ctx: AudioContext, dest: AudioNode) {
+  const src = ctx.createBufferSource();
+  src.buffer = makeNoiseBuffer(ctx, 'white', 0.05);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 1500 + Math.random() * 2500;
+  const gain = ctx.createGain();
+  const now = ctx.currentTime;
+  gain.gain.setValueAtTime(0.5 + Math.random() * 0.5, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05 + Math.random() * 0.05);
+  src.connect(filter).connect(gain).connect(dest);
+  src.start();
+  src.stop(now + 0.15);
+}
+
+function playChirp(ctx: AudioContext, dest: AudioNode) {
+  const osc = ctx.createOscillator();
+  osc.type = 'sine';
+  const base = 1800 + Math.random() * 1400;
+  const now = ctx.currentTime;
+  osc.frequency.setValueAtTime(base, now);
+  osc.frequency.exponentialRampToValueAtTime(base * (0.7 + Math.random() * 0.6), now + 0.12);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.25, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+  osc.connect(gain).connect(dest);
+  osc.start(now);
+  osc.stop(now + 0.2);
+}
+
+type SoundHandle = { stop: () => void };
+
+function startSound(ctx: AudioContext, key: SoundKey, dest: AudioNode): SoundHandle {
+  const source = ctx.createBufferSource();
+  const timers: number[] = [];
+  const extraNodes: AudioNode[] = [];
+
+  switch (key) {
+    case 'white': {
+      source.buffer = makeNoiseBuffer(ctx, 'white');
+      source.loop = true;
+      source.connect(dest);
+      break;
+    }
+    case 'rain': {
+      source.buffer = makeNoiseBuffer(ctx, 'white');
+      source.loop = true;
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2200;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 8000;
+      source.connect(hp).connect(lp).connect(dest);
+      break;
+    }
+    case 'waves': {
+      source.buffer = makeNoiseBuffer(ctx, 'brown');
+      source.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 700;
+      const swell = ctx.createGain();
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.12;
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 0.35;
+      swell.gain.value = 0.65;
+      lfo.connect(lfoGain).connect(swell.gain);
+      lfo.start();
+      source.connect(lp).connect(swell).connect(dest);
+      extraNodes.push(lfo);
+      break;
+    }
+    case 'forest': {
+      source.buffer = makeNoiseBuffer(ctx, 'brown');
+      source.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 1000;
+      const bed = ctx.createGain();
+      bed.gain.value = 0.4;
+      source.connect(lp).connect(bed).connect(dest);
+      const scheduleChirp = () => {
+        playChirp(ctx, dest);
+        timers.push(window.setTimeout(scheduleChirp, 800 + Math.random() * 3500));
+      };
+      timers.push(window.setTimeout(scheduleChirp, 500));
+      break;
+    }
+    case 'cafe': {
+      source.buffer = makeNoiseBuffer(ctx, 'brown');
+      source.loop = true;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 900;
+      bp.Q.value = 0.6;
+      source.connect(bp).connect(dest);
+      break;
+    }
+    case 'fireplace': {
+      source.buffer = makeNoiseBuffer(ctx, 'brown');
+      source.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 400;
+      const bed = ctx.createGain();
+      bed.gain.value = 0.5;
+      source.connect(lp).connect(bed).connect(dest);
+      const scheduleCrackle = () => {
+        playCrackle(ctx, dest);
+        timers.push(window.setTimeout(scheduleCrackle, 150 + Math.random() * 400));
+      };
+      timers.push(window.setTimeout(scheduleCrackle, 100));
+      break;
+    }
+  }
+
+  source.start();
+
+  return {
+    stop: () => {
+      timers.forEach((t) => window.clearTimeout(t));
+      try { source.stop(); } catch { /* already stopped */ }
+      source.disconnect();
+      extraNodes.forEach((n) => {
+        if (n instanceof OscillatorNode) {
+          try { n.stop(); } catch { /* already stopped */ }
+        }
+        n.disconnect();
+      });
+    },
+  };
+}
+
 function SoundIcon({ soundKey }: { soundKey: SoundKey }) {
   switch (soundKey) {
     case 'rain':
@@ -39,16 +191,49 @@ export function PomodoroPage() {
   const [mode, setMode] = useState<Mode>('focus');
   const [secondsLeft, setSecondsLeft] = useState(MODES.focus);
   const [isRunning, setIsRunning] = useState(false);
-  const [sessionsDone, setSessionsDone] = useState(1);
-  const [activeSound, setActiveSound] = useState<SoundKey | null>('rain');
+  const [sessionsDone, setSessionsDone] = useState(0);
+  const [activeSound, setActiveSound] = useState<SoundKey | null>(null);
   const [volume, setVolume] = useState(60);
   const timerRef = useRef<number | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
+  const soundHandleRef = useRef<SoundHandle | null>(null);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
+      soundHandleRef.current?.stop();
+      audioCtxRef.current?.close();
     };
   }, []);
+
+  useEffect(() => {
+    soundHandleRef.current?.stop();
+    soundHandleRef.current = null;
+
+    if (!activeSound) return;
+
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new AudioContext();
+      masterGainRef.current = audioCtxRef.current.createGain();
+      masterGainRef.current.connect(audioCtxRef.current.destination);
+    }
+    const ctx = audioCtxRef.current;
+    if (ctx.state === 'suspended') ctx.resume();
+    if (masterGainRef.current) masterGainRef.current.gain.value = volume / 100;
+
+    soundHandleRef.current = startSound(ctx, activeSound, masterGainRef.current!);
+
+    return () => {
+      soundHandleRef.current?.stop();
+      soundHandleRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSound]);
+
+  useEffect(() => {
+    if (masterGainRef.current) masterGainRef.current.gain.value = volume / 100;
+  }, [volume]);
 
   const tick = () => {
     setSecondsLeft((s) => {

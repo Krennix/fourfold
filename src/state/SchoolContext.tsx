@@ -1,4 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
+import { useRemoteState } from '../lib/remoteStore';
+import { useAuth } from './AuthContext';
 
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 export type Weekday = (typeof WEEKDAYS)[number];
@@ -32,8 +34,6 @@ export interface Preset {
 export interface DayOverride {
   presetId: string | null;
 }
-
-const STORAGE_KEY = 'fourfold.school.v2';
 
 const DEFAULT_CLASSES: SchoolClass[] = [
   { id: 'calc', name: 'Calculus II', room: 'Rm 214', meetings: [
@@ -83,26 +83,11 @@ interface SchoolContextValue extends StoredState {
 
 const SchoolContext = createContext<SchoolContextValue | null>(null);
 
-function loadInitial(): StoredState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // ignore malformed storage
-  }
-  return { classes: DEFAULT_CLASSES, presets: DEFAULT_PRESETS, overrides: {} };
-}
+const DEFAULT_STATE: StoredState = { classes: DEFAULT_CLASSES, presets: DEFAULT_PRESETS, overrides: {} };
 
 export function SchoolProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<StoredState>(loadInitial);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // storage unavailable — state still works for this session
-    }
-  }, [state]);
+  const { handleSessionExpired } = useAuth();
+  const [state, setState] = useRemoteState<StoredState>('school', DEFAULT_STATE, handleSessionExpired, 'fourfold.school.v2');
 
   const addClass: SchoolContextValue['addClass'] = (c) => {
     setState((s) => ({ ...s, classes: [...s.classes, { ...c, id: `class-${Date.now()}` }] }));

@@ -15,7 +15,7 @@ function AccessSettings() {
       </div>
       <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
         Signed in as <strong>{email}</strong>. To let someone else in, add their Google account email to{' '}
-        <code>VITE_ALLOWED_EMAILS</code> and redeploy.
+        <code>ALLOWED_EMAILS</code> and redeploy.
       </p>
     </Widget>
   );
