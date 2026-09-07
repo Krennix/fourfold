@@ -11,8 +11,8 @@ interface Homework {
   done: boolean;
 }
 
-const START_HOUR = 8;
-const END_HOUR = 18;
+const SCHOOL_START = 8 + 10 / 60; // 8:10am
+const SCHOOL_END = 15 + 25 / 60; // 3:25pm
 const PRIORITY_LABEL: Record<Homework['priority'], string> = { high: 'High', med: 'Medium', low: 'Low' };
 const PRIORITY_CLASS: Record<Homework['priority'], string> = { high: 'pill-high', med: 'pill-med', low: 'pill-low' };
 
@@ -25,9 +25,11 @@ const INITIAL_HOMEWORK: Record<string, Homework[]> = {
 };
 
 function fmtHour(h: number) {
-  const hour12 = h % 1 === 0 ? (h > 12 ? h - 12 : h) : (Math.floor(h) > 12 ? Math.floor(h) - 12 : Math.floor(h));
-  const mins = h % 1 === 0 ? '00' : '30';
-  return `${hour12}:${mins}`;
+  const totalMins = Math.round(h * 60);
+  const hour24 = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${String(mins).padStart(2, '0')}`;
 }
 
 function dateKey(d: Date) {
@@ -73,9 +75,18 @@ export function SchoolPage() {
     if (dueRef.current) dueRef.current.value = '';
   };
 
-  const hourLabels: string[] = [];
-  for (let h = START_HOUR; h < END_HOUR; h++) hourLabels.push(h > 12 ? `${h - 12}pm` : h === 12 ? '12pm' : `${h}am`);
+  const allTimes = [
+    ...classes.flatMap((c) => c.meetings.flatMap((m) => [m.start, m.end])),
+    ...presets.flatMap((p) => p.meetings.flatMap((m) => [m.start, m.end])),
+  ];
+  const START_HOUR = allTimes.length ? Math.max(SCHOOL_START, Math.min(...allTimes)) : SCHOOL_START;
+  const END_HOUR = allTimes.length ? Math.min(SCHOOL_END, Math.max(...allTimes)) : SCHOOL_END;
   const totalHours = END_HOUR - START_HOUR;
+
+  const hourLabels: { h: number; label: string }[] = [];
+  for (let h = Math.ceil(START_HOUR); h < END_HOUR; h++) {
+    hourLabels.push({ h, label: h > 12 ? `${h - 12}pm` : h === 12 ? '12pm' : `${h}am` });
+  }
 
   const weekDates = WEEKDAYS.map((_, i) => {
     const d = new Date(weekStart);
@@ -104,17 +115,19 @@ export function SchoolPage() {
       blocks = classes.flatMap((c) => c.meetings.filter((m) => m.day === day).map((m) => ({ classId: c.id, name: c.name, room: c.room, start: m.start, end: m.end })));
     }
 
-    const positioned = blocks.map((b) => {
-      const topPct = ((b.start - START_HOUR) / totalHours) * 100;
-      const heightPct = ((b.end - b.start) / totalHours) * 100;
-      const hw = homework[b.classId] || [];
-      return {
-        ...b,
-        time: `${fmtHour(b.start)}–${fmtHour(b.end)}`,
-        posStyle: { top: `${topPct}%`, height: `${heightPct}%` },
-        hasHomework: hw.some((h) => !h.done),
-      };
-    });
+    const positioned = [...blocks]
+      .sort((a, b) => a.start - b.start)
+      .map((b) => {
+        const topPct = ((b.start - START_HOUR) / totalHours) * 100;
+        const heightPct = ((b.end - b.start) / totalHours) * 100;
+        const hw = homework[b.classId] || [];
+        return {
+          ...b,
+          time: `${fmtHour(b.start)}–${fmtHour(b.end)}`,
+          posStyle: { top: `${topPct}%`, height: `${heightPct}%` },
+          hasHomework: hw.some((h) => !h.done),
+        };
+      });
 
     return { day, date, key, isOverridden: !!override, isSpecialNoSchool: override ? !presets.find((p) => p.id === override.presetId) : false, classes: positioned };
   });
@@ -178,11 +191,13 @@ export function SchoolPage() {
               </div>
             </div>
           ))}
-          <div style={{ gridColumn: '1/2', display: 'flex', flexDirection: 'column' }}>
-            {hourLabels.map((h) => <div className="time-label" style={{ height: 56 }} key={h}>{h}</div>)}
+          <div style={{ gridColumn: '1/2', position: 'relative', height: totalHours * 56 }}>
+            {hourLabels.map(({ h, label }) => (
+              <div className="time-label" style={{ position: 'absolute', top: `${((h - START_HOUR) / totalHours) * 100}%`, right: 0, left: 0 }} key={h}>{label}</div>
+            ))}
           </div>
           {dayColumns.map((col) => (
-            <div className="day-col" key={col.key}>
+            <div className="day-col" style={{ height: totalHours * 56 }} key={col.key}>
               {col.classes.map((c) => (
                 <div className="class-block" style={c.posStyle} onClick={() => setOpenClassId(c.classId)} key={`${col.key}-${c.classId}-${c.start}`}>
                   <span className="cb-name">{c.name}</span>

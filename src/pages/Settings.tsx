@@ -68,18 +68,21 @@ function GoogleCalendarSettings() {
 }
 
 function fmtHour(h: number) {
-  const hour12 = h % 1 === 0 ? (h > 12 ? h - 12 : h) : (Math.floor(h) > 12 ? Math.floor(h) - 12 : Math.floor(h));
-  const mins = h % 1 === 0 ? '00' : '30';
-  return `${hour12}:${mins}`;
+  const totalMins = Math.round(h * 60);
+  const hour24 = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${String(mins).padStart(2, '0')}`;
 }
 function timeToHourValue(time: string) {
   const [h, m] = time.split(':').map(Number);
-  return h + (m >= 30 ? 0.5 : 0);
+  return h + m / 60;
 }
 function hourValueToTime(h: number) {
-  const hour = Math.floor(h);
-  const mins = h % 1 === 0 ? '00' : '30';
-  return `${String(hour).padStart(2, '0')}:${mins}`;
+  const totalMins = Math.round(h * 60);
+  const hour = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+  return `${String(hour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 }
 
 interface DayFormRow {
