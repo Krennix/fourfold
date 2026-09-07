@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useTheme } from '../state/ThemeContext';
 import './Sidebar.css';
 
 const navItems = [
@@ -45,6 +46,19 @@ const navItems = [
     ),
   },
   {
+    to: '/countdowns',
+    label: 'Countdowns',
+    icon: (
+      <>
+        <path d="M12 2v3" />
+        <path d="M12 5c-1 0-1.5.75-1.5 1.5S11 8 12 8s1.5-.75 1.5-1.5S13 5 12 5Z" />
+        <path d="M4 21v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6" />
+        <path d="M4 21h16" />
+        <path d="M4 17c1 1 2 1 3 0s2-1 3 0 2 1 3 0 2-1 3 0 2 1 3 0" />
+      </>
+    ),
+  },
+  {
     to: '/pomodoro',
     label: 'Pomodoro',
     icon: (
@@ -67,6 +81,34 @@ const navItems = [
   },
 ];
 
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  return (
+    <button
+      type="button"
+      className="side-link theme-toggle"
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        {isDark ? (
+          <circle cx="12" cy="12" r="4.5" />
+        ) : (
+          <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" />
+        )}
+        {isDark && (
+          <>
+            <path d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12h2M19 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
+          </>
+        )}
+      </svg>
+      {isDark ? 'Light mode' : 'Dark mode'}
+    </button>
+  );
+}
+
 export function Sidebar() {
   return (
     <aside className="sidebar">
@@ -87,6 +129,7 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="sidebar-footer">
+        <ThemeToggle />
         <NavLink to="/settings" className={({ isActive }) => `side-link${isActive ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />

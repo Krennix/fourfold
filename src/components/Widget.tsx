@@ -3,11 +3,7 @@ import './Widget.css';
 
 export function Widget({ children, style, align }: { children: ReactNode; style?: React.CSSProperties; align?: 'center' }) {
   return (
-    <div className="widget blueprint" style={{ ...(align === 'center' ? { alignItems: 'center' } : {}), ...style }}>
-      <i className="corner tl" />
-      <i className="corner tr" />
-      <i className="corner bl" />
-      <i className="corner br" />
+    <div className="widget" style={{ ...(align === 'center' ? { alignItems: 'center' } : {}), ...style }}>
       {children}
     </div>
   );

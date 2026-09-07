@@ -52,16 +52,114 @@
   --space-6: 20.4px;
   --space-8: 27.2px;
 
-  --radius-sm: 2px;
-  --radius-md: 4px;
-  --radius-lg: 7px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
 
   /* Elevation — derived from the ground: soft ink-tinted shadows on a
      light theme, a hairline edge + ambient darkness on a dark one. */
   --shadow-sm: 0 1px 2px color-mix(in srgb, #2b2b2d 14%, transparent);
   --shadow-md: 0 3px 10px color-mix(in srgb, #2b2b2d 16%, transparent);
   --shadow-lg: 0 12px 32px color-mix(in srgb, #2b2b2d 22%, transparent);
+
+  color-scheme: light;
 }
+
+/* — dark mode — respects the OS setting by default; a manual toggle
+   stamps [data-theme] on <html> to override it either way. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #17181a;
+    --color-surface: #212226;
+    --color-text: #eceef0;
+    --color-accent: #7fa8cf;
+    --color-accent-2: #8fa9c4;
+    --color-divider: color-mix(in srgb, #eceef0 14%, transparent);
+
+    --color-neutral-100: #2b2b2d;
+    --color-neutral-200: #343437;
+    --color-neutral-300: #424244;
+    --color-neutral-400: #5d5d60;
+    --color-neutral-500: #7a7a7d;
+    --color-neutral-600: #98989b;
+    --color-neutral-700: #b7b7ba;
+    --color-neutral-800: #d4d4d7;
+    --color-neutral-900: #f5f5f8;
+
+    --color-accent-100: #1d2d3d;
+    --color-accent-200: #2c455d;
+    --color-accent-300: #416180;
+    --color-accent-400: #597ea3;
+    --color-accent-500: #749dc4;
+    --color-accent-600: #94bce3;
+    --color-accent-700: #b5d9fd;
+    --color-accent-800: #d6ebff;
+    --color-accent-900: #eef6ff;
+
+    --color-accent-2-100: #1f2d3a;
+    --color-accent-2-200: #314457;
+    --color-accent-2-300: #486077;
+    --color-accent-2-400: #627d98;
+    --color-accent-2-500: #7e9cb8;
+    --color-accent-2-600: #9ebbd8;
+    --color-accent-2-700: #bdd8f2;
+    --color-accent-2-800: #d6ebff;
+    --color-accent-2-900: #eef6ff;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #17181a;
+  --color-surface: #212226;
+  --color-text: #eceef0;
+  --color-accent: #7fa8cf;
+  --color-accent-2: #8fa9c4;
+  --color-divider: color-mix(in srgb, #eceef0 14%, transparent);
+
+  --color-neutral-100: #2b2b2d;
+  --color-neutral-200: #343437;
+  --color-neutral-300: #424244;
+  --color-neutral-400: #5d5d60;
+  --color-neutral-500: #7a7a7d;
+  --color-neutral-600: #98989b;
+  --color-neutral-700: #b7b7ba;
+  --color-neutral-800: #d4d4d7;
+  --color-neutral-900: #f5f5f8;
+
+  --color-accent-100: #1d2d3d;
+  --color-accent-200: #2c455d;
+  --color-accent-300: #416180;
+  --color-accent-400: #597ea3;
+  --color-accent-500: #749dc4;
+  --color-accent-600: #94bce3;
+  --color-accent-700: #b5d9fd;
+  --color-accent-800: #d6ebff;
+  --color-accent-900: #eef6ff;
+
+  --color-accent-2-100: #1f2d3a;
+  --color-accent-2-200: #314457;
+  --color-accent-2-300: #486077;
+  --color-accent-2-400: #627d98;
+  --color-accent-2-500: #7e9cb8;
+  --color-accent-2-600: #9ebbd8;
+  --color-accent-2-700: #bdd8f2;
+  --color-accent-2-800: #d6ebff;
+  --color-accent-2-900: #eef6ff;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}
+
+* { transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
 
 body {
   background: var(--color-bg);
@@ -277,11 +375,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 .dialog-body { font-size: 14px; opacity: 0.85; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
 
-/* — blueprint frame: components are wireframe objects (see .blueprint
-     and .corner above) — square, transparent, hairline-bordered — */
-.card, .btn, .input, .tag, .seg, .dialog { border-radius: 0; }
-.card, .dialog { background: transparent; border: 1px solid var(--color-divider); }
-.btn { border: 1px solid var(--color-divider); }
-.btn-primary { border-color: var(--color-accent); }
+.card, .dialog { border: 1px solid var(--color-divider); }
+.btn-secondary { border: 1px solid var(--color-divider); }
 .btn-ghost { border-color: transparent; }
 

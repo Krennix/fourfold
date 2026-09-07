@@ -1,7 +1,54 @@
 import { useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, WEEKDAYS, type Weekday, type SchoolClass, type Preset } from '../state/SchoolContext';
+import { useGoogleAuth } from '../state/GoogleAuthContext';
 import './Settings.css';
+
+function GoogleCalendarSettings() {
+  const { status, email, error, connect, disconnect } = useGoogleAuth();
+
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Google Calendar</h4>
+        {status === 'signed-in' && <button className="btn btn-ghost" type="button" onClick={disconnect}>Disconnect</button>}
+        {(status === 'signed-out' || status === 'connecting' || status === 'error') && (
+          <button className="btn btn-primary" type="button" onClick={connect} disabled={status === 'connecting'}>
+            {status === 'connecting' ? 'Connecting…' : 'Connect Google Calendar'}
+          </button>
+        )}
+      </div>
+
+      {status === 'signed-in' && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+          Connected as <strong>{email ?? '…'}</strong>. Events on the Calendar page now read from and write to this account.
+        </p>
+      )}
+      {status === 'error' && error && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>
+      )}
+      {status === 'signed-out' && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+          Not connected yet. The Calendar page falls back to a local, device-only schedule until you connect.
+        </p>
+      )}
+      {status === 'unconfigured' && (
+        <>
+          <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+            No Google OAuth client is configured, so sync is unavailable. To enable it:
+          </p>
+          <ol className="text-muted" style={{ fontSize: 12.5, marginTop: 4, paddingLeft: 18 }}>
+            <li>Open <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer">Google Cloud Console</a> and create (or pick) a project.</li>
+            <li>APIs &amp; Services → Library → enable the <strong>Google Calendar API</strong>.</li>
+            <li>APIs &amp; Services → OAuth consent screen → set it up as External and add your own Google account as a test user.</li>
+            <li>APIs &amp; Services → Credentials → Create Credentials → <strong>OAuth client ID</strong> → Application type <strong>Web application</strong> → add <code>http://localhost:5173</code> as an authorized JavaScript origin.</li>
+            <li>Copy the client ID into a <code>.env</code> file at the project root as <code>VITE_GOOGLE_CLIENT_ID=&hellip;</code>, then restart the dev server.</li>
+          </ol>
+        </>
+      )}
+    </Widget>
+  );
+}
 
 function fmtHour(h: number) {
   const hour12 = h % 1 === 0 ? (h > 12 ? h - 12 : h) : (Math.floor(h) > 12 ? Math.floor(h) - 12 : Math.floor(h));
@@ -101,6 +148,8 @@ export function SettingsPage() {
   return (
     <div className="page">
       <PageHeader kicker="Preferences" title="Settings" />
+
+      <GoogleCalendarSettings />
 
       <Widget>
         <div className="widget-head">

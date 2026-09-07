@@ -1,28 +1,22 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Widget, PageHeader } from '../components/Widget';
+import { CountdownIcon } from '../components/CountdownIcon';
+import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
+import { CountdownDialog } from '../components/CountdownDialog';
+import { useHabits } from '../state/HabitsContext';
+import { useMatrix, type QuadKey } from '../state/MatrixContext';
+import { useCalendarEvents } from '../state/CalendarContext';
+import { useCountdowns, type Countdown } from '../state/CountdownsContext';
 import './Home.css';
+import './Countdowns.css';
 
-interface Habit {
-  name: string;
-  streak: number;
-  time: string | null;
-  done: boolean;
-}
-
-const INITIAL_HABITS: Habit[] = [
-  { name: 'Workout', streak: 12, time: '8:00 AM', done: true },
-  { name: 'Read 20 min', streak: 5, time: '7:00 PM', done: false },
-  { name: 'Drink water', streak: 30, time: null, done: true },
-  { name: 'Meditate', streak: 0, time: null, done: false },
-];
-
-const EVENTS = [
-  { time: '8:00 AM', title: 'Workout', linked: true, google: false },
-  { time: '9:30 AM', title: 'Team standup', linked: false, google: true },
-  { time: '12:00 PM', title: 'Lunch with Sam', linked: false, google: true },
-  { time: '2:00 PM', title: 'Fix production bug', linked: true, google: false },
-  { time: '7:00 PM', title: 'Read 20 min', linked: true, google: false },
-];
+const QUAD_LABELS: Record<QuadKey, string> = {
+  q1: 'Do now · urgent + important',
+  q2: 'Schedule · important',
+  q3: 'Delegate · urgent',
+  q4: 'Eliminate',
+};
 
 function daysUntilNext(month: number, day: number) {
   const now = new Date();
@@ -33,32 +27,51 @@ function daysUntilNext(month: number, day: number) {
   return Math.round((target.getTime() - today.getTime()) / 86400000);
 }
 
-function daysSince(year: number, month: number, day: number) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const born = new Date(year, month - 1, day);
-  return Math.floor((today.getTime() - born.getTime()) / 86400000);
-}
-
-const COUNTDOWNS = [
-  { name: 'My Birthday', days: daysUntilNext(9, 9), ageLabel: `${daysSince(2012, 9, 9).toLocaleString()} days old` },
-  { name: "Elsa's Birthday", days: daysUntilNext(6, 10), ageLabel: `${daysSince(2012, 6, 10).toLocaleString()} days old` },
-];
-
 const now = new Date();
 const hour = now.getHours();
 const dayPart = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
 const todayLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
 
 export function HomePage() {
-  const [habits, setHabits] = useState(INITIAL_HABITS);
-
-  const toggleHabit = (i: number) => {
-    setHabits((prev) => prev.map((h, idx) => (idx === i ? { ...h, done: !h.done } : h)));
-  };
+  const { habits, toggleHabit } = useHabits();
+  const { tasks } = useMatrix();
+  const { eventsByDate } = useCalendarEvents();
+  const { countdowns, addCountdown, updateCountdown, removeCountdown } = useCountdowns();
+  const [cdDialogState, setCdDialogState] = useState<'add' | Countdown | null>(null);
+  const [cdMenu, setCdMenu] = useState<{ x: number; y: number; countdown: Countdown } | null>(null);
 
   const doneCount = habits.filter((h) => h.done).length;
-  const pct = Math.round((doneCount / habits.length) * 100);
+  const pct = habits.length ? Math.round((doneCount / habits.length) * 100) : 0;
+  const todaysEvents = eventsByDate(todayKey);
+
+  const upcomingCountdowns = [...countdowns]
+    .sort((a, b) => daysUntilNext(a.month, a.day) - daysUntilNext(b.month, b.day))
+    .slice(0, 4);
+
+  const cdMenuItems: ContextMenuItem[] = cdMenu
+    ? [
+        {
+          label: 'Edit countdown',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+          ),
+          onClick: () => setCdDialogState(cdMenu.countdown),
+        },
+        {
+          label: 'Delete countdown',
+          danger: true,
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            </svg>
+          ),
+          onClick: () => removeCountdown(cdMenu.countdown.id),
+        },
+      ]
+    : [];
 
   return (
     <div className="page">
@@ -78,49 +91,37 @@ export function HomePage() {
           <Widget>
             <div className="widget-head">
               <h4>Priority Matrix</h4>
-              <a className="btn btn-ghost" style={{ fontSize: 12 }}>
+              <Link className="btn btn-ghost" style={{ fontSize: 12 }} to="/matrix">
                 View full matrix
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
-              </a>
+              </Link>
             </div>
             <div className="quad-grid">
-              <div className="quad">
-                <div className="quad-label">Do now · urgent + important</div>
-                <div className="task-chip">Submit tax extension</div>
-                <div className="task-chip">Fix production bug</div>
-              </div>
-              <div className="quad">
-                <div className="quad-label">Schedule · important</div>
-                <div className="task-chip">Plan Q4 roadmap</div>
-                <div className="task-chip">Renew passport</div>
-              </div>
-              <div className="quad">
-                <div className="quad-label">Delegate · urgent</div>
-                <div className="task-chip">Reply to recruiter emails</div>
-              </div>
-              <div className="quad">
-                <div className="quad-label">Eliminate</div>
-                <div className="task-chip">Reorganize bookmarks</div>
-              </div>
+              {(Object.keys(QUAD_LABELS) as QuadKey[]).map((qkey) => {
+                const active = tasks[qkey].filter((t) => !t.done);
+                return (
+                  <div className="quad" key={qkey}>
+                    <div className="quad-label">{QUAD_LABELS[qkey]}</div>
+                    {active.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No tasks</div>}
+                    {active.map((t) => (
+                      <div className="task-chip" key={t.id}>{t.title}</div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </Widget>
 
           <Widget>
             <div className="widget-head">
               <h4>Today's Calendar</h4>
-              <span className="tag tag-outline">Synced with Google</span>
             </div>
             <div>
-              {EVENTS.map((ev) => (
-                <div className="event-row" key={ev.title}>
+              {todaysEvents.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No events today.</div>}
+              {todaysEvents.map((ev) => (
+                <div className="event-row" key={ev.id}>
                   <span className="event-time">{ev.time}</span>
                   <span style={{ fontSize: 14 }}>{ev.title}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {ev.linked && (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14, color: 'var(--color-accent-700)' }}><rect x="3" y="8" width="9" height="6" rx="3" /><rect x="10" y="10" width="9" height="6" rx="3" /></svg>
-                    )}
-                    {ev.google && <span className="tag tag-neutral">Google</span>}
-                  </span>
                 </div>
               ))}
             </div>
@@ -134,9 +135,10 @@ export function HomePage() {
               <span style={{ fontSize: 12 }} className="text-muted">{doneCount}/{habits.length} done · {pct}%</span>
             </div>
             <div>
-              {habits.map((h, i) => (
-                <div className="habit-row" key={h.name}>
-                  <div className={`habit-check${h.done ? ' done' : ''}`} onClick={() => toggleHabit(i)}>
+              {habits.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No habits yet.</div>}
+              {habits.map((h) => (
+                <div className="habit-row" key={h.id}>
+                  <div className={`habit-check${h.done ? ' done' : ''}`} onClick={() => toggleHabit(h.id)}>
                     {h.done && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                   </div>
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -150,20 +152,43 @@ export function HomePage() {
                 </div>
               ))}
             </div>
-            <div style={{ fontSize: 11 }} className="text-muted">Need 80% of habits done to keep a streak day.</div>
+            {habits.length > 0 && <div style={{ fontSize: 11 }} className="text-muted">Need 80% of habits done to keep a streak day.</div>}
           </Widget>
 
           <Widget>
-            <h4>Upcoming Countdowns</h4>
+            <div className="widget-head">
+              <h4>Upcoming Countdowns</h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                <Link className="btn btn-ghost" style={{ fontSize: 12 }} to="/countdowns">
+                  View all
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+                </Link>
+                <button className="btn btn-icon" type="button" onClick={() => setCdDialogState('add')} aria-label="Add countdown">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+                </button>
+              </div>
+            </div>
             <div>
-              {COUNTDOWNS.map((c) => (
-                <div className="cd-item" key={c.name}>
-                  <div>
-                    <div style={{ fontSize: 14 }}>{c.name}</div>
-                    <div style={{ fontSize: 11 }} className="text-muted">{c.ageLabel}</div>
+              {upcomingCountdowns.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No countdowns yet.</div>}
+              {upcomingCountdowns.map((c) => (
+                <div
+                  className="cd-item"
+                  key={c.id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setCdDialogState(c)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setCdMenu({ x: e.clientX, y: e.clientY, countdown: c });
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+                    <div className={`cd-item-icon cd-icon-${c.type}`}>
+                      <CountdownIcon type={c.type} />
+                    </div>
+                    <div style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: 'var(--color-accent-700)' }}>{c.days}</div>
+                  <div style={{ textAlign: 'right', flex: 'none' }}>
+                    <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: 'var(--color-accent-700)' }}>{daysUntilNext(c.month, c.day)}</div>
                     <div style={{ fontSize: 11 }} className="text-muted">days</div>
                   </div>
                 </div>
@@ -172,6 +197,19 @@ export function HomePage() {
           </Widget>
         </div>
       </div>
+
+      {cdMenu && <ContextMenu x={cdMenu.x} y={cdMenu.y} items={cdMenuItems} onClose={() => setCdMenu(null)} />}
+
+      {cdDialogState && (
+        <CountdownDialog
+          countdown={cdDialogState === 'add' ? null : cdDialogState}
+          onClose={() => setCdDialogState(null)}
+          onSave={(name, month, day, type) => {
+            if (cdDialogState === 'add') addCountdown(name, month, day, type);
+            else updateCountdown(cdDialogState.id, name, month, day, type);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,16 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
+import { useMatrix, type QuadKey } from '../state/MatrixContext';
 import './Matrix.css';
-
-interface Task {
-  id: number;
-  title: string;
-  done: boolean;
-  time: string | null;
-  listTag: string;
-}
-
-type QuadKey = 'q1' | 'q2' | 'q3' | 'q4';
 
 const QUAD_CONFIG: { key: QuadKey; numeral: string; label: string; sub: string; badgeStyle: React.CSSProperties }[] = [
   { key: 'q1', numeral: 'I', label: 'Urgent & Important', sub: 'Do first', badgeStyle: { background: 'var(--color-accent-800)', color: 'var(--color-bg)' } },
@@ -19,38 +10,26 @@ const QUAD_CONFIG: { key: QuadKey; numeral: string; label: string; sub: string; 
   { key: 'q4', numeral: 'IV', label: 'Not Urgent & Not Important', sub: 'Eliminate', badgeStyle: { background: 'var(--color-neutral-300)', color: 'var(--color-neutral-800)' } },
 ];
 
-const INITIAL_TASKS: Record<QuadKey, Task[]> = {
-  q1: [
-    { id: 1, title: 'Fix production bug', done: false, time: null, listTag: 'Work' },
-    { id: 2, title: 'Submit tax extension', done: true, time: null, listTag: 'Inbox' },
-  ],
-  q2: [
-    { id: 3, title: 'Plan Q4 roadmap', done: false, time: 'Thu 10:00 AM', listTag: 'Work' },
-    { id: 4, title: 'Renew passport', done: false, time: null, listTag: 'Personal' },
-  ],
-  q3: [{ id: 5, title: 'Reply to recruiter emails', done: false, time: null, listTag: 'Inbox' }],
-  q4: [
-    { id: 6, title: 'Reorganize bookmarks', done: true, time: null, listTag: 'Inbox' },
-    { id: 7, title: 'Clean out downloads folder', done: true, time: null, listTag: 'Inbox' },
-  ],
-};
-
 export function MatrixPage() {
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
+  const { tasks, addTask, removeTask, toggleDone, scheduleTask, unscheduleTask } = useMatrix();
   const [open, setOpen] = useState<Record<QuadKey, boolean>>({ q1: true, q2: true, q3: true, q4: true });
+  const [dialogQuad, setDialogQuad] = useState<QuadKey | null>(null);
 
-  const toggleDone = (qkey: QuadKey, id: number) => {
-    setTasks((s) => ({ ...s, [qkey]: s[qkey].map((t) => (t.id === id ? { ...t, done: !t.done } : t)) }));
-  };
+  const titleRef = useRef<HTMLInputElement>(null);
+  const tagRef = useRef<HTMLInputElement>(null);
+  const quadRef = useRef<HTMLSelectElement>(null);
+
   const toggleOpen = (qkey: QuadKey) => setOpen((s) => ({ ...s, [qkey]: !s[qkey] }));
-  const scheduleTask = (qkey: QuadKey, id: number) => {
-    setTasks((s) => ({ ...s, [qkey]: s[qkey].map((t) => (t.id === id ? { ...t, time: 'Thu 10:00 AM' } : t)) }));
-  };
-  const unscheduleTask = (qkey: QuadKey, id: number) => {
-    setTasks((s) => ({ ...s, [qkey]: s[qkey].map((t) => (t.id === id ? { ...t, time: null } : t)) }));
-  };
-  const addTask = (qkey: QuadKey) => {
-    setTasks((s) => ({ ...s, [qkey]: [...s[qkey], { id: Date.now(), title: 'New task', done: false, time: null, listTag: 'Inbox' }] }));
+
+  const openDialog = (qkey: QuadKey) => setDialogQuad(qkey);
+
+  const saveTask = () => {
+    const title = titleRef.current?.value.trim();
+    const qkey = (quadRef.current?.value as QuadKey) || dialogQuad;
+    if (title && qkey) addTask(qkey, title, tagRef.current?.value.trim() || 'Inbox');
+    if (titleRef.current) titleRef.current.value = '';
+    if (tagRef.current) tagRef.current.value = '';
+    setDialogQuad(null);
   };
 
   return (
@@ -59,7 +38,7 @@ export function MatrixPage() {
         kicker="Prioritize"
         title="Eisenhower Matrix"
         actions={
-          <button className="btn btn-primary" type="button">
+          <button className="btn btn-primary" type="button" onClick={() => openDialog('q1')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
             Add task
           </button>
@@ -92,9 +71,12 @@ export function MatrixPage() {
                       <span className="tag tag-accent" style={{ cursor: 'pointer' }} onClick={() => unscheduleTask(q.key, t.id)}>{t.time}</span>
                     )}
                     {!t.time && (
-                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => scheduleTask(q.key, t.id)} type="button">+ Schedule</button>
+                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => scheduleTask(q.key, t.id, 'Thu 10:00 AM')} type="button">+ Schedule</button>
                     )}
                     <span className="tag tag-neutral">{t.listTag}</span>
+                    <button className="btn btn-icon" type="button" onClick={() => removeTask(q.key, t.id)} aria-label={`Remove ${t.title}`}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                    </button>
                   </span>
                 </div>
               ))}
@@ -116,18 +98,45 @@ export function MatrixPage() {
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
                         </div>
                         <span className="ttitle done">{t.title}</span>
-                        <span className="tmeta"><span className="tag tag-neutral">{t.listTag}</span></span>
+                        <span className="tmeta">
+                          <span className="tag tag-neutral">{t.listTag}</span>
+                          <button className="btn btn-icon" type="button" onClick={() => removeTask(q.key, t.id)} aria-label={`Remove ${t.title}`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                          </button>
+                        </span>
                       </div>
                     ))}
                   </div>
                 </>
               )}
 
-              <button className="btn btn-ghost qaddbtn" onClick={() => addTask(q.key)} type="button">+ Add task</button>
+              <button className="btn btn-ghost qaddbtn" onClick={() => openDialog(q.key)} type="button">+ Add task</button>
             </Widget>
           );
         })}
       </div>
+
+      {dialogQuad && (
+        <div className="dialog-backdrop" onClick={() => setDialogQuad(null)}>
+          <div className="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-title">Add task</div>
+            <div className="field"><label>Title</label><input className="input" type="text" ref={titleRef} placeholder="Task title" autoFocus /></div>
+            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Quadrant</label>
+                <select className="input" ref={quadRef} defaultValue={dialogQuad}>
+                  {QUAD_CONFIG.map((q) => <option key={q.key} value={q.key}>{q.numeral} · {q.label}</option>)}
+                </select>
+              </div>
+              <div className="field" style={{ flex: 1 }}><label>List tag</label><input className="input" type="text" ref={tagRef} placeholder="Inbox" /></div>
+            </div>
+            <div className="dialog-actions">
+              <button className="btn btn-secondary" type="button" onClick={() => setDialogQuad(null)}>Cancel</button>
+              <button className="btn btn-primary" type="button" onClick={saveTask}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

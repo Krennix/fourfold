@@ -58,3 +58,10 @@
   height: 18px;
   flex: none;
 }
+
+.theme-toggle {
+  width: 100%;
+  background: none;
+  font: inherit;
+  text-align: left;
+}
