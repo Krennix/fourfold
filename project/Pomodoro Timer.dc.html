@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="./assets/ds/styles.css">
+<script src="_ds/industry-fccfab8c-a272-485d-8ff4-a29b0928eafa/_ds_bundle.js"></script>
+<style>
+.widget{position:relative;border:1px solid var(--color-divider);border-radius:0;padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-3);background:transparent}
+.ring-wrap{position:relative;width:280px;height:280px;margin:0 auto}
+.ring-time{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.dots{display:flex;gap:8px;justify-content:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--color-neutral-300)}
+.dot.filled{background:var(--color-accent)}
+.sound-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:var(--space-3)}
+.sound-card{border:1px solid var(--color-divider);border-radius:0;padding:var(--space-3);display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;text-align:center}
+.sound-card.active{border-color:var(--color-accent);background:var(--color-accent-100)}
+.sound-card svg{width:22px;height:22px;color:var(--color-accent-700)}
+.sound-card span{font-size:12.5px}
+input[type=range]{width:100%;accent-color:var(--color-accent)}
+</style>
+</helmet>
+<div style="display:flex;min-height:100vh;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
+<dc-import name="Sidebar" active="pomodoro" hint-size="220px,100%"></dc-import>
+<main style="flex:1;min-width:0;padding:var(--space-8);display:flex;flex-direction:column;gap:var(--space-6);max-width:900px">
+  <div>
+    <h6 class="text-muted" style="margin-bottom:6px">Focus</h6>
+    <h1 style="font-size:34px">Pomodoro Timer</h1>
+  </div>
+
+  <div class="widget blueprint" style="align-items:center">
+    <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+    <div class="seg">
+      <sc-for list="{{ modes }}" as="m" hint-placeholder-count="3">
+        <label class="seg-opt" style="border-radius: 5px"><input type="radio" name="pomo-mode" checked="{{ m.active }}" onChange="{{ m.select }}">{{ m.label }}</label>
+      </sc-for>
+    </div>
+
+    <div class="ring-wrap">
+      <svg viewBox="0 0 280 280" width="280" height="280">
+        <circle cx="140" cy="140" r="120" fill="none" stroke="var(--color-neutral-200)" stroke-width="10"></circle>
+        <circle cx="140" cy="140" r="120" fill="none" stroke="var(--color-accent)" stroke-width="10" stroke-linecap="round" transform="rotate(-90 140 140)" stroke-dasharray="{{ ringDasharray }}" stroke-dashoffset="{{ ringOffset }}"></circle>
+      </svg>
+      <div class="ring-time">
+        <div style="font-family:var(--font-heading);font-size:56px;font-weight:600">{{ timeLabel }}</div>
+        <div class="text-muted" style="font-size:13px">{{ modeLabel }}</div>
+      </div>
+    </div>
+
+    <div class="dots">
+      <sc-for list="{{ sessionDots }}" as="s" hint-placeholder-count="4"><span class="dot {{ s.cls }}"></span></sc-for>
+    </div>
+
+    <div style="display:flex;gap:var(--space-3)">
+      <button class="btn btn-secondary" type="button" onClick="{{ reset }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 3 6.7"></path><path d="M3 16v-4h4"></path></svg>
+        Reset
+      </button>
+      <button class="btn btn-primary" type="button" onClick="{{ toggleRun }}" style="min-width:140px">
+        <sc-if value="{{ isRunning }}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="4" height="14"></rect><rect x="14" y="5" width="4" height="14"></rect></svg>Pause</sc-if>
+        <sc-if value="{{ isNotRunning }}" hint-placeholder-val="{{ true }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7 4 13 8-13 8z"></path></svg>Start</sc-if>
+      </button>
+    </div>
+  </div>
+
+  <div class="widget blueprint">
+    <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+    <div class="widget-head" style="display:flex;justify-content:space-between;align-items:center">
+      <h4>Ambient sound</h4>
+      <sc-if value="{{ activeSoundName }}" hint-placeholder-val="{{ false }}"><span class="tag tag-outline">{{ activeSoundName }}</span></sc-if>
+    </div>
+    <div class="sound-grid">
+      <sc-for list="{{ sounds }}" as="s" hint-placeholder-count="6">
+        <div class="sound-card {{ s.activeClass }}" onClick="{{ s.select }}">
+          <span dangerouslySetInnerHTML="{{ s.iconHtml }}"></span>
+          <span>{{ s.label }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <sc-if value="{{ activeSoundName }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:var(--space-3)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;flex:none;color:var(--color-accent-700)"><path d="M11 5 6 9H2v6h4l5 4z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>
+        <input type="range" min="0" max="100" value="{{ volume }}" onChange="{{ onVolume }}">
+        <span class="text-muted" style="font-size:12px;width:32px;text-align:right">{{ volume }}%</span>
+      </div>
+    </sc-if>
+  </div>
+</main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const ICONS = {
+  rain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M16 13v8"/><path d="M8 13v8"/><path d="M12 15v8"/><path d="M20 16.6A5 5 0 0 0 18 7h-1.3A6.5 6.5 0 1 0 5 13.5"/></svg>',
+  waves: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M2 12c1.5-2 3.5-2 5 0s3.5 2 5 0 3.5-2 5 0 3.5 2 5 0"/><path d="M2 18c1.5-2 3.5-2 5 0s3.5 2 5 0 3.5-2 5 0 3.5 2 5 0"/></svg>',
+  white: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/><path d="M17.6 7.6A2 2 0 1 1 19 11H2"/></svg>',
+  forest: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a4 4 0 0 1 8 0z"/><path d="M17 14v.2a2.5 2.5 0 0 1-1 4.8h-3a2.5 2.5 0 0 1-1-4.8V14a3 3 0 0 1 6 0z" transform="translate(4 -2)"/><path d="M12 22v-4M6 22v-2"/></svg>',
+  cafe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><path d="M6 2v2M10 2v2M14 2v2"/></svg>',
+  fireplace: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M12 2c1 4-3 5-3 9a3 3 0 0 0 6 0c0-2-1-3-1-3s2 1 2 4a5 5 0 0 1-10 0c0-5 4-6 4-10z"/></svg>',
+};
+const MODES = { focus: 25 * 60, short: 5 * 60, long: 15 * 60 };
+const MODE_LABELS = { focus: 'Focus', short: 'Short break', long: 'Long break' };
+
+class Component extends DCLogic {
+  state = { mode: 'focus', secondsLeft: MODES.focus, isRunning: false, sessionsDone: 1, activeSound: 'rain', volume: 60 };
+
+  componentWillUnmount() { if (this.timer) clearInterval(this.timer); }
+
+  tick() {
+    this.setState(s => {
+      if (s.secondsLeft <= 1) {
+        clearInterval(this.timer); this.timer = null;
+        return { secondsLeft: 0, isRunning: false, sessionsDone: s.mode === 'focus' ? s.sessionsDone + 1 : s.sessionsDone };
+      }
+      return { secondsLeft: s.secondsLeft - 1 };
+    });
+  }
+
+  toggleRun() {
+    this.setState(s => {
+      const running = !s.isRunning;
+      if (running) { this.timer = setInterval(() => this.tick(), 1000); }
+      else if (this.timer) { clearInterval(this.timer); this.timer = null; }
+      return { isRunning: running };
+    });
+  }
+  reset() {
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.setState(s => ({ secondsLeft: MODES[s.mode], isRunning: false }));
+  }
+  selectMode(mode) {
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.setState({ mode, secondsLeft: MODES[mode], isRunning: false });
+  }
+  selectSound(key) {
+    this.setState(s => ({ activeSound: s.activeSound === key ? null : key }));
+  }
+  setVolume(v) { this.setState({ volume: v }); }
+
+  renderVals() {
+    const total = MODES[this.state.mode];
+    const frac = this.state.secondsLeft / total;
+    const circumference = 2 * Math.PI * 120;
+    const mm = Math.floor(this.state.secondsLeft / 60);
+    const ss = this.state.secondsLeft % 60;
+    const timeLabel = `${mm}:${ss < 10 ? '0' : ''}${ss}`;
+
+    const modes = ['focus', 'short', 'long'].map(m => ({
+      label: MODE_LABELS[m], active: m === this.state.mode, select: () => this.selectMode(m),
+    }));
+
+    const sessionDots = [0, 1, 2, 3].map(i => ({ cls: i < this.state.sessionsDone ? 'filled' : '' }));
+
+    const soundDefs = [
+      { key: 'rain', label: 'Rain' }, { key: 'waves', label: 'Ocean waves' }, { key: 'white', label: 'White noise' },
+      { key: 'forest', label: 'Forest & birds' }, { key: 'cafe', label: 'Cafe' }, { key: 'fireplace', label: 'Fireplace' },
+    ];
+    const sounds = soundDefs.map(s => ({
+      ...s, activeClass: this.state.activeSound === s.key ? 'active' : '',
+      iconHtml: { __html: ICONS[s.key] }, select: () => this.selectSound(s.key),
+    }));
+    const activeDef = soundDefs.find(s => s.key === this.state.activeSound);
+
+    return {
+      timeLabel, modeLabel: MODE_LABELS[this.state.mode], modes, sessionDots,
+      isRunning: this.state.isRunning, isNotRunning: !this.state.isRunning,
+      ringDasharray: `${circumference} ${circumference}`,
+      ringOffset: circumference * (1 - frac),
+      toggleRun: () => this.toggleRun(), reset: () => this.reset(),
+      sounds, activeSoundName: activeDef ? activeDef.label : null,
+      volume: this.state.volume, onVolume: (e) => this.setVolume(Number(e.target.value)),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

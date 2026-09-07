@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="./assets/ds/styles.css">
+<script src="_ds/industry-fccfab8c-a272-485d-8ff4-a29b0928eafa/_ds_bundle.js"></script>
+<style>
+.qcard{border:1px solid var(--color-divider);border-radius:0;padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-3);min-height:280px;position:relative}
+.qhead{display:flex;align-items:center;gap:var(--space-2)}
+.qbadge{width:24px;height:24px;border-radius:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-heading);font-weight:600;font-size:13px;flex:none}
+.qlabel{font-family:var(--font-heading);font-weight:600;font-size:17px}
+.qsub{font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent);margin-left:auto}
+.task-row{display:flex;align-items:center;gap:var(--space-2);padding:6px 0;border-bottom:1px solid color-mix(in srgb, var(--color-text) 6%, transparent)}
+.tcheck{width:19px;height:19px;flex:none;border:1.5px solid var(--color-divider);border-radius:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.tcheck.done{background:var(--color-accent);border-color:var(--color-accent);color:var(--color-bg)}
+.tcheck svg{width:12px;height:12px}
+.ttitle{flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ttitle.done{text-decoration:line-through;color:color-mix(in srgb, var(--color-text) 45%, transparent)}
+.tmeta{display:flex;align-items:center;gap:6px;flex:none}
+.completed-head{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600;color:color-mix(in srgb, var(--color-text) 60%, transparent);padding:4px 0}
+.completed-head svg{width:13px;height:13px;transition:transform .15s}
+.empty-msg{font-size:12px;color:color-mix(in srgb, var(--color-text) 40%, transparent);text-align:center;padding:var(--space-4) 0}
+.qaddbtn{margin-top:auto;align-self:flex-start;font-size:12px}
+</style>
+</helmet>
+<div style="display:flex;min-height:100vh;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
+<dc-import name="Sidebar" active="matrix" hint-size="220px,100%"></dc-import>
+<main style="flex:1;min-width:0;padding:var(--space-8);display:flex;flex-direction:column;gap:var(--space-6);max-width:1320px">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-4);flex-wrap:wrap">
+    <div>
+      <h6 class="text-muted" style="margin-bottom:6px">Prioritize</h6>
+      <h1 style="font-size:34px">Eisenhower Matrix</h1>
+    </div>
+    <button class="btn btn-primary" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+      Add task
+    </button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6)">
+    <sc-for list="{{ quadrants }}" as="q" hint-placeholder-count="4">
+      <div class="qcard blueprint">
+        <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        <div class="qhead">
+          <span class="qbadge" style="{{ q.badgeStyle }}">{{ q.numeral }}</span>
+          <span class="qlabel">{{ q.label }}</span>
+          <span class="qsub">{{ q.sub }}</span>
+        </div>
+
+        <sc-for list="{{ q.activeTasks }}" as="t" hint-placeholder-count="2">
+          <div class="task-row">
+            <div class="tcheck {{ t.doneClass }}" onClick="{{ t.toggle }}">
+              <sc-if value="{{ t.done }}" hint-placeholder-val="{{ false }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+            </div>
+            <span class="ttitle {{ t.doneClass }}">{{ t.title }}</span>
+            <span class="tmeta">
+              <sc-if value="{{ t.time }}" hint-placeholder-val="{{ false }}">
+                <span class="tag tag-accent" style="cursor:pointer" onClick="{{ t.unschedule }}">{{ t.time }}</span>
+              </sc-if>
+              <sc-if value="{{ t.showSchedule }}" hint-placeholder-val="{{ true }}">
+                <button class="btn btn-ghost" style="font-size:11px;padding:2px 6px" onClick="{{ t.schedule }}" type="button">+ Schedule</button>
+              </sc-if>
+              <span class="tag tag-neutral">{{ t.listTag }}</span>
+            </span>
+          </div>
+        </sc-for>
+
+        <sc-if value="{{ q.noTasks }}" hint-placeholder-val="{{ false }}">
+          <div class="empty-msg">No tasks</div>
+        </sc-if>
+
+        <sc-if value="{{ q.hasCompleted }}" hint-placeholder-val="{{ false }}">
+          <div class="completed-head" onClick="{{ q.toggleOpen }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="{{ q.chevronStyle }}"><path d="m6 9 6 6 6-6"></path></svg>
+            Completed {{ q.completedCount }}
+          </div>
+          <div style="{{ q.completedDisplay }}">
+            <sc-for list="{{ q.completedTasks }}" as="t" hint-placeholder-count="1">
+              <div class="task-row">
+                <div class="tcheck {{ t.doneClass }}" onClick="{{ t.toggle }}">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+                </div>
+                <span class="ttitle {{ t.doneClass }}">{{ t.title }}</span>
+                <span class="tmeta"><span class="tag tag-neutral">{{ t.listTag }}</span></span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <button class="btn btn-ghost qaddbtn" onClick="{{ q.addTask }}" type="button">+ Add task</button>
+      </div>
+    </sc-for>
+  </div>
+</main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    open: { q1: true, q2: true, q3: true, q4: true },
+    tasks: {
+      q1: [
+        { id: 1, title: 'Fix production bug', done: false, time: null, listTag: 'Work' },
+        { id: 2, title: 'Submit tax extension', done: true, time: null, listTag: 'Inbox' },
+      ],
+      q2: [
+        { id: 3, title: 'Plan Q4 roadmap', done: false, time: 'Thu 10:00 AM', listTag: 'Work' },
+        { id: 4, title: 'Renew passport', done: false, time: null, listTag: 'Personal' },
+      ],
+      q3: [
+        { id: 5, title: 'Reply to recruiter emails', done: false, time: null, listTag: 'Inbox' },
+      ],
+      q4: [
+        { id: 6, title: 'Reorganize bookmarks', done: true, time: null, listTag: 'Inbox' },
+        { id: 7, title: 'Clean out downloads folder', done: true, time: null, listTag: 'Inbox' },
+      ],
+    },
+  };
+
+  toggleDone(qkey, id) {
+    this.setState(s => ({ tasks: { ...s.tasks, [qkey]: s.tasks[qkey].map(t => t.id === id ? { ...t, done: !t.done } : t) } }));
+  }
+  toggleOpen(qkey) {
+    this.setState(s => ({ open: { ...s.open, [qkey]: !s.open[qkey] } }));
+  }
+  scheduleTask(qkey, id) {
+    this.setState(s => ({ tasks: { ...s.tasks, [qkey]: s.tasks[qkey].map(t => t.id === id ? { ...t, time: 'Thu 10:00 AM' } : t) } }));
+  }
+  unscheduleTask(qkey, id) {
+    this.setState(s => ({ tasks: { ...s.tasks, [qkey]: s.tasks[qkey].map(t => t.id === id ? { ...t, time: null } : t) } }));
+  }
+  addTask(qkey) {
+    this.setState(s => ({ tasks: { ...s.tasks, [qkey]: [...s.tasks[qkey], { id: Date.now(), title: 'New task', done: false, time: null, listTag: 'Inbox' }] } }));
+  }
+
+  renderVals() {
+    const config = [
+      { key: 'q1', numeral: 'I', label: 'Urgent & Important', sub: 'Do first', badgeStyle: 'background:var(--color-accent-800);color:var(--color-bg)' },
+      { key: 'q2', numeral: 'II', label: 'Not Urgent & Important', sub: 'Schedule', badgeStyle: 'background:var(--color-accent-500);color:var(--color-bg)' },
+      { key: 'q3', numeral: 'III', label: 'Urgent & Not Important', sub: 'Delegate', badgeStyle: 'background:var(--color-accent-300);color:var(--color-accent-800)' },
+      { key: 'q4', numeral: 'IV', label: 'Not Urgent & Not Important', sub: 'Eliminate', badgeStyle: 'background:var(--color-neutral-300);color:var(--color-neutral-800)' },
+    ];
+
+    const quadrants = config.map(c => {
+      const all = this.state.tasks[c.key];
+      const activeTasks = all.filter(t => !t.done).map(t => ({
+        ...t, doneClass: t.done ? 'done' : '', showSchedule: !t.time,
+        toggle: () => this.toggleDone(c.key, t.id),
+        schedule: () => this.scheduleTask(c.key, t.id),
+        unschedule: () => this.unscheduleTask(c.key, t.id),
+      }));
+      const completedTasks = all.filter(t => t.done).map(t => ({
+        ...t, doneClass: 'done', toggle: () => this.toggleDone(c.key, t.id),
+      }));
+      const open = this.state.open[c.key];
+      return {
+        ...c, activeTasks, completedTasks,
+        noTasks: activeTasks.length === 0 && completedTasks.length === 0,
+        hasCompleted: completedTasks.length > 0,
+        completedCount: completedTasks.length,
+        completedDisplay: open ? 'display:flex;flex-direction:column' : 'display:none',
+        chevronStyle: open ? 'transform:rotate(0deg)' : 'transform:rotate(-90deg)',
+        toggleOpen: () => this.toggleOpen(c.key),
+        addTask: () => this.addTask(c.key),
+      };
+    });
+
+    return { quadrants };
+  }
+}
+
+</script>
+</body>
+</html>
