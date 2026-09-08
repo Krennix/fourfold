@@ -89,3 +89,18 @@ export async function insertEvent(
 export async function deleteEvent(accessToken: string, eventId: string): Promise<void> {
   await calendarFetch(accessToken, `/calendars/primary/events/${eventId}`, { method: 'DELETE' });
 }
+
+export async function updateEvent(
+  accessToken: string,
+  eventId: string,
+  event: { summary?: string; startISO?: string; endISO?: string },
+): Promise<GoogleCalendarEvent> {
+  return calendarFetch(accessToken, `/calendars/primary/events/${eventId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      ...(event.summary !== undefined ? { summary: event.summary } : {}),
+      ...(event.startISO ? { start: { dateTime: event.startISO } } : {}),
+      ...(event.endISO ? { end: { dateTime: event.endISO } } : {}),
+    }),
+  });
+}

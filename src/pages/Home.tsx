@@ -174,7 +174,7 @@ export function HomePage() {
                     <div className="quad-label">{QUAD_LABELS[qkey]}</div>
                     {active.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No tasks</div>}
                     {active.map((t) => (
-                      <div className="task-chip" key={t.id}>
+                      <div className="task-chip" key={t.id} title={t.description || undefined}>
                         {t.title}
                         {t.durationMin && <span className="text-muted"> · {formatDuration(t.durationMin)}</span>}
                         {t.dueDate && <span className="text-muted"> · Due {t.dueDate}</span>}
@@ -276,9 +276,9 @@ export function HomePage() {
         <TaskDialog
           initialQuad={taskDialogQuad}
           onClose={() => setTaskDialogQuad(null)}
-          onSave={async ({ title, quad, dueDate, link, durationMin }) => {
+          onSave={async ({ title, description, quad, dueDate, link, durationMin }) => {
             const scheduled = await autoSchedule({ title, dueDate, durationMin, link });
-            addTask(quad, { title, dueDate, link: scheduled.link, durationMin, time: scheduled.time });
+            addTask(quad, { title, description, dueDate, link: scheduled.link, durationMin, time: scheduled.time });
           }}
         />
       )}

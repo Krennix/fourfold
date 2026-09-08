@@ -9,7 +9,7 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN ?? '',
 });
 
-const NAMESPACES = new Set(['school', 'habits', 'matrix', 'countdowns']);
+const NAMESPACES = new Set(['school', 'habits', 'matrix', 'countdowns', 'agentChat', 'dailyPlan', 'watchdogDismissed']);
 
 function bearerToken(req: VercelRequest): string | null {
   const header = req.headers.authorization;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getStoredSession } from '../state/AuthContext';
 
-export type RemoteNamespace = 'school' | 'habits' | 'matrix' | 'countdowns';
+export type RemoteNamespace = 'school' | 'habits' | 'matrix' | 'countdowns' | 'agentChat' | 'dailyPlan' | 'watchdogDismissed';
 
 const SAVE_DEBOUNCE_MS = 600;
 

@@ -11,12 +11,14 @@ import { GoogleAuthProvider } from './state/GoogleAuthContext';
 import { CalendarProvider } from './state/CalendarContext';
 import { CountdownsProvider } from './state/CountdownsContext';
 import { PomodoroProvider } from './state/PomodoroContext';
+import { AgentProvider } from './state/AgentContext';
 import { HomePage } from './pages/Home';
 import { MatrixPage } from './pages/Matrix';
 import { HabitsPage } from './pages/Habits';
 import { CalendarPage } from './pages/Calendar';
 import { CountdownsPage } from './pages/Countdowns';
 import { PomodoroPage } from './pages/Pomodoro';
+import { AgentPage } from './pages/Agent';
 import { SchoolPage } from './pages/School';
 import { SettingsPage } from './pages/Settings';
 
@@ -33,6 +35,7 @@ function App() {
           <CalendarProvider>
             <CountdownsProvider>
             <PomodoroProvider>
+            <AgentProvider>
               <BrowserRouter>
                 <Sidebar />
                 <main className="content">
@@ -43,11 +46,13 @@ function App() {
                     <Route path="/calendar" element={<CalendarPage />} />
                     <Route path="/countdowns" element={<CountdownsPage />} />
                     <Route path="/pomodoro" element={<PomodoroPage />} />
+                    <Route path="/agent" element={<AgentPage />} />
                     <Route path="/school" element={<SchoolPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                   </Routes>
                 </main>
               </BrowserRouter>
+            </AgentProvider>
             </PomodoroProvider>
             </CountdownsProvider>
           </CalendarProvider>

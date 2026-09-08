@@ -37,11 +37,12 @@ export function TaskDialog({
 }: {
   initialQuad: QuadKey;
   onClose: () => void;
-  onSave: (data: { title: string; quad: QuadKey; dueDate: string | null; link: TaskLink | null; durationMin: number | null }) => void;
+  onSave: (data: { title: string; description: string; quad: QuadKey; dueDate: string | null; link: TaskLink | null; durationMin: number | null }) => void;
 }) {
   const { classes } = useSchool();
   const { events } = useCalendarEvents();
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [quad, setQuad] = useState<QuadKey>(initialQuad);
   const [dueDate, setDueDate] = useState('');
   const [durationMin, setDurationMin] = useState<number>(30);
@@ -84,7 +85,7 @@ export function TaskDialog({
   const handleSave = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    onSave({ title: trimmed, quad, dueDate: dueDate || null, link, durationMin });
+    onSave({ title: trimmed, description: description.trim(), quad, dueDate: dueDate || null, link, durationMin });
     onClose();
   };
 
@@ -121,6 +122,16 @@ export function TaskDialog({
           <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
             Type <strong>@</strong> to link a class, <strong>~</strong> to link a calendar event.
           </div>
+        </div>
+
+        <div className="field">
+          <label>Description</label>
+          <textarea
+            className="input"
+            value={description}
+            placeholder="Add any extra details (optional)"
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </div>
 
         {link && (
