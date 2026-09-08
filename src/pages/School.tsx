@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, WEEKDAYS, type Weekday } from '../state/SchoolContext';
+import { useSchoology } from '../state/SchoologyContext';
 import { fetchBellSchedule, findPeriod, isNoSchoolDay, isoToLocalHour, type BellSchedule } from '../lib/harkerBell';
 import './School.css';
 
@@ -48,6 +49,45 @@ function mondayOf(d: Date) {
 
 function isSameDate(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function fmtDue(due: string, allDay: boolean) {
+  const d = new Date(due);
+  const datePart = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (allDay) return datePart;
+  return `${datePart}, ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function SchoologyHomeworkWidget() {
+  const { status, icsUrl, assignments, error, refresh } = useSchoology();
+
+  if (!icsUrl) return null;
+
+  const now = Date.now();
+  const upcoming = assignments.filter((a) => new Date(a.due).getTime() >= now - 24 * 60 * 60 * 1000);
+
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Schoology homework</h4>
+        <button className="btn btn-ghost" type="button" onClick={() => void refresh()} disabled={status === 'loading'}>
+          {status === 'loading' ? 'Syncing…' : 'Refresh'}
+        </button>
+      </div>
+      {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
+      {!error && upcoming.length === 0 && <div className="empty-msg">Nothing due — you're all caught up.</div>}
+      <div>
+        {upcoming.map((a) => (
+          <div className="hw-row" key={a.uid}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <span className="hw-title">{a.title}</span>
+              <span className="text-muted" style={{ fontSize: 11 }}>Due {fmtDue(a.due, a.allDay)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Widget>
+  );
 }
 
 export function SchoolPage() {
@@ -284,6 +324,8 @@ export function SchoolPage() {
           ))}
         </div>
       </Widget>
+
+      <SchoologyHomeworkWidget />
 
       {classes.length === 0 && (
         <div className="empty-msg">No classes yet — add some in Settings.</div>

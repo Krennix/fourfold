@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, type SchoolClass, type Preset } from '../state/SchoolContext';
 import { useGoogleAuth } from '../state/GoogleAuthContext';
+import { useSchoology } from '../state/SchoologyContext';
 import { useAuth } from '../state/AuthContext';
 import './Settings.css';
 
@@ -62,6 +63,54 @@ function GoogleCalendarSettings() {
             <li>Copy the client ID into a <code>.env</code> file at the project root as <code>VITE_GOOGLE_CLIENT_ID=&hellip;</code>, then restart the dev server.</li>
           </ol>
         </>
+      )}
+    </Widget>
+  );
+}
+
+function SchoologySettings() {
+  const { status, icsUrl, error, saveIcsUrl, refresh } = useSchoology();
+  const [draft, setDraft] = useState(icsUrl ?? '');
+  const [dirty, setDirty] = useState(false);
+
+  const shown = dirty ? draft : (icsUrl ?? draft);
+
+  const handleSave = () => {
+    setDirty(false);
+    void saveIcsUrl(draft.trim());
+  };
+
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Schoology homework</h4>
+        {icsUrl && (
+          <button className="btn btn-ghost" type="button" onClick={() => void refresh()} disabled={status === 'loading'}>
+            {status === 'loading' ? 'Syncing…' : 'Sync now'}
+          </button>
+        )}
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Paste your personal Schoology calendar feed URL to pull assignment due dates onto the School tab. In Schoology,
+        go to <strong>Courses → Upcoming Assignments</strong> (or your Calendar), find <strong>Export/Subscribe</strong>,
+        and copy the <code>.ics</code> link it gives you.
+      </p>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          className="input"
+          type="url"
+          style={{ flex: 1, minWidth: 240 }}
+          placeholder="https://.../feed/....ics"
+          value={shown}
+          onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
+        />
+        <button className="btn btn-primary" type="button" onClick={handleSave} disabled={status === 'loading' || !draft.trim()}>
+          Save
+        </button>
+      </div>
+      {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
+      {icsUrl && !error && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>Connected. Assignments now show up on the School tab.</p>
       )}
     </Widget>
   );
@@ -166,6 +215,7 @@ export function SettingsPage() {
 
       <AccessSettings />
       <GoogleCalendarSettings />
+      <SchoologySettings />
 
       <Widget>
         <div className="widget-head">

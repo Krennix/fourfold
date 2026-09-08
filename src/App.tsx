@@ -4,6 +4,7 @@ import { LoginGate } from './components/LoginGate';
 import { AuthProvider } from './state/AuthContext';
 import { ThemeProvider } from './state/ThemeContext';
 import { SchoolProvider } from './state/SchoolContext';
+import { SchoologyProvider } from './state/SchoologyContext';
 import { HabitsProvider } from './state/HabitsContext';
 import { MatrixProvider } from './state/MatrixContext';
 import { GoogleAuthProvider } from './state/GoogleAuthContext';
@@ -25,6 +26,7 @@ function App() {
     <AuthProvider>
     <LoginGate>
     <SchoolProvider>
+    <SchoologyProvider>
       <HabitsProvider>
         <MatrixProvider>
           <GoogleAuthProvider>
@@ -52,6 +54,7 @@ function App() {
           </GoogleAuthProvider>
         </MatrixProvider>
       </HabitsProvider>
+    </SchoologyProvider>
     </SchoolProvider>
     </LoginGate>
     </AuthProvider>
