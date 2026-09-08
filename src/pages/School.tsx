@@ -274,13 +274,14 @@ export function SchoolPage() {
           <button className="btn btn-icon" type="button" onClick={() => setWeekStart((w) => { const d = new Date(w); d.setDate(d.getDate() - 7); return d; })}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 6-6 6 6 6" /></svg>
           </button>
-          <h3 style={{ minWidth: 220 }}>{weekLabel}</h3>
+          <h3 style={{ minWidth: 0 }}>{weekLabel}</h3>
           <button className="btn btn-icon" type="button" onClick={() => setWeekStart((w) => { const d = new Date(w); d.setDate(d.getDate() + 7); return d; })}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
           </button>
           <button className="btn btn-secondary" type="button" onClick={() => setWeekStart(mondayOf(new Date()))} style={{ marginLeft: 'var(--space-2)' }}>This week</button>
         </div>
 
+        <div className="week-grid-scroll">
         <div className="week-grid">
           <div />
           {dayColumns.map((col) => (
@@ -341,6 +342,7 @@ export function SchoolPage() {
               ))}
             </div>
           ))}
+        </div>
         </div>
       </Widget>
 

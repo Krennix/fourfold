@@ -11,6 +11,14 @@
   min-height: 104px; border: 1px solid var(--color-divider); border-radius: var(--radius-sm);
   padding: 6px; display: flex; flex-direction: column; gap: 4px; background: transparent;
 }
+
+@media (max-width: 640px) {
+  .month-grid { gap: 3px; }
+  .day-cell { min-height: 64px; padding: 3px; gap: 2px; }
+  .day-num { font-size: 11px; }
+  .evt-chip { font-size: 9px; padding: 1px 4px; }
+  .dow { padding: 2px 2px; font-size: 9px; }
+}
 .day-cell.blank { border-color: transparent; }
 .day-cell.clickable { cursor: pointer; }
 .day-cell.clickable:hover { border-color: var(--color-accent); background: var(--color-accent-100); }

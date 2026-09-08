@@ -45,7 +45,7 @@
   --urgency-yellow: #b8860b;
   --urgency-blue: #3f7cad;
 
-  --color-logo: #0f1e54;
+  --color-logo: #0c2b67;
 
   --font-heading: "Barlow Condensed", system-ui, sans-serif;
   --font-heading-weight: 600;
@@ -116,7 +116,7 @@
     --urgency-yellow: #d6a437;
     --urgency-blue: #6ba3d6;
 
-    --color-logo: #eef1fb;
+    --color-logo: #a7c1f5;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
     --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.4);

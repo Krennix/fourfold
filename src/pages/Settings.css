@@ -31,3 +31,12 @@
 .period-chip.active { border-color: var(--color-accent); background: var(--color-accent-100); color: var(--color-accent-800); }
 
 .toggle-row { display: flex; align-items: center; gap: var(--space-2); font-size: 13px; cursor: pointer; }
+
+@media (max-width: 640px) {
+  .day-time-row { flex-wrap: wrap; row-gap: 4px; }
+  .day-time-row .input { width: 92px; }
+  .day-time-check { width: 100%; }
+
+  .class-row { flex-wrap: wrap; }
+  .class-row-actions { width: 100%; justify-content: flex-end; }
+}
