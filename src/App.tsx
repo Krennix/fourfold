@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
 import { LoginGate } from './components/LoginGate';
 import { AuthProvider } from './state/AuthContext';
@@ -16,7 +16,6 @@ import { HomePage } from './pages/Home';
 import { MatrixPage } from './pages/Matrix';
 import { HabitsPage } from './pages/Habits';
 import { CalendarPage } from './pages/Calendar';
-import { CountdownsPage } from './pages/Countdowns';
 import { PomodoroPage } from './pages/Pomodoro';
 import { AgentPage } from './pages/Agent';
 import { SchoolPage } from './pages/School';
@@ -44,7 +43,7 @@ function App() {
                     <Route path="/matrix" element={<MatrixPage />} />
                     <Route path="/habits" element={<HabitsPage />} />
                     <Route path="/calendar" element={<CalendarPage />} />
-                    <Route path="/countdowns" element={<CountdownsPage />} />
+                    <Route path="/countdowns" element={<Navigate to="/habits" replace />} />
                     <Route path="/pomodoro" element={<PomodoroPage />} />
                     <Route path="/agent" element={<AgentPage />} />
                     <Route path="/school" element={<SchoolPage />} />

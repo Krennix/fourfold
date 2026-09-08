@@ -3,6 +3,10 @@ import { useGoogleAuth } from './GoogleAuthContext';
 import { deleteEvent, insertEvent, listEvents, updateEvent as patchGoogleEvent, type GoogleCalendarEvent } from '../lib/googleCalendar';
 
 const STORAGE_KEY = 'fourfold.calendar.v1';
+/** Google-sourced events are refetched fresh on every refresh, so "locked" can't live on the
+ * event object itself — it's tracked here as a standalone set of event ids and overlaid onto
+ * whichever events (local or Google) currently have a matching id. */
+const LOCKED_STORAGE_KEY = 'fourfold.calendar.locked.v1';
 
 export interface CalEvent {
   id: string;
@@ -12,6 +16,8 @@ export interface CalEvent {
   cls: '' | 'google';
   /** Length of the event in minutes, when known (absent for legacy/local events). */
   durationMin?: number;
+  /** Fixed/"set in stone" — shouldn't be moved, rescheduled, or deleted by drag/AI actions. */
+  locked?: boolean;
 }
 
 export interface CalendarContextValue {
@@ -22,6 +28,7 @@ export interface CalendarContextValue {
   addEvent: (date: string, title: string, time: string, durationMin?: number) => Promise<CalEvent | null>;
   updateEvent: (id: string, date: string, title: string, time: string, durationMin?: number) => Promise<CalEvent | null>;
   removeEvent: (id: string) => void;
+  toggleEventLocked: (id: string) => void;
   eventsByDate: (date: string) => CalEvent[];
 }
 
@@ -35,6 +42,16 @@ function loadLocalEvents(): CalEvent[] {
     // ignore malformed storage
   }
   return [];
+}
+
+function loadLockedIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LOCKED_STORAGE_KEY);
+    if (raw) return new Set(JSON.parse(raw));
+  } catch {
+    // ignore malformed storage
+  }
+  return new Set();
 }
 
 function googleEventToCalEvent(ev: GoogleCalendarEvent): CalEvent | null {
@@ -54,6 +71,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   const { status, accessToken } = useGoogleAuth();
   const [localEvents, setLocalEvents] = useState<CalEvent[]>(loadLocalEvents);
   const [googleEvents, setGoogleEvents] = useState<CalEvent[]>([]);
+  const [lockedIds, setLockedIds] = useState<Set<string>>(loadLockedIds);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +82,23 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       // storage unavailable — state still works for this session
     }
   }, [localEvents]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCKED_STORAGE_KEY, JSON.stringify([...lockedIds]));
+    } catch {
+      // storage unavailable — state still works for this session
+    }
+  }, [lockedIds]);
+
+  const toggleEventLocked = useCallback((id: string) => {
+    setLockedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (status !== 'signed-in') setGoogleEvents([]);
@@ -110,6 +145,10 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
 
   // `date` is "Y-M-D" with a 0-based month, matching `addEvent`.
   const updateEvent: CalendarContextValue['updateEvent'] = async (id, date, title, time, durationMin = 60) => {
+    if (lockedIds.has(id)) {
+      setError('That event is locked — unlock it before moving it.');
+      return null;
+    }
     const googleEvent = googleEvents.find((e) => e.id === id);
     if (googleEvent && accessToken) {
       const [y, m, d] = date.split('-').map(Number);
@@ -136,6 +175,10 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   };
 
   const removeEvent = (id: string) => {
+    if (lockedIds.has(id)) {
+      setError('That event is locked — unlock it before deleting it.');
+      return;
+    }
     const googleEvent = googleEvents.find((e) => e.id === id);
     if (googleEvent && accessToken) {
       setError(null);
@@ -147,11 +190,11 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     setLocalEvents((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const events = [...googleEvents, ...localEvents];
+  const events = [...googleEvents, ...localEvents].map((e) => (lockedIds.has(e.id) ? { ...e, locked: true } : e));
   const eventsByDate = (date: string) => events.filter((e) => e.date === date).sort((a, b) => a.time.localeCompare(b.time));
 
   return (
-    <CalendarContext.Provider value={{ events, loading, error, refresh, addEvent, updateEvent, removeEvent, eventsByDate }}>
+    <CalendarContext.Provider value={{ events, loading, error, refresh, addEvent, updateEvent, removeEvent, toggleEventLocked, eventsByDate }}>
       {children}
     </CalendarContext.Provider>
   );

@@ -5,6 +5,10 @@ export interface IcsEvent {
   /** ISO 8601 due date/time. */
   due: string;
   allDay: boolean;
+  /** Course/category names from the ICS CATEGORIES property, if present. */
+  categories: string[];
+  /** RFC 5545 PRIORITY (1-4 high, 5 normal, 6-9 low, 0/absent = none). */
+  priority: number | null;
 }
 
 function unfold(text: string): string[] {
@@ -56,12 +60,28 @@ export function parseIcsEvents(text: string): IcsEvent[] {
         const parsed = dt ? parseDate(dt.value, dt.params) : null;
         const uid = current.UID?.value ?? `${current.SUMMARY?.value ?? 'event'}-${parsed?.iso ?? ''}`;
         if (parsed) {
+          const categoriesRaw = current.CATEGORIES ? unescapeText(current.CATEGORIES.value) : '';
+          const categories = categoriesRaw
+            .split(/(?<!\\),/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          const priorityNum = current.PRIORITY ? Number(current.PRIORITY.value) : NaN;
+          const priority = Number.isFinite(priorityNum) && priorityNum > 0 ? priorityNum : null;
+          const title = current.SUMMARY ? unescapeText(current.SUMMARY.value) : 'Untitled assignment';
+          // Many Schoology feeds don't set CATEGORIES; the course name often shows up
+          // as a trailing "(Course Name)" on the title instead — use that as a fallback.
+          const titleCourseMatch = /\(([^()]+)\)\s*$/.exec(title);
+          if (titleCourseMatch && !categories.includes(titleCourseMatch[1].trim())) {
+            categories.push(titleCourseMatch[1].trim());
+          }
           events.push({
             uid,
-            title: current.SUMMARY ? unescapeText(current.SUMMARY.value) : 'Untitled assignment',
+            title,
             description: current.DESCRIPTION ? unescapeText(current.DESCRIPTION.value) : null,
             due: parsed.iso,
             allDay: parsed.allDay,
+            categories,
+            priority,
           });
         }
       }

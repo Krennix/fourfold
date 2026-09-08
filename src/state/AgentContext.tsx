@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { useCalendarEvents } from './CalendarContext';
 import { useMatrix } from './MatrixContext';
@@ -18,6 +18,14 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
 }
+
+/** Chat is stored alongside the local day it was started on, so it can be wiped at local midnight. */
+interface ChatState {
+  day: string;
+  messages: ChatMessage[];
+}
+
+const EMPTY_CHAT: ChatState = { day: '', messages: [] };
 
 interface AgentContextValue {
   chatMessages: ChatMessage[];
@@ -47,7 +55,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const matrix = useMatrix();
   const { assignments } = useSchoology();
 
-  const [chatMessages, setChatMessages] = useRemoteState<ChatMessage[]>('agentChat', [], handleSessionExpired);
+  const [chatState, setChatState] = useRemoteState<ChatState>('agentChat', EMPTY_CHAT, handleSessionExpired);
   const [isThinking, setIsThinking] = useState(false);
   const [dailyPlan, setDailyPlan] = useRemoteState<DailyPlanItem[] | null>('dailyPlan', null, handleSessionExpired);
   const [isPlanning, setIsPlanning] = useState(false);
@@ -64,20 +72,47 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     };
   }, [calendar.events, matrix.tasks, assignments]);
 
+  // Re-render at least once a minute so `todayKey` below notices a local-midnight rollover
+  // even if the tab is just sitting open with nothing else triggering a render.
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => forceTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const todayKey = dateKeyForToday();
+  const chatMessages = chatState.day === todayKey ? chatState.messages : [];
+
+  // Persist the wipe once we notice the day has rolled over — `chatMessages` above already
+  // renders empty immediately, this just makes the clear stick in remote storage.
+  useEffect(() => {
+    if (chatState.day !== todayKey) setChatState({ day: todayKey, messages: [] });
+  }, [chatState.day, todayKey, setChatState]);
+
+  const appendChatMessage = useCallback(
+    (message: ChatMessage) => {
+      setChatState((prev) => ({
+        day: todayKey,
+        messages: [...(prev.day === todayKey ? prev.messages : []), message],
+      }));
+    },
+    [todayKey, setChatState],
+  );
+
   const sendChatMessage = useCallback(
     async (text: string) => {
-      setChatMessages((prev) => [...prev, { role: 'user', text }]);
+      appendChatMessage({ role: 'user', text });
       setIsThinking(true);
       try {
         const reply = await runAgentLoop('chat', text, buildContext(), { calendar, matrix }, handleSessionExpired);
-        if (reply) setChatMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
+        if (reply) appendChatMessage({ role: 'assistant', text: reply });
       } catch (err) {
-        setChatMessages((prev) => [...prev, { role: 'assistant', text: `Something went wrong: ${err instanceof Error ? err.message : String(err)}` }]);
+        appendChatMessage({ role: 'assistant', text: `Something went wrong: ${err instanceof Error ? err.message : String(err)}` });
       } finally {
         setIsThinking(false);
       }
     },
-    [buildContext, calendar, matrix, handleSessionExpired, setChatMessages],
+    [appendChatMessage, buildContext, calendar, matrix, handleSessionExpired],
   );
 
   const generateDailyPlan = useCallback(async () => {

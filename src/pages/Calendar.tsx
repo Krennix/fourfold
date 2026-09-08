@@ -7,7 +7,7 @@ import './Calendar.css';
 const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function CalendarPage() {
-  const { events, loading, error, refresh, addEvent, removeEvent } = useCalendarEvents();
+  const { events, loading, error, refresh, addEvent, removeEvent, toggleEventLocked } = useCalendarEvents();
   const { status, email, connect, disconnect } = useGoogleAuth();
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
@@ -134,14 +134,28 @@ export function CalendarPage() {
                   <span className="day-num">{c.num}</span>
                   {c.events.map((ev) => (
                     <span
-                      className={`evt-chip${ev.cls ? ` ${ev.cls}` : ''}`}
+                      className={`evt-chip${ev.cls ? ` ${ev.cls}` : ''}${ev.locked ? ' locked' : ''}`}
                       key={ev.id}
-                      title="Click to remove"
-                      onClick={() => removeEvent(ev.id)}
-                      style={{ cursor: 'pointer' }}
+                      title={ev.locked ? 'Locked — set in stone. Click the lock to unlock.' : 'Click to remove'}
+                      onClick={() => !ev.locked && removeEvent(ev.id)}
+                      style={{ cursor: ev.locked ? 'default' : 'pointer' }}
                     >
                       {ev.cls === 'google' && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="8" width="9" height="6" rx="3" /><rect x="10" y="10" width="9" height="6" rx="3" /></svg>}
                       {ev.time} {ev.title}
+                      <span
+                        className="evt-lock"
+                        role="button"
+                        tabIndex={0}
+                        title={ev.locked ? 'Unlock' : 'Lock in place — set in stone'}
+                        onClick={(e) => { e.stopPropagation(); toggleEventLocked(ev.id); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleEventLocked(ev.id); } }}
+                      >
+                        {ev.locked ? (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                        ) : (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 7.5-2" /></svg>
+                        )}
+                      </span>
                     </span>
                   ))}
                 </>

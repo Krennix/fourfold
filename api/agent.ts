@@ -5,7 +5,7 @@ import { verifySession } from './_lib/session.js';
 import { findFreeSlots, type AgentCalEvent } from './_lib/scheduling.js';
 import { toolsForMode, systemPromptForMode, DAILY_PLAN_SCHEMA, WATCHDOG_SCHEMA, type AgentMode } from './_lib/agentTools.js';
 
-const MODEL = 'claude-opus-5';
+const MODEL = 'claude-sonnet-5';
 const MAX_ITERATIONS = 6;
 const READ_ONLY_TOOLS = new Set(['get_calendar_events', 'get_tasks', 'get_assignments', 'find_free_slots']);
 
@@ -16,6 +16,7 @@ interface AgentTask {
   time: string | null;
   dueDate: string | null;
   durationMin: number | null;
+  locked?: boolean;
 }
 
 interface AgentAssignment {
@@ -94,11 +95,17 @@ async function handleLoopMode(
   if (pendingToolResults) {
     messages = [...messages, { role: 'user', content: pendingToolResults }];
   } else if (message) {
-    messages = [...messages, { role: 'user', content: message }];
+    // Stamped here (not in the system prompt) so the system/tools prefix stays byte-identical
+    // across every request and can actually be served from cache — see systemPromptForMode.
+    messages = [...messages, { role: 'user', content: `[Current date/time: ${context.now}]\n${message}` }];
   }
 
   const tools = toolsForMode(mode);
-  const system = systemPromptForMode(mode, context.now);
+  // Explicit breakpoint: this text is static per mode, so it (and the tools before it in the
+  // cache hierarchy) gets reused across every iteration of this loop and every future request.
+  const system: Anthropic.TextBlockParam[] = [
+    { type: 'text', text: systemPromptForMode(mode), cache_control: { type: 'ephemeral' } },
+  ];
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const response = await client.messages.create({
@@ -106,6 +113,9 @@ async function handleLoopMode(
       max_tokens: 4096,
       system,
       tools,
+      // Automatic breakpoint: as `messages` grows across loop iterations and later chat turns,
+      // this keeps caching everything up to the newest block instead of resending it uncached.
+      cache_control: { type: 'ephemeral' },
       thinking: { type: 'adaptive' },
       output_config: { effort: mode === 'auto_schedule' ? 'medium' : 'low' },
       messages,
@@ -143,7 +153,7 @@ async function handleLoopMode(
 }
 
 async function handleDailyPlan(context: AgentContextPayload, res: VercelResponse) {
-  const system = systemPromptForMode('daily_plan', context.now);
+  const system = systemPromptForMode('daily_plan');
   const response = await client.messages.parse({
     model: MODEL,
     max_tokens: 4096,
@@ -156,7 +166,7 @@ async function handleDailyPlan(context: AgentContextPayload, res: VercelResponse
 }
 
 async function handleWatchdog(context: AgentContextPayload, res: VercelResponse) {
-  const system = systemPromptForMode('watchdog', context.now);
+  const system = systemPromptForMode('watchdog');
   const response = await client.messages.parse({
     model: MODEL,
     max_tokens: 4096,

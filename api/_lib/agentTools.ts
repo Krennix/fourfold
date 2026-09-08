@@ -148,8 +148,13 @@ export function toolsForMode(mode: AgentMode): Anthropic.Tool[] {
   return [...READ_TOOLS, ...WRITE_TOOLS];
 }
 
-export function systemPromptForMode(mode: AgentMode, nowISO: string): string {
-  const base = `You are Fourfold's scheduling assistant. The current date/time is ${nowISO}. All calendar dates use the format "YYYY-M-D" with a 0-based month (e.g. "2026-8-7" is September 7, 2026). Times are "HH:MM" 24-hour. Always use find_free_slots to find open time rather than reasoning about conflicts yourself.`;
+/**
+ * Static per-mode instructions — deliberately excludes anything that varies per request (like
+ * the current time) so this stays byte-identical across calls and stays cacheable. The caller
+ * stamps the current time onto the user turn instead; see handleLoopMode in api/agent.ts.
+ */
+export function systemPromptForMode(mode: AgentMode): string {
+  const base = `You are Fourfold's scheduling assistant. The user's current date/time is given at the start of their message. All calendar dates use the format "YYYY-M-D" with a 0-based month (e.g. "2026-8-7" is September 7, 2026). Times are "HH:MM" 24-hour. Always use find_free_slots to find open time rather than reasoning about conflicts yourself. Events and tasks may have "locked": true, meaning the user has marked them fixed/"set in stone" — never move, reschedule, or delete a locked item (the app will refuse the action anyway); if asked to change one, tell the user it's locked and that they need to unlock it in the Calendar/Matrix UI first. Locked items still count as busy time when finding free slots for other things.`;
   switch (mode) {
     case 'chat':
       return `${base} Help the user manage their calendar, tasks, and assignments via natural language. Take action with tools when asked; ask for clarification if a request is ambiguous. Keep replies brief.`;

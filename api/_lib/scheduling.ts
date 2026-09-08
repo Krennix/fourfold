@@ -5,6 +5,7 @@ export interface AgentCalEvent {
   time: string;
   title: string;
   durationMin?: number;
+  locked?: boolean;
 }
 
 export interface FreeSlotOptions {
