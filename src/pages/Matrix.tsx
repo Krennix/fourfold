@@ -67,7 +67,6 @@ export function MatrixPage() {
                   </div>
                   <span className={`ttitle${t.done ? ' done' : ''}`}>{t.title}</span>
                   <span className="tmeta">
-                    {t.link && <span className="tag tag-accent-2">{t.link.type === 'class' ? '@' : '~'}{t.link.label}</span>}
                     {t.dueDate && <span className="tag tag-outline">Due {t.dueDate}</span>}
                     {t.time && (
                       <span className="tag tag-accent" style={{ cursor: 'pointer' }} onClick={() => unscheduleTask(q.key, t.id)}>{t.time}</span>

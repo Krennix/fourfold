@@ -18,6 +18,8 @@ export interface Task {
   listTag: string;
   dueDate: string | null;
   link: TaskLink | null;
+  /** Estimated time needed to complete the task, in minutes. */
+  durationMin: number | null;
 }
 
 export interface NewTaskInput {
@@ -25,6 +27,7 @@ export interface NewTaskInput {
   listTag?: string;
   dueDate?: string | null;
   link?: TaskLink | null;
+  durationMin?: number | null;
 }
 
 type TaskState = Record<QuadKey, Task[]>;
@@ -55,6 +58,7 @@ export function MatrixProvider({ children }: { children: ReactNode }) {
       listTag: data.listTag || 'Inbox',
       dueDate: data.dueDate ?? null,
       link: data.link ?? null,
+      durationMin: data.durationMin ?? null,
     };
     setTasks((s) => ({ ...s, [qkey]: [...s[qkey], task] }));
   };

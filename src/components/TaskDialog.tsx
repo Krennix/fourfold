@@ -4,6 +4,8 @@ import { useSchool } from '../state/SchoolContext';
 import { useCalendarEvents } from '../state/CalendarContext';
 import './TaskDialog.css';
 
+const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120, 180] as const;
+
 const QUAD_OPTIONS: { key: QuadKey; numeral: string; label: string }[] = [
   { key: 'q1', numeral: 'I', label: 'Urgent & Important' },
   { key: 'q2', numeral: 'II', label: 'Not Urgent & Important' },
@@ -35,13 +37,14 @@ export function TaskDialog({
 }: {
   initialQuad: QuadKey;
   onClose: () => void;
-  onSave: (data: { title: string; quad: QuadKey; dueDate: string | null; link: TaskLink | null }) => void;
+  onSave: (data: { title: string; quad: QuadKey; dueDate: string | null; link: TaskLink | null; durationMin: number | null }) => void;
 }) {
   const { classes } = useSchool();
   const { events } = useCalendarEvents();
   const [title, setTitle] = useState('');
   const [quad, setQuad] = useState<QuadKey>(initialQuad);
   const [dueDate, setDueDate] = useState('');
+  const [durationMin, setDurationMin] = useState<number>(30);
   const [link, setLink] = useState<TaskLink | null>(null);
   const [mention, setMention] = useState<Mention | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -81,7 +84,7 @@ export function TaskDialog({
   const handleSave = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    onSave({ title: trimmed, quad, dueDate: dueDate || null, link });
+    onSave({ title: trimmed, quad, dueDate: dueDate || null, link, durationMin });
     onClose();
   };
 
@@ -142,11 +145,20 @@ export function TaskDialog({
             <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
           <div className="field" style={{ flex: 1 }}>
-            <label>Priority</label>
-            <select className="input" value={quad} onChange={(e) => setQuad(e.target.value as QuadKey)}>
-              {QUAD_OPTIONS.map((q) => <option key={q.key} value={q.key}>{q.numeral} · {q.label}</option>)}
+            <label>Time needed</label>
+            <select className="input" value={durationMin} onChange={(e) => setDurationMin(Number(e.target.value))}>
+              {DURATION_OPTIONS.map((m) => (
+                <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60} hr${m > 60 ? (m % 60 ? ` ${m % 60}m` : '') : ''}`}</option>
+              ))}
             </select>
           </div>
+        </div>
+
+        <div className="field">
+          <label>Priority</label>
+          <select className="input" value={quad} onChange={(e) => setQuad(e.target.value as QuadKey)}>
+            {QUAD_OPTIONS.map((q) => <option key={q.key} value={q.key}>{q.numeral} · {q.label}</option>)}
+          </select>
         </div>
 
         <div className="dialog-actions">

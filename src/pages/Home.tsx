@@ -167,8 +167,7 @@ export function HomePage() {
                     {active.map((t) => (
                       <div className="task-chip" key={t.id}>
                         {t.title}
-                        {t.link && <span className="text-muted"> · {t.link.type === 'class' ? '@' : '~'}{t.link.label}</span>}
-                        {t.dueDate && <span className="text-muted"> · {t.dueDate}</span>}
+                        {t.dueDate && <span className="text-muted"> · Due {t.dueDate}</span>}
                       </div>
                     ))}
                   </div>

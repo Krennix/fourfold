@@ -14,6 +14,11 @@ function bearerToken(req: VercelRequest): string | null {
   return header.slice('Bearer '.length);
 }
 
+/** Calendar apps hand out `webcal://` links as an alias for the same feed over https. */
+function normalizeIcsUrl(value: string): string {
+  return value.replace(/^webcal:\/\//i, 'https://');
+}
+
 function isHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -55,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'PUT') {
-    const icsUrl = typeof req.body?.icsUrl === 'string' ? req.body.icsUrl.trim() : '';
+    const icsUrl = typeof req.body?.icsUrl === 'string' ? normalizeIcsUrl(req.body.icsUrl.trim()) : '';
     if (icsUrl && !isHttpUrl(icsUrl)) {
       res.status(400).json({ error: 'That does not look like a valid URL.' });
       return;
