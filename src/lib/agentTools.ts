@@ -16,6 +16,10 @@ function isQuadKey(v: unknown): v is QuadKey {
   return v === 'q1' || v === 'q2' || v === 'q3' || v === 'q4';
 }
 
+function findTask(matrix: MatrixContextValue, quadrant: QuadKey, taskId: string) {
+  return matrix.tasks[quadrant].find((t) => t.id === taskId);
+}
+
 /** Executes a write tool Claude requested against the real app state. Read tools are executed server-side. */
 export async function executeWriteTool(call: AgentToolCall, deps: AgentToolDeps): Promise<unknown> {
   const { input } = call;
@@ -34,6 +38,7 @@ export async function executeWriteTool(call: AgentToolCall, deps: AgentToolDeps)
     case 'move_event': {
       const existing = calendar.events.find((e) => e.id === input.id);
       if (!existing) return { error: 'No such event.' };
+      if (existing.locked) return { error: 'This event is locked ("set in stone") and cannot be moved. Ask the user to unlock it first.' };
       const updated = await calendar.updateEvent(
         String(input.id),
         String(input.date),
@@ -44,6 +49,8 @@ export async function executeWriteTool(call: AgentToolCall, deps: AgentToolDeps)
       return updated ?? { error: 'Could not move the event.' };
     }
     case 'remove_event': {
+      const existing = calendar.events.find((e) => e.id === input.id);
+      if (existing?.locked) return { error: 'This event is locked ("set in stone") and cannot be deleted. Ask the user to unlock it first.' };
       calendar.removeEvent(String(input.id));
       return { ok: true };
     }
@@ -58,11 +65,17 @@ export async function executeWriteTool(call: AgentToolCall, deps: AgentToolDeps)
     }
     case 'schedule_task': {
       if (!isQuadKey(input.quadrant)) return { error: 'Invalid quadrant.' };
+      if (findTask(matrix, input.quadrant, String(input.taskId))?.locked) {
+        return { error: 'This task is locked ("set in stone") and cannot be rescheduled. Ask the user to unlock it first.' };
+      }
       matrix.scheduleTask(input.quadrant, String(input.taskId), String(input.time));
       return { ok: true };
     }
     case 'unschedule_task': {
       if (!isQuadKey(input.quadrant)) return { error: 'Invalid quadrant.' };
+      if (findTask(matrix, input.quadrant, String(input.taskId))?.locked) {
+        return { error: 'This task is locked ("set in stone") and cannot be unscheduled. Ask the user to unlock it first.' };
+      }
       matrix.unscheduleTask(input.quadrant, String(input.taskId));
       return { ok: true };
     }

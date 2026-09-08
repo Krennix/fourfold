@@ -32,12 +32,37 @@ export function matchCategoryToClass(
   return fuzzy?.id ?? null;
 }
 
+/**
+ * Resolves an assignment to a class id using, in order: its categories (real ICS
+ * CATEGORIES or a guessed trailing "(Course)" on the title), then per-class keywords
+ * matched as a substring against the title/description. Keywords are the fallback for
+ * feeds that expose no course-identifying field at all.
+ */
+export function matchAssignmentToClass(
+  assignment: Pick<SchoologyAssignment, 'categories' | 'title' | 'description'>,
+  classes: SchoolClass[],
+  mappings: Record<string, string>,
+  classKeywords: Record<string, string[]>,
+): string | null {
+  for (const cat of assignment.categories) {
+    const match = matchCategoryToClass(cat, classes, mappings);
+    if (match) return match;
+  }
+  const haystack = `${assignment.title} ${assignment.description ?? ''}`.toLowerCase();
+  for (const cls of classes) {
+    const keywords = classKeywords[cls.id] || [];
+    if (keywords.some((kw) => kw.trim() && haystack.includes(kw.trim().toLowerCase()))) return cls.id;
+  }
+  return null;
+}
+
 export function mergeHomeworkForClass(
   classId: string,
   manual: Homework[],
   assignments: SchoologyAssignment[],
   classes: SchoolClass[],
   mappings: Record<string, string>,
+  classKeywords: Record<string, string[]>,
   schoologyDone: Record<string, boolean>,
   now: Date = new Date(),
 ): MergedHomeworkItem[] {
@@ -52,9 +77,7 @@ export function mergeHomeworkForClass(
     homeworkId: hw.id,
   }));
 
-  const matched = assignments.filter((a) =>
-    a.categories.some((cat) => matchCategoryToClass(cat, classes, mappings) === classId),
-  );
+  const matched = assignments.filter((a) => matchAssignmentToClass(a, classes, mappings, classKeywords) === classId);
   const schoologyItems: MergedHomeworkItem[] = matched.map((a) => ({
     key: `schoology-${a.uid}`,
     source: 'schoology',
@@ -84,21 +107,6 @@ export function classBadge(openItems: MergedHomeworkItem[]): { count: number; co
     if (urgencyRank(item.urgency) < urgencyRank(color)) color = item.urgency;
   }
   return { count: openItems.length, color };
-}
-
-/** Distinct categories seen across the feed that don't resolve to any class, for the Settings mapping UI. */
-export function unmatchedCategories(
-  assignments: SchoologyAssignment[],
-  classes: SchoolClass[],
-  mappings: Record<string, string>,
-): string[] {
-  const seen = new Set<string>();
-  for (const a of assignments) {
-    for (const cat of a.categories) {
-      if (cat.trim()) seen.add(cat.trim());
-    }
-  }
-  return Array.from(seen).filter((cat) => !matchCategoryToClass(cat, classes, mappings));
 }
 
 /** All distinct categories seen across the feed, for the Settings mapping UI. */

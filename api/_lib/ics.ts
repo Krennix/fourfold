@@ -67,9 +67,16 @@ export function parseIcsEvents(text: string): IcsEvent[] {
             .filter(Boolean);
           const priorityNum = current.PRIORITY ? Number(current.PRIORITY.value) : NaN;
           const priority = Number.isFinite(priorityNum) && priorityNum > 0 ? priorityNum : null;
+          const title = current.SUMMARY ? unescapeText(current.SUMMARY.value) : 'Untitled assignment';
+          // Many Schoology feeds don't set CATEGORIES; the course name often shows up
+          // as a trailing "(Course Name)" on the title instead — use that as a fallback.
+          const titleCourseMatch = /\(([^()]+)\)\s*$/.exec(title);
+          if (titleCourseMatch && !categories.includes(titleCourseMatch[1].trim())) {
+            categories.push(titleCourseMatch[1].trim());
+          }
           events.push({
             uid,
-            title: current.SUMMARY ? unescapeText(current.SUMMARY.value) : 'Untitled assignment',
+            title,
             description: current.DESCRIPTION ? unescapeText(current.DESCRIPTION.value) : null,
             due: parsed.iso,
             allDay: parsed.allDay,

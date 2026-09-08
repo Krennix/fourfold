@@ -291,7 +291,7 @@ export function HomePage() {
             <div className="widget-head">
               <h4>Upcoming Countdowns</h4>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                <Link className="btn btn-ghost" style={{ fontSize: 12 }} to="/countdowns">
+                <Link className="btn btn-ghost" style={{ fontSize: 12 }} to="/habits">
                   View all
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
                 </Link>
@@ -336,9 +336,9 @@ export function HomePage() {
         <TaskDialog
           initialQuad={taskDialogQuad}
           onClose={() => setTaskDialogQuad(null)}
-          onSave={async ({ title, description, quad, dueDate, link, durationMin }) => {
+          onSave={async ({ title, description, quad, dueDate, link, durationMin, locked }) => {
             const scheduled = await autoSchedule({ title, dueDate, durationMin, link });
-            addTask(quad, { title, description, dueDate, link: scheduled.link, durationMin, time: scheduled.time });
+            addTask(quad, { title, description, dueDate, link: scheduled.link, durationMin, time: scheduled.time, locked });
           }}
         />
       )}

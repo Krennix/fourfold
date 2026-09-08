@@ -46,7 +46,7 @@ function fmtDueDisplay(due: string | null) {
 export function SchoolPage() {
   const {
     classes, presets, overrides, setOverride, showBreaks, homework,
-    addHomework: addHomeworkToClass, toggleHomework, schoologyDone, toggleSchoologyHomeworkDone, classMappings,
+    addHomework: addHomeworkToClass, toggleHomework, schoologyDone, toggleSchoologyHomeworkDone, classMappings, classKeywords,
   } = useSchool();
   const { assignments } = useSchoology();
   const [openClassId, setOpenClassId] = useState<string | null>(null);
@@ -94,10 +94,10 @@ export function SchoolPage() {
   const mergedByClass = useMemo(() => {
     const out: Record<string, MergedHomeworkItem[]> = {};
     for (const c of classes) {
-      out[c.id] = mergeHomeworkForClass(c.id, homework[c.id] || [], assignments, classes, classMappings, schoologyDone);
+      out[c.id] = mergeHomeworkForClass(c.id, homework[c.id] || [], assignments, classes, classMappings, classKeywords, schoologyDone);
     }
     return out;
-  }, [classes, homework, assignments, classMappings, schoologyDone]);
+  }, [classes, homework, assignments, classMappings, classKeywords, schoologyDone]);
 
   const weekDates = WEEKDAYS.map((_, i) => {
     const d = new Date(weekStart);

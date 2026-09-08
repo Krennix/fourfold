@@ -27,7 +27,7 @@ const navItems = [
   },
   {
     to: '/habits',
-    label: 'Habits',
+    label: 'Habits & Countdowns',
     icon: (
       <>
         <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -46,19 +46,6 @@ const navItems = [
     ),
   },
   {
-    to: '/countdowns',
-    label: 'Countdowns',
-    icon: (
-      <>
-        <path d="M12 2v3" />
-        <path d="M12 5c-1 0-1.5.75-1.5 1.5S11 8 12 8s1.5-.75 1.5-1.5S13 5 12 5Z" />
-        <path d="M4 21v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6" />
-        <path d="M4 21h16" />
-        <path d="M4 17c1 1 2 1 3 0s2-1 3 0 2 1 3 0 2-1 3 0 2 1 3 0" />
-      </>
-    ),
-  },
-  {
     to: '/pomodoro',
     label: 'Pomodoro',
     icon: (
@@ -70,22 +57,22 @@ const navItems = [
     ),
   },
   {
-    to: '/agent',
-    label: 'Assistant',
-    icon: (
-      <>
-        <circle cx="12" cy="12" r="3.5" />
-        <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
-      </>
-    ),
-  },
-  {
     to: '/school',
     label: 'School',
     icon: (
       <>
         <path d="m22 10-10-5L2 10l10 5 10-5Z" />
         <path d="M6 12v5c0 1.1 2.7 2 6 2s6-.9 6-2v-5" />
+      </>
+    ),
+  },
+  {
+    to: '/agent',
+    label: 'Assistant',
+    icon: (
+      <>
+        <circle cx="12" cy="12" r="3.5" />
+        <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
       </>
     ),
   },

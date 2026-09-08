@@ -119,52 +119,76 @@ function SchoologySettings() {
 
 function SchoologyClassMappingSettings() {
   const { assignments } = useSchoology();
-  const { classes, classMappings, setClassMapping } = useSchool();
+  const { classes, classMappings, setClassMapping, classKeywords, setClassKeywords } = useSchool();
   const categories = allCategories(assignments);
-
-  if (categories.length === 0) {
-    return (
-      <Widget>
-        <div className="widget-head"><h4>Schoology course mapping</h4></div>
-        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-          Connect a Schoology feed above to map its course categories to your classes.
-        </p>
-      </Widget>
-    );
-  }
+  const [keywordDrafts, setKeywordDrafts] = useState<Record<string, string>>({});
 
   return (
     <Widget>
       <div className="widget-head"><h4>Schoology course mapping</h4></div>
       <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-        Assignments are auto-matched to a class by course name. Override any of them here.
+        Assignments are matched to a class by course name when the feed provides one, and by keywords you set below
+        (checked against each assignment's title/description) otherwise.
       </p>
-      <div className="class-list">
-        {categories.map((cat) => {
-          const key = cat.trim().toLowerCase();
-          const current = classMappings[key] ?? matchCategoryToClass(cat, classes, {}) ?? '';
-          const isAuto = !classMappings[key];
-          return (
-            <div className="class-row" key={cat}>
-              <div className="class-row-main">
-                <span className="class-row-name">{cat}</span>
-                {isAuto && current && <span className="class-row-meta text-muted">Auto-matched to {classes.find((c) => c.id === current)?.name}</span>}
-                {!current && <span className="class-row-meta text-muted">Unmatched</span>}
+
+      {categories.length > 0 && (
+        <div className="class-list">
+          {categories.map((cat) => {
+            const key = cat.trim().toLowerCase();
+            const current = classMappings[key] ?? matchCategoryToClass(cat, classes, {}) ?? '';
+            const isAuto = !classMappings[key];
+            return (
+              <div className="class-row" key={cat}>
+                <div className="class-row-main">
+                  <span className="class-row-name">{cat}</span>
+                  {isAuto && current && <span className="class-row-meta text-muted">Auto-matched to {classes.find((c) => c.id === current)?.name}</span>}
+                  {!current && <span className="class-row-meta text-muted">Unmatched</span>}
+                </div>
+                <select
+                  className="input"
+                  style={{ maxWidth: 200 }}
+                  value={current}
+                  onChange={(e) => setClassMapping(cat, e.target.value || null)}
+                >
+                  <option value="">No class</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
-              <select
+            );
+          })}
+        </div>
+      )}
+      {categories.length === 0 && (
+        <p className="text-muted" style={{ fontSize: 12, margin: 0 }}>
+          No course names were found in your feed — use the keywords below to route assignments to classes instead.
+        </p>
+      )}
+
+      <div className="class-list" style={{ marginTop: 'var(--space-2)' }}>
+        {classes.map((c) => {
+          const stored = (classKeywords[c.id] || []).join(', ');
+          const shown = keywordDrafts[c.id] ?? stored;
+          return (
+            <div className="class-row" key={c.id}>
+              <div className="class-row-main">
+                <span className="class-row-name">{c.name}</span>
+                <span className="class-row-meta text-muted">Keywords (comma-separated) matched against assignment title/description</span>
+              </div>
+              <input
                 className="input"
-                style={{ maxWidth: 200 }}
-                value={current}
-                onChange={(e) => setClassMapping(cat, e.target.value || null)}
-              >
-                <option value="">No class</option>
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+                style={{ maxWidth: 220 }}
+                type="text"
+                placeholder="e.g. Chem, CHEM101"
+                value={shown}
+                onChange={(e) => setKeywordDrafts((d) => ({ ...d, [c.id]: e.target.value }))}
+                onBlur={() => setClassKeywords(c.id, shown.split(','))}
+              />
             </div>
           );
         })}
+        {classes.length === 0 && <div className="empty-msg">Add a class first.</div>}
       </div>
     </Widget>
   );

@@ -21,6 +21,8 @@ export interface Task {
   link: TaskLink | null;
   /** Estimated time needed to complete the task, in minutes. */
   durationMin: number | null;
+  /** Fixed/"set in stone" — shouldn't be rescheduled or removed by drag/AI actions. */
+  locked: boolean;
 }
 
 export interface NewTaskInput {
@@ -31,6 +33,7 @@ export interface NewTaskInput {
   link?: TaskLink | null;
   durationMin?: number | null;
   time?: string | null;
+  locked?: boolean;
 }
 
 type TaskState = Record<QuadKey, Task[]>;
@@ -44,9 +47,15 @@ export interface MatrixContextValue {
   toggleDone: (qkey: QuadKey, id: string) => void;
   scheduleTask: (qkey: QuadKey, id: string, time: string) => void;
   unscheduleTask: (qkey: QuadKey, id: string) => void;
+  toggleTaskLocked: (qkey: QuadKey, id: string) => void;
 }
 
 const MatrixContext = createContext<MatrixContextValue | null>(null);
+
+/** Fills in `locked: false` for tasks persisted before the field existed. */
+function normalizeTask(t: Task | (Omit<Task, 'locked'> & { locked?: boolean })): Task {
+  return { ...t, locked: t.locked ?? false };
+}
 
 export function MatrixProvider({ children }: { children: ReactNode }) {
   const { handleSessionExpired } = useAuth();
@@ -63,24 +72,35 @@ export function MatrixProvider({ children }: { children: ReactNode }) {
       dueDate: data.dueDate ?? null,
       link: data.link ?? null,
       durationMin: data.durationMin ?? null,
+      locked: data.locked ?? false,
     };
     setTasks((s) => ({ ...s, [qkey]: [...s[qkey], task] }));
   };
   const removeTask: MatrixContextValue['removeTask'] = (qkey, id) => {
-    setTasks((s) => ({ ...s, [qkey]: s[qkey].filter((t) => t.id !== id) }));
+    setTasks((s) => ({ ...s, [qkey]: s[qkey].filter((t) => t.id !== id || t.locked) }));
   };
   const toggleDone: MatrixContextValue['toggleDone'] = (qkey, id) => {
     setTasks((s) => ({ ...s, [qkey]: s[qkey].map((t) => (t.id === id ? { ...t, done: !t.done } : t)) }));
   };
   const scheduleTask: MatrixContextValue['scheduleTask'] = (qkey, id, time) => {
-    setTasks((s) => ({ ...s, [qkey]: s[qkey].map((t) => (t.id === id ? { ...t, time } : t)) }));
+    setTasks((s) => ({ ...s, [qkey]: s[qkey].map((t) => (t.id === id && !t.locked ? { ...t, time } : t)) }));
   };
   const unscheduleTask: MatrixContextValue['unscheduleTask'] = (qkey, id) => {
-    setTasks((s) => ({ ...s, [qkey]: s[qkey].map((t) => (t.id === id ? { ...t, time: null } : t)) }));
+    setTasks((s) => ({ ...s, [qkey]: s[qkey].map((t) => (t.id === id && !t.locked ? { ...t, time: null } : t)) }));
+  };
+  const toggleTaskLocked: MatrixContextValue['toggleTaskLocked'] = (qkey, id) => {
+    setTasks((s) => ({ ...s, [qkey]: s[qkey].map((t) => (t.id === id ? { ...t, locked: !t.locked } : t)) }));
+  };
+
+  const normalizedTasks: TaskState = {
+    q1: tasks.q1.map(normalizeTask),
+    q2: tasks.q2.map(normalizeTask),
+    q3: tasks.q3.map(normalizeTask),
+    q4: tasks.q4.map(normalizeTask),
   };
 
   return (
-    <MatrixContext.Provider value={{ tasks, addTask, removeTask, toggleDone, scheduleTask, unscheduleTask }}>
+    <MatrixContext.Provider value={{ tasks: normalizedTasks, addTask, removeTask, toggleDone, scheduleTask, unscheduleTask, toggleTaskLocked }}>
       {children}
     </MatrixContext.Provider>
   );

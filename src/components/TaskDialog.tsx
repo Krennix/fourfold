@@ -37,7 +37,7 @@ export function TaskDialog({
 }: {
   initialQuad: QuadKey;
   onClose: () => void;
-  onSave: (data: { title: string; description: string; quad: QuadKey; dueDate: string | null; link: TaskLink | null; durationMin: number | null }) => void;
+  onSave: (data: { title: string; description: string; quad: QuadKey; dueDate: string | null; link: TaskLink | null; durationMin: number | null; locked: boolean }) => void;
 }) {
   const { classes } = useSchool();
   const { events } = useCalendarEvents();
@@ -47,6 +47,7 @@ export function TaskDialog({
   const [dueDate, setDueDate] = useState('');
   const [durationMin, setDurationMin] = useState<number>(30);
   const [link, setLink] = useState<TaskLink | null>(null);
+  const [locked, setLocked] = useState(false);
   const [mention, setMention] = useState<Mention | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -85,7 +86,7 @@ export function TaskDialog({
   const handleSave = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    onSave({ title: trimmed, description: description.trim(), quad, dueDate: dueDate || null, link, durationMin });
+    onSave({ title: trimmed, description: description.trim(), quad, dueDate: dueDate || null, link, durationMin, locked });
     onClose();
   };
 
@@ -171,6 +172,11 @@ export function TaskDialog({
             {QUAD_OPTIONS.map((q) => <option key={q.key} value={q.key}>{q.numeral} · {q.label}</option>)}
           </select>
         </div>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+          <input type="checkbox" checked={locked} onChange={(e) => setLocked(e.target.checked)} />
+          Locked — fixed in place, won't be moved or removed by scheduling/AI actions
+        </label>
 
         <div className="dialog-actions">
           <button className="btn btn-secondary" type="button" onClick={onClose}>Cancel</button>

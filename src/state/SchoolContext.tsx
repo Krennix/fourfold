@@ -90,6 +90,8 @@ interface StoredState {
   schoologyDone: Record<string, boolean>;
   /** Manual overrides mapping a lowercased Schoology category/course name to a class id. */
   classMappings: Record<string, string>;
+  /** Free-text keywords per class id; a Schoology assignment matches a class if its title/description contains one. */
+  classKeywords: Record<string, string[]>;
 }
 
 interface SchoolContextValue extends StoredState {
@@ -106,6 +108,7 @@ interface SchoolContextValue extends StoredState {
   removeHomework: (classId: string, id: number) => void;
   toggleSchoologyHomeworkDone: (uid: string) => void;
   setClassMapping: (category: string, classId: string | null) => void;
+  setClassKeywords: (classId: string, keywords: string[]) => void;
 }
 
 const SchoolContext = createContext<SchoolContextValue | null>(null);
@@ -126,6 +129,7 @@ const DEFAULT_STATE: StoredState = {
   homework: DEFAULT_HOMEWORK,
   schoologyDone: {},
   classMappings: {},
+  classKeywords: {},
 };
 
 export function SchoolProvider({ children }: { children: ReactNode }) {
@@ -207,6 +211,16 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const setClassKeywords: SchoolContextValue['setClassKeywords'] = (classId, keywords) => {
+    setState((s) => {
+      const classKeywords = { ...(s.classKeywords ?? {}) };
+      const cleaned = keywords.map((k) => k.trim()).filter(Boolean);
+      if (cleaned.length) classKeywords[classId] = cleaned;
+      else delete classKeywords[classId];
+      return { ...s, classKeywords };
+    });
+  };
+
   const normalizedHomework = (() => {
     const homework = state.homework ?? {};
     const out: Record<string, Homework[]> = {};
@@ -225,8 +239,9 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
         homework: normalizedHomework,
         schoologyDone: state.schoologyDone ?? {},
         classMappings: state.classMappings ?? {},
+        classKeywords: state.classKeywords ?? {},
         addClass, updateClass, removeClass, addPreset, updatePreset, removePreset, setOverride, setShowBreaks,
-        addHomework, toggleHomework, removeHomework, toggleSchoologyHomeworkDone, setClassMapping,
+        addHomework, toggleHomework, removeHomework, toggleSchoologyHomeworkDone, setClassMapping, setClassKeywords,
       }}
     >
       {children}
