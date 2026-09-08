@@ -12,6 +12,7 @@ import { useMatrix, type QuadKey } from '../state/MatrixContext';
 import { useCalendarEvents } from '../state/CalendarContext';
 import { useCountdowns, type Countdown } from '../state/CountdownsContext';
 import { usePomodoro, POMODORO_MODES, POMODORO_MODE_LABELS } from '../state/PomodoroContext';
+import { useAgent } from '../state/AgentContext';
 import './Home.css';
 import './Countdowns.css';
 
@@ -54,6 +55,13 @@ export function HomePage() {
   const [cdDialogState, setCdDialogState] = useState<'add' | Countdown | null>(null);
   const [cdMenu, setCdMenu] = useState<{ x: number; y: number; countdown: Countdown } | null>(null);
   const [taskDialogQuad, setTaskDialogQuad] = useState<QuadKey | null>(null);
+  const [assistantInput, setAssistantInput] = useState('');
+  const { watchdogFlags, checkWatchdog, dismissFlag, dailyPlan, isPlanning, generateDailyPlan, isThinking, sendChatMessage } = useAgent();
+
+  useEffect(() => {
+    void checkWatchdog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const doneCount = habits.filter((h) => h.done).length;
   const pct = habits.length ? Math.round((doneCount / habits.length) * 100) : 0;
