@@ -29,12 +29,34 @@ export interface EventExtras {
   allDay?: boolean;
 }
 
+export type RepeatFreq = 'daily' | 'weekly' | 'monthly';
+
+/** Advance a "Y-M-D" (0-based month) date key by one repeat step. */
+function advanceDateKey(date: string, freq: RepeatFreq): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const next = new Date(y, m, d);
+  if (freq === 'daily') next.setDate(next.getDate() + 1);
+  else if (freq === 'weekly') next.setDate(next.getDate() + 7);
+  else next.setMonth(next.getMonth() + 1);
+  return `${next.getFullYear()}-${next.getMonth()}-${next.getDate()}`;
+}
+
 export interface CalendarContextValue {
   events: CalEvent[];
   loading: boolean;
   error: string | null;
   refresh: (monthStart: Date, monthEnd: Date) => void;
   addEvent: (date: string, title: string, time: string, durationMin?: number, extras?: EventExtras) => Promise<CalEvent | null>;
+  /** Creates one event per occurrence from `date` through `until` (inclusive), stepping by `freq`. */
+  addRecurringEvent: (
+    date: string,
+    until: string,
+    freq: RepeatFreq,
+    title: string,
+    time: string,
+    durationMin?: number,
+    extras?: EventExtras,
+  ) => Promise<void>;
   updateEvent: (id: string, date: string, title: string, time: string, durationMin?: number, extras?: EventExtras) => Promise<CalEvent | null>;
   removeEvent: (id: string) => void;
   toggleEventLocked: (id: string) => void;
@@ -191,6 +213,28 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     return created;
   };
 
+  const MAX_RECURRING_OCCURRENCES = 366;
+
+  const addRecurringEvent: CalendarContextValue['addRecurringEvent'] = async (
+    date,
+    until,
+    freq,
+    title,
+    time,
+    durationMin = 60,
+    extras = {},
+  ) => {
+    const [uy, um, ud] = until.split('-').map(Number);
+    const untilTime = new Date(uy, um, ud).getTime();
+    let cursor = date;
+    for (let i = 0; i < MAX_RECURRING_OCCURRENCES; i++) {
+      const [cy, cm, cd] = cursor.split('-').map(Number);
+      if (new Date(cy, cm, cd).getTime() > untilTime) break;
+      await addEvent(cursor, title, time, durationMin, extras);
+      cursor = advanceDateKey(cursor, freq);
+    }
+  };
+
   // `date` is "Y-M-D" with a 0-based month, matching `addEvent`.
   const updateEvent: CalendarContextValue['updateEvent'] = async (id, date, title, time, durationMin = 60, extras = {}) => {
     if (lockedIds.has(id)) {
@@ -259,7 +303,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   const eventsByDate = (date: string) => events.filter((e) => e.date === date).sort((a, b) => a.time.localeCompare(b.time));
 
   return (
-    <CalendarContext.Provider value={{ events, loading, error, refresh, addEvent, updateEvent, removeEvent, toggleEventLocked, eventsByDate }}>
+    <CalendarContext.Provider value={{ events, loading, error, refresh, addEvent, addRecurringEvent, updateEvent, removeEvent, toggleEventLocked, eventsByDate }}>
       {children}
     </CalendarContext.Provider>
   );
