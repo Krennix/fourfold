@@ -5,6 +5,7 @@ import { StreakFire } from '../components/StreakFire';
 import { CountdownIcon } from '../components/CountdownIcon';
 import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
 import { CountdownDialog } from '../components/CountdownDialog';
+import { TaskDialog } from '../components/TaskDialog';
 import { useHabits } from '../state/HabitsContext';
 import { useMatrix, type QuadKey } from '../state/MatrixContext';
 import { useCalendarEvents } from '../state/CalendarContext';
@@ -37,12 +38,13 @@ const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
 
 export function HomePage() {
   const { habits, toggleHabit } = useHabits();
-  const { tasks } = useMatrix();
+  const { tasks, addTask } = useMatrix();
   const { eventsByDate } = useCalendarEvents();
   const { countdowns, addCountdown, updateCountdown, removeCountdown } = useCountdowns();
   const { mode: pomoMode, secondsLeft: pomoSecondsLeft, isRunning: pomoRunning, start: startPomodoro, toggleRun: togglePomodoro } = usePomodoro();
   const [cdDialogState, setCdDialogState] = useState<'add' | Countdown | null>(null);
   const [cdMenu, setCdMenu] = useState<{ x: number; y: number; countdown: Countdown } | null>(null);
+  const [taskDialogQuad, setTaskDialogQuad] = useState<QuadKey | null>(null);
 
   const doneCount = habits.filter((h) => h.done).length;
   const pct = habits.length ? Math.round((doneCount / habits.length) * 100) : 0;
@@ -88,10 +90,16 @@ export function HomePage() {
         kicker={todayLabel}
         title={`Good ${dayPart}`}
         actions={
-          <button className="btn btn-primary" type="button" onClick={startPomodoro}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2h4" /><path d="M12 14v-4" /><circle cx="12" cy="14" r="8" /></svg>
-            Start Pomodoro
-          </button>
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <button className="btn btn-secondary" type="button" onClick={() => setTaskDialogQuad('q2')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+              New Task
+            </button>
+            <button className="btn btn-primary" type="button" onClick={startPomodoro}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2h4" /><path d="M12 14v-4" /><circle cx="12" cy="14" r="8" /></svg>
+              Start Pomodoro
+            </button>
+          </div>
         }
       />
 
@@ -145,11 +153,23 @@ export function HomePage() {
               {(Object.keys(QUAD_LABELS) as QuadKey[]).map((qkey) => {
                 const active = tasks[qkey].filter((t) => !t.done);
                 return (
-                  <div className="quad" key={qkey}>
+                  <div
+                    className="quad quad-clickable"
+                    key={qkey}
+                    role="button"
+                    tabIndex={0}
+                    title="Add a task to this quadrant"
+                    onClick={() => setTaskDialogQuad(qkey)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTaskDialogQuad(qkey); } }}
+                  >
                     <div className="quad-label">{QUAD_LABELS[qkey]}</div>
                     {active.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No tasks</div>}
                     {active.map((t) => (
-                      <div className="task-chip" key={t.id}>{t.title}</div>
+                      <div className="task-chip" key={t.id}>
+                        {t.title}
+                        {t.link && <span className="text-muted"> · {t.link.type === 'class' ? '@' : '~'}{t.link.label}</span>}
+                        {t.dueDate && <span className="text-muted"> · {t.dueDate}</span>}
+                      </div>
                     ))}
                   </div>
                 );
@@ -242,6 +262,14 @@ export function HomePage() {
       </div>
 
       {cdMenu && <ContextMenu x={cdMenu.x} y={cdMenu.y} items={cdMenuItems} onClose={() => setCdMenu(null)} />}
+
+      {taskDialogQuad && (
+        <TaskDialog
+          initialQuad={taskDialogQuad}
+          onClose={() => setTaskDialogQuad(null)}
+          onSave={({ title, quad, dueDate, link }) => addTask(quad, { title, dueDate, link })}
+        />
+      )}
 
       {cdDialogState && (
         <CountdownDialog

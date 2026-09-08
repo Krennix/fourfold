@@ -1,0 +1,36 @@
+.mention-field {
+  position: relative;
+}
+
+.mention-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.mention-opt {
+  padding: 7px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mention-opt:hover {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.mention-trigger {
+  color: var(--color-accent);
+  font-weight: 600;
+}

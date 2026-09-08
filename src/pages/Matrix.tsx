@@ -26,7 +26,7 @@ export function MatrixPage() {
   const saveTask = () => {
     const title = titleRef.current?.value.trim();
     const qkey = (quadRef.current?.value as QuadKey) || dialogQuad;
-    if (title && qkey) addTask(qkey, title, tagRef.current?.value.trim() || 'Inbox');
+    if (title && qkey) addTask(qkey, { title, listTag: tagRef.current?.value.trim() || 'Inbox' });
     if (titleRef.current) titleRef.current.value = '';
     if (tagRef.current) tagRef.current.value = '';
     setDialogQuad(null);
@@ -67,6 +67,8 @@ export function MatrixPage() {
                   </div>
                   <span className={`ttitle${t.done ? ' done' : ''}`}>{t.title}</span>
                   <span className="tmeta">
+                    {t.link && <span className="tag tag-accent-2">{t.link.type === 'class' ? '@' : '~'}{t.link.label}</span>}
+                    {t.dueDate && <span className="tag tag-outline">Due {t.dueDate}</span>}
                     {t.time && (
                       <span className="tag tag-accent" style={{ cursor: 'pointer' }} onClick={() => unscheduleTask(q.key, t.id)}>{t.time}</span>
                     )}
