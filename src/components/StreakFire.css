@@ -3,20 +3,29 @@
   font-weight: 600; white-space: nowrap; flex: none;
   color: color-mix(in srgb, var(--color-text) 35%, transparent);
 }
-.streak-fire-icon { width: 15px; height: 15px; flex: none; }
+.streak-fire-icon { width: 16px; height: 16px; flex: none; }
+.streak-fire-outer { fill: color-mix(in srgb, var(--color-text) 28%, transparent); }
+.streak-fire-inner { fill: var(--color-bg); opacity: 0.9; }
 
 .streak-fire.lit {
   color: #ff7a1a;
-  animation: streak-fire-flicker 1.4s ease-in-out infinite;
+  animation: streak-fire-flicker 1.6s ease-in-out infinite;
+}
+.streak-fire.lit .streak-fire-outer {
+  fill: #ff7a1a;
+}
+.streak-fire.lit .streak-fire-inner {
+  fill: #ffd257;
 }
 .streak-fire.lit .streak-fire-icon {
   filter: drop-shadow(0 0 4px rgba(255, 122, 26, 0.65));
-  animation: streak-fire-bob 0.9s ease-in-out infinite;
+  animation: streak-fire-bob 1.1s ease-in-out infinite;
+  transform-origin: 50% 90%;
 }
 
 @keyframes streak-fire-bob {
   0%, 100% { transform: scale(1) translateY(0); }
-  50% { transform: scale(1.12) translateY(-1px); }
+  50% { transform: scale(1.08, 1.14) translateY(-1px); }
 }
 
 @keyframes streak-fire-flicker {

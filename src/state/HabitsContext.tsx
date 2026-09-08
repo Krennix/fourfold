@@ -9,6 +9,12 @@ export interface Habit {
   quote: string | null;
   streak: number;
   done: boolean;
+  history: string[];
+}
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 interface HabitsContextValue {
@@ -26,7 +32,7 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
   const [habits, setHabits] = useRemoteState<Habit[]>('habits', [], handleSessionExpired, 'fourfold.habits.v1');
 
   const addHabit: HabitsContextValue['addHabit'] = (name, time, quote) => {
-    setHabits((prev) => [...prev, { id: `habit-${Date.now()}`, name, time, quote, streak: 0, done: false }]);
+    setHabits((prev) => [...prev, { id: `habit-${Date.now()}`, name, time, quote, streak: 0, done: false, history: [] }]);
   };
   const removeHabit = (id: string) => {
     setHabits((prev) => prev.filter((h) => h.id !== id));
@@ -35,7 +41,16 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, name, time, quote } : h)));
   };
   const toggleHabit = (id: string) => {
-    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, done: !h.done, streak: !h.done ? h.streak + 1 : Math.max(0, h.streak - 1) } : h)));
+    const key = todayKey();
+    setHabits((prev) =>
+      prev.map((h) => {
+        if (h.id !== id) return h;
+        const done = !h.done;
+        const prevHistory = h.history || [];
+        const history = done ? [...prevHistory, key] : prevHistory.filter((d) => d !== key);
+        return { ...h, done, history, streak: done ? h.streak + 1 : Math.max(0, h.streak - 1) };
+      }),
+    );
   };
 
   return (
