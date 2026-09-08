@@ -41,12 +41,25 @@
 .time-label { font-size: 10.5px; color: color-mix(in srgb, var(--color-text) 45%, transparent); text-align: right; padding-right: 6px; padding-top: 2px; }
 .day-col { position: relative; border-left: 1px solid var(--color-divider); }
 .bell-block {
-  position: absolute; left: 0; right: 0;
-  border-bottom: 1px dashed color-mix(in srgb, var(--color-text) 12%, transparent);
-  padding: 1px 4px; overflow: hidden; pointer-events: none;
+  position: absolute; left: 2px; right: 2px;
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; pointer-events: none;
 }
 .bell-block .bb-name {
-  font-size: 9px; color: color-mix(in srgb, var(--color-text) 35%, transparent); text-transform: uppercase; letter-spacing: 0.03em;
+  font-size: 10px; letter-spacing: 0.01em;
+}
+.bell-block-open {
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+.bell-block-open .bb-name {
+  color: color-mix(in srgb, var(--color-text) 32%, transparent);
+}
+.bell-block-break {
+  background: color-mix(in srgb, #64748b 14%, transparent);
+}
+.bell-block-break .bb-name {
+  color: color-mix(in srgb, #64748b 85%, var(--color-text));
 }
 .class-block {
   position: absolute; left: 2px; right: 2px;

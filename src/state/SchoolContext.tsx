@@ -59,6 +59,8 @@ interface StoredState {
   classes: SchoolClass[];
   presets: Preset[];
   overrides: Record<string, DayOverride>;
+  /** Whether to show non-class bell periods (breaks, lunch, advisory, office hours, ...) on the School tab. */
+  showBreaks: boolean;
 }
 
 interface SchoolContextValue extends StoredState {
@@ -69,11 +71,12 @@ interface SchoolContextValue extends StoredState {
   updatePreset: (id: string, p: Omit<Preset, 'id'>) => void;
   removePreset: (id: string) => void;
   setOverride: (dates: string[], override: DayOverride | null) => void;
+  setShowBreaks: (show: boolean) => void;
 }
 
 const SchoolContext = createContext<SchoolContextValue | null>(null);
 
-const DEFAULT_STATE: StoredState = { classes: DEFAULT_CLASSES, presets: DEFAULT_PRESETS, overrides: {} };
+const DEFAULT_STATE: StoredState = { classes: DEFAULT_CLASSES, presets: DEFAULT_PRESETS, overrides: {}, showBreaks: true };
 
 export function SchoolProvider({ children }: { children: ReactNode }) {
   const { handleSessionExpired } = useAuth();
@@ -114,8 +117,19 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const setShowBreaks: SchoolContextValue['setShowBreaks'] = (show) => {
+    setState((s) => ({ ...s, showBreaks: show }));
+  };
+
   return (
-    <SchoolContext.Provider value={{ ...state, classes: state.classes.map(normalizeClass), addClass, updateClass, removeClass, addPreset, updatePreset, removePreset, setOverride }}>
+    <SchoolContext.Provider
+      value={{
+        ...state,
+        classes: state.classes.map(normalizeClass),
+        showBreaks: state.showBreaks ?? true,
+        addClass, updateClass, removeClass, addPreset, updatePreset, removePreset, setOverride, setShowBreaks,
+      }}
+    >
       {children}
     </SchoolContext.Provider>
   );

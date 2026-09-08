@@ -51,7 +51,7 @@ function isSameDate(a: Date, b: Date) {
 }
 
 export function SchoolPage() {
-  const { classes, presets, overrides, setOverride } = useSchool();
+  const { classes, presets, overrides, setOverride, showBreaks } = useSchool();
   const [homework, setHomework] = useState(INITIAL_HOMEWORK);
   const [openClassId, setOpenClassId] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
@@ -125,6 +125,7 @@ export function SchoolPage() {
     const bell = bellSchedules[key];
     const bellNoSchool = bell ? isNoSchoolDay(bell) : false;
 
+    const usedPeriods = new Set<number>();
     let blocks: { classId: string; name: string; room: string; start: number; end: number }[];
     if (override) {
       const preset = presets.find((p) => p.id === override.presetId);
@@ -139,6 +140,7 @@ export function SchoolPage() {
         c.periods.flatMap((periodNum) => {
           const period = findPeriod(bell, periodNum);
           if (!period) return [];
+          usedPeriods.add(periodNum);
           return [{ classId: c.id, name: c.name, room: c.room, start: isoToLocalHour(period.start), end: isoToLocalHour(period.end) }];
         }),
       );
@@ -160,15 +162,22 @@ export function SchoolPage() {
         };
       });
 
-    const bellPeriods = bell && !bellNoSchool
-      ? bell.schedule.map((p, idx) => {
+    const bellPeriods = bell && !bellNoSchool && !override
+      ? bell.schedule.flatMap((p, idx) => {
+          const name = p.name.trim();
+          if (!name) return [];
+          const match = /^class\s+(\d+)$/i.exec(name);
+          const variant: 'open' | 'break' = match ? 'open' : 'break';
+          if (variant === 'open' && usedPeriods.has(Number(match![1]))) return [];
+          if (variant === 'break' && !showBreaks) return [];
           const start = isoToLocalHour(p.start);
           const end = isoToLocalHour(p.end);
-          return {
+          return [{
             key: `${key}-bell-${idx}`,
-            name: p.name,
+            label: variant === 'open' ? `Period ${match![1]}` : name,
+            variant,
             posStyle: { top: `${((start - START_HOUR) / totalHours) * 100}%`, height: `${((end - start) / totalHours) * 100}%` },
-          };
+          }];
         })
       : [];
 
@@ -260,8 +269,8 @@ export function SchoolPage() {
           {dayColumns.map((col) => (
             <div className="day-col" style={{ height: totalHours * 56 }} key={col.key}>
               {col.bellPeriods.map((p) => (
-                <div className="bell-block" style={p.posStyle} key={p.key} title={p.name}>
-                  <span className="bb-name">{p.name}</span>
+                <div className={`bell-block bell-block-${p.variant}`} style={p.posStyle} key={p.key}>
+                  <span className="bb-name">{p.label}</span>
                 </div>
               ))}
               {col.classes.map((c) => (

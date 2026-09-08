@@ -119,7 +119,7 @@ function presetToForm(p: Preset, classIds: string[]): PresetFormState {
 }
 
 export function SettingsPage() {
-  const { classes, addClass, updateClass, removeClass, presets, addPreset, updatePreset, removePreset } = useSchool();
+  const { classes, addClass, updateClass, removeClass, presets, addPreset, updatePreset, removePreset, showBreaks, setShowBreaks } = useSchool();
 
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [classForm, setClassForm] = useState<ClassFormState>(emptyClassForm());
@@ -166,6 +166,16 @@ export function SettingsPage() {
 
       <AccessSettings />
       <GoogleCalendarSettings />
+
+      <Widget>
+        <div className="widget-head">
+          <h4>Bell schedule</h4>
+        </div>
+        <label className="toggle-row">
+          <input type="checkbox" checked={showBreaks} onChange={(e) => setShowBreaks(e.target.checked)} />
+          <span>Show breaks, lunch, advisory &amp; office hours on the School tab</span>
+        </label>
+      </Widget>
 
       <Widget>
         <div className="widget-head">
