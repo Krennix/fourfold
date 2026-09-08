@@ -1,6 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, WEEKDAYS, type Weekday } from '../state/SchoolContext';
+import { useSchoology } from '../state/SchoologyContext';
+import { fetchBellSchedule, findPeriod, isNoSchoolDay, isoToLocalHour, type BellSchedule } from '../lib/harkerBell';
 import './School.css';
 
 interface Homework {
@@ -49,12 +51,52 @@ function isSameDate(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+function fmtDue(due: string, allDay: boolean) {
+  const d = new Date(due);
+  const datePart = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (allDay) return datePart;
+  return `${datePart}, ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+function SchoologyHomeworkWidget() {
+  const { status, icsUrl, assignments, error, refresh } = useSchoology();
+
+  if (!icsUrl) return null;
+
+  const now = Date.now();
+  const upcoming = assignments.filter((a) => new Date(a.due).getTime() >= now - 24 * 60 * 60 * 1000);
+
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Schoology homework</h4>
+        <button className="btn btn-ghost" type="button" onClick={() => void refresh()} disabled={status === 'loading'}>
+          {status === 'loading' ? 'Syncing…' : 'Refresh'}
+        </button>
+      </div>
+      {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
+      {!error && upcoming.length === 0 && <div className="empty-msg">Nothing due — you're all caught up.</div>}
+      <div>
+        {upcoming.map((a) => (
+          <div className="hw-row" key={a.uid}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <span className="hw-title">{a.title}</span>
+              <span className="text-muted" style={{ fontSize: 11 }}>Due {fmtDue(a.due, a.allDay)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Widget>
+  );
+}
+
 export function SchoolPage() {
-  const { classes, presets, overrides, setOverride } = useSchool();
+  const { classes, presets, overrides, setOverride, showBreaks } = useSchool();
   const [homework, setHomework] = useState(INITIAL_HOMEWORK);
   const [openClassId, setOpenClassId] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [menuDate, setMenuDate] = useState<string | null>(null);
+  const [bellSchedules, setBellSchedules] = useState<Record<string, BellSchedule | null>>({});
 
   const titleRef = useRef<HTMLInputElement>(null);
   const dueRef = useRef<HTMLInputElement>(null);
@@ -75,19 +117,6 @@ export function SchoolPage() {
     if (dueRef.current) dueRef.current.value = '';
   };
 
-  const allTimes = [
-    ...classes.flatMap((c) => c.meetings.flatMap((m) => [m.start, m.end])),
-    ...presets.flatMap((p) => p.meetings.flatMap((m) => [m.start, m.end])),
-  ];
-  const START_HOUR = allTimes.length ? Math.max(SCHOOL_START, Math.min(...allTimes)) : SCHOOL_START;
-  const END_HOUR = allTimes.length ? Math.min(SCHOOL_END, Math.max(...allTimes)) : SCHOOL_END;
-  const totalHours = END_HOUR - START_HOUR;
-
-  const hourLabels: { h: number; label: string }[] = [];
-  for (let h = Math.ceil(START_HOUR); h < END_HOUR; h++) {
-    hourLabels.push({ h, label: h > 12 ? `${h - 12}pm` : h === 12 ? '12pm' : `${h}am` });
-  }
-
   const weekDates = WEEKDAYS.map((_, i) => {
     const d = new Date(weekStart);
     d.setDate(weekStart.getDate() + i);
@@ -95,13 +124,48 @@ export function SchoolPage() {
   });
   const today = new Date();
 
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(weekDates.map((d) => fetchBellSchedule(d).then((sched) => [dateKey(d), sched] as const).catch(() => [dateKey(d), null] as const)))
+      .then((entries) => {
+        if (cancelled) return;
+        setBellSchedules((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart]);
+
+  const bellHours = weekDates.flatMap((d) => {
+    const sched = bellSchedules[dateKey(d)];
+    if (!sched || isNoSchoolDay(sched)) return [];
+    return sched.schedule.flatMap((p) => [isoToLocalHour(p.start), isoToLocalHour(p.end)]);
+  });
+
+  const allTimes = [
+    ...presets.flatMap((p) => p.meetings.flatMap((m) => [m.start, m.end])),
+    ...bellHours,
+  ];
+  const START_HOUR = allTimes.length ? Math.min(SCHOOL_START, ...allTimes) : SCHOOL_START;
+  const END_HOUR = allTimes.length ? Math.max(SCHOOL_END, ...allTimes) : SCHOOL_END;
+  const totalHours = END_HOUR - START_HOUR;
+
+  const hourLabels: { h: number; label: string }[] = [];
+  for (let h = Math.ceil(START_HOUR); h < END_HOUR; h++) {
+    hourLabels.push({ h, label: h > 12 ? `${h - 12}pm` : h === 12 ? '12pm' : `${h}am` });
+  }
+
   const classById = Object.fromEntries(classes.map((c) => [c.id, c]));
 
   const dayColumns = WEEKDAYS.map((day: Weekday, i) => {
     const date = weekDates[i];
     const key = dateKey(date);
     const override = overrides[key];
+    const bell = bellSchedules[key];
+    const bellNoSchool = bell ? isNoSchoolDay(bell) : false;
 
+    const usedPeriods = new Set<number>();
     let blocks: { classId: string; name: string; room: string; start: number; end: number }[];
     if (override) {
       const preset = presets.find((p) => p.id === override.presetId);
@@ -111,8 +175,17 @@ export function SchoolPage() {
             return { classId: m.classId, name: cls?.name ?? 'Unknown', room: cls?.room ?? '', start: m.start, end: m.end };
           })
         : [];
+    } else if (bell && !bellNoSchool) {
+      blocks = classes.flatMap((c) =>
+        c.periods.flatMap((periodNum) => {
+          const period = findPeriod(bell, periodNum);
+          if (!period) return [];
+          usedPeriods.add(periodNum);
+          return [{ classId: c.id, name: c.name, room: c.room, start: isoToLocalHour(period.start), end: isoToLocalHour(period.end) }];
+        }),
+      );
     } else {
-      blocks = classes.flatMap((c) => c.meetings.filter((m) => m.day === day).map((m) => ({ classId: c.id, name: c.name, room: c.room, start: m.start, end: m.end })));
+      blocks = [];
     }
 
     const positioned = [...blocks]
@@ -129,7 +202,34 @@ export function SchoolPage() {
         };
       });
 
-    return { day, date, key, isOverridden: !!override, isSpecialNoSchool: override ? !presets.find((p) => p.id === override.presetId) : false, classes: positioned };
+    const bellPeriods = bell && !bellNoSchool && !override
+      ? bell.schedule.flatMap((p, idx) => {
+          const name = p.name.trim();
+          if (!name) return [];
+          const match = /^class\s+(\d+)$/i.exec(name);
+          const variant: 'open' | 'break' = match ? 'open' : 'break';
+          if (variant === 'open' && usedPeriods.has(Number(match![1]))) return [];
+          if (variant === 'break' && !showBreaks) return [];
+          const start = isoToLocalHour(p.start);
+          const end = isoToLocalHour(p.end);
+          return [{
+            key: `${key}-bell-${idx}`,
+            label: variant === 'open' ? `Period ${match![1]}` : name,
+            variant,
+            posStyle: { top: `${((start - START_HOUR) / totalHours) * 100}%`, height: `${((end - start) / totalHours) * 100}%` },
+          }];
+        })
+      : [];
+
+    return {
+      day, date, key,
+      isOverridden: !!override,
+      isSpecialNoSchool: override ? !presets.find((p) => p.id === override.presetId) : false,
+      classes: positioned,
+      bell,
+      bellNoSchool,
+      bellPeriods,
+    };
   });
 
   const cls = classes.find((c) => c.id === openClassId);
@@ -189,6 +289,16 @@ export function SchoolPage() {
                   </div>
                 )}
               </div>
+              {col.bell && (
+                col.bellNoSchool ? (
+                  <span className="tag bell-badge bell-badge-off">{col.bell.name || 'No school'}</span>
+                ) : (
+                  <span className="tag bell-badge" title={col.bell.name}>
+                    {col.bell.code.trim() ? `${col.bell.code.trim()} Day` : 'Bell schedule'}
+                    {col.bell.variant ? ` · ${col.bell.name || col.bell.variant}` : ''}
+                  </span>
+                )
+              )}
             </div>
           ))}
           <div style={{ gridColumn: '1/2', position: 'relative', height: totalHours * 56 }}>
@@ -198,6 +308,11 @@ export function SchoolPage() {
           </div>
           {dayColumns.map((col) => (
             <div className="day-col" style={{ height: totalHours * 56 }} key={col.key}>
+              {col.bellPeriods.map((p) => (
+                <div className={`bell-block bell-block-${p.variant}`} style={p.posStyle} key={p.key}>
+                  <span className="bb-name">{p.label}</span>
+                </div>
+              ))}
               {col.classes.map((c) => (
                 <div className="class-block" style={c.posStyle} onClick={() => setOpenClassId(c.classId)} key={`${col.key}-${c.classId}-${c.start}`}>
                   <span className="cb-name">{c.name}</span>
@@ -210,6 +325,8 @@ export function SchoolPage() {
         </div>
       </Widget>
 
+      <SchoologyHomeworkWidget />
+
       {classes.length === 0 && (
         <div className="empty-msg">No classes yet — add some in Settings.</div>
       )}
@@ -219,7 +336,7 @@ export function SchoolPage() {
           <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 'min(520px,100%)' }}>
             <div className="dialog-title">{cls.name}</div>
             <div className="dialog-body" style={{ marginBottom: 4 }}>
-              {cls.room} &middot; {cls.meetings.map((m) => `${m.day} ${fmtHour(m.start)}–${fmtHour(m.end)}`).join(', ')}
+              {cls.room} &middot; {cls.periods.length ? cls.periods.map((p) => `Period ${p}`).join(', ') : 'No periods assigned'}
             </div>
 
             <h4 style={{ marginTop: 8 }}>Homework</h4>

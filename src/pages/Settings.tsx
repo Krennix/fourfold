@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
-import { useSchool, WEEKDAYS, type Weekday, type SchoolClass, type Preset } from '../state/SchoolContext';
+import { useSchool, type SchoolClass, type Preset } from '../state/SchoolContext';
 import { useGoogleAuth } from '../state/GoogleAuthContext';
+import { useSchoology } from '../state/SchoologyContext';
 import { useAuth } from '../state/AuthContext';
 import './Settings.css';
 
@@ -67,6 +68,54 @@ function GoogleCalendarSettings() {
   );
 }
 
+function SchoologySettings() {
+  const { status, icsUrl, error, saveIcsUrl, refresh } = useSchoology();
+  const [draft, setDraft] = useState(icsUrl ?? '');
+  const [dirty, setDirty] = useState(false);
+
+  const shown = dirty ? draft : (icsUrl ?? draft);
+
+  const handleSave = () => {
+    setDirty(false);
+    void saveIcsUrl(draft.trim());
+  };
+
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Schoology homework</h4>
+        {icsUrl && (
+          <button className="btn btn-ghost" type="button" onClick={() => void refresh()} disabled={status === 'loading'}>
+            {status === 'loading' ? 'Syncing…' : 'Sync now'}
+          </button>
+        )}
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Paste your personal Schoology calendar feed URL to pull assignment due dates onto the School tab. In Schoology,
+        go to <strong>Courses → Upcoming Assignments</strong> (or your Calendar), find <strong>Export/Subscribe</strong>,
+        and copy the <code>.ics</code> link it gives you.
+      </p>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          className="input"
+          type="url"
+          style={{ flex: 1, minWidth: 240 }}
+          placeholder="https://.../feed/....ics"
+          value={shown}
+          onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
+        />
+        <button className="btn btn-primary" type="button" onClick={handleSave} disabled={status === 'loading' || !draft.trim()}>
+          Save
+        </button>
+      </div>
+      {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
+      {icsUrl && !error && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>Connected. Assignments now show up on the School tab.</p>
+      )}
+    </Widget>
+  );
+}
+
 function fmtHour(h: number) {
   const totalMins = Math.round(h * 60);
   const hour24 = Math.floor(totalMins / 60);
@@ -85,25 +134,21 @@ function hourValueToTime(h: number) {
   return `${String(hour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 }
 
+const BELL_PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
+
 interface DayFormRow {
   enabled: boolean;
   start: string;
   end: string;
 }
-type ClassFormState = { name: string; room: string; days: Record<Weekday, DayFormRow> };
+type ClassFormState = { name: string; room: string; periods: number[] };
 
 function emptyClassForm(): ClassFormState {
-  const days = {} as Record<Weekday, DayFormRow>;
-  for (const d of WEEKDAYS) days[d] = { enabled: false, start: '09:00', end: '10:00' };
-  return { name: '', room: '', days };
+  return { name: '', room: '', periods: [] };
 }
 
 function classToForm(c: SchoolClass): ClassFormState {
-  const form = emptyClassForm();
-  for (const m of c.meetings) {
-    form.days[m.day] = { enabled: true, start: hourValueToTime(m.start), end: hourValueToTime(m.end) };
-  }
-  return form;
+  return { name: c.name, room: c.room, periods: [...c.periods] };
 }
 
 type PresetFormState = { name: string; classes: Record<string, DayFormRow> };
@@ -123,7 +168,7 @@ function presetToForm(p: Preset, classIds: string[]): PresetFormState {
 }
 
 export function SettingsPage() {
-  const { classes, addClass, updateClass, removeClass, presets, addPreset, updatePreset, removePreset } = useSchool();
+  const { classes, addClass, updateClass, removeClass, presets, addPreset, updatePreset, removePreset, showBreaks, setShowBreaks } = useSchool();
 
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [classForm, setClassForm] = useState<ClassFormState>(emptyClassForm());
@@ -137,14 +182,13 @@ export function SettingsPage() {
 
   const saveClass = () => {
     if (!classForm.name.trim()) return;
-    const meetings = WEEKDAYS.filter((d) => classForm.days[d].enabled).map((d) => ({
-      day: d, start: timeToHourValue(classForm.days[d].start), end: timeToHourValue(classForm.days[d].end),
-    }));
-    if (meetings.length === 0) return;
-    const payload = { name: classForm.name.trim(), room: classForm.room.trim(), meetings };
+    const payload = { name: classForm.name.trim(), room: classForm.room.trim(), periods: [...classForm.periods].sort((a, b) => a - b) };
     if (editingClassId && editingClassId !== 'new') updateClass(editingClassId, payload);
     else addClass(payload);
     cancelClass();
+  };
+  const togglePeriod = (p: number) => {
+    setClassForm((f) => ({ ...f, periods: f.periods.includes(p) ? f.periods.filter((x) => x !== p) : [...f.periods, p] }));
   };
 
   const startEditPreset = (p: Preset) => { setEditingPresetId(p.id); setPresetForm(presetToForm(p, classes.map((c) => c.id))); };
@@ -171,6 +215,17 @@ export function SettingsPage() {
 
       <AccessSettings />
       <GoogleCalendarSettings />
+      <SchoologySettings />
+
+      <Widget>
+        <div className="widget-head">
+          <h4>Bell schedule</h4>
+        </div>
+        <label className="toggle-row">
+          <input type="checkbox" checked={showBreaks} onChange={(e) => setShowBreaks(e.target.checked)} />
+          <span>Show breaks, lunch, advisory &amp; office hours on the School tab</span>
+        </label>
+      </Widget>
 
       <Widget>
         <div className="widget-head">
@@ -183,7 +238,8 @@ export function SettingsPage() {
           )}
         </div>
         <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-          A class can meet at different times on different days. This is the normal weekly schedule shown on the School tab.
+          Assign each class to the bell-schedule periods it meets during (e.g. Period 1). The School tab looks up the
+          real Harker bell schedule each day to figure out when that period actually happens.
         </p>
 
         {classes.length === 0 && !isClassFormOpen && <div className="empty-msg">No classes yet — add your first one.</div>}
@@ -194,7 +250,7 @@ export function SettingsPage() {
               <div className="class-row-main">
                 <span className="class-row-name">{c.name}</span>
                 <span className="class-row-meta text-muted">
-                  {c.room || 'No room'} &middot; {c.meetings.map((m) => `${m.day} ${fmtHour(m.start)}–${fmtHour(m.end)}`).join(', ')}
+                  {c.room || 'No room'} &middot; {c.periods.length ? c.periods.map((p) => `Period ${p}`).join(', ') : 'No periods assigned'}
                 </span>
               </div>
               <div className="class-row-actions">
@@ -210,22 +266,18 @@ export function SettingsPage() {
             <div className="field"><label>Class name</label><input className="input" type="text" value={classForm.name} onChange={(e) => setClassForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Calculus II" /></div>
             <div className="field"><label>Room</label><input className="input" type="text" value={classForm.room} onChange={(e) => setClassForm((f) => ({ ...f, room: e.target.value }))} placeholder="e.g. Rm 214" /></div>
             <div className="field">
-              <label>Meeting times</label>
-              <div className="day-time-rows">
-                {WEEKDAYS.map((d) => {
-                  const row = classForm.days[d];
-                  return (
-                    <div className="day-time-row" key={d}>
-                      <label className="day-time-check">
-                        <input type="checkbox" checked={row.enabled} onChange={(e) => setClassForm((f) => ({ ...f, days: { ...f.days, [d]: { ...row, enabled: e.target.checked } } }))} />
-                        {d}
-                      </label>
-                      <input className="input" type="time" disabled={!row.enabled} value={row.start} onChange={(e) => setClassForm((f) => ({ ...f, days: { ...f.days, [d]: { ...row, start: e.target.value } } }))} />
-                      <span className="text-muted">to</span>
-                      <input className="input" type="time" disabled={!row.enabled} value={row.end} onChange={(e) => setClassForm((f) => ({ ...f, days: { ...f.days, [d]: { ...row, end: e.target.value } } }))} />
-                    </div>
-                  );
-                })}
+              <label>Periods</label>
+              <div className="period-chips">
+                {BELL_PERIODS.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`period-chip${classForm.periods.includes(p) ? ' active' : ''}`}
+                    onClick={() => togglePeriod(p)}
+                  >
+                    {p}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="dialog-actions">

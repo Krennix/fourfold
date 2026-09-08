@@ -10,6 +10,8 @@ export interface CalEvent {
   time: string;
   title: string;
   cls: '' | 'google';
+  /** Length of the event in minutes, when known (absent for legacy/local events). */
+  durationMin?: number;
 }
 
 interface CalendarContextValue {
@@ -17,7 +19,7 @@ interface CalendarContextValue {
   loading: boolean;
   error: string | null;
   refresh: (monthStart: Date, monthEnd: Date) => void;
-  addEvent: (date: string, title: string, time: string) => void;
+  addEvent: (date: string, title: string, time: string, durationMin?: number) => Promise<CalEvent | null>;
   removeEvent: (id: string) => void;
   eventsByDate: (date: string) => CalEvent[];
 }
@@ -42,7 +44,9 @@ function googleEventToCalEvent(ev: GoogleCalendarEvent): CalEvent | null {
   const time = ev.start.dateTime
     ? start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
     : 'All day';
-  return { id: ev.id, date, time, title: ev.summary || '(no title)', cls: 'google' };
+  const endISO = ev.end.dateTime ?? ev.end.date;
+  const durationMin = ev.start.dateTime && endISO ? (new Date(endISO).getTime() - start.getTime()) / 60000 : undefined;
+  return { id: ev.id, date, time, title: ev.summary || '(no title)', cls: 'google', durationMin };
 }
 
 export function CalendarProvider({ children }: { children: ReactNode }) {
@@ -78,24 +82,29 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   );
 
   // `date` is "Y-M-D" with a 0-based month, matching the key used for eventsByDate/day-cell lookups.
-  const addEvent: CalendarContextValue['addEvent'] = (date, title, time) => {
+  const addEvent: CalendarContextValue['addEvent'] = async (date, title, time, durationMin = 60) => {
     if (status === 'signed-in' && accessToken) {
       const [y, m, d] = date.split('-').map(Number);
       const [h, min] = (time || '09:00').split(':').map(Number);
       const start = new Date(y, m, d, h || 9, min || 0);
-      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      const end = new Date(start.getTime() + durationMin * 60000);
       setLoading(true);
       setError(null);
-      insertEvent(accessToken, { summary: title, startISO: start.toISOString(), endISO: end.toISOString() })
-        .then((ev) => {
-          const mapped = googleEventToCalEvent(ev);
-          if (mapped) setGoogleEvents((prev) => [...prev, mapped]);
-        })
-        .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-        .finally(() => setLoading(false));
-      return;
+      try {
+        const ev = await insertEvent(accessToken, { summary: title, startISO: start.toISOString(), endISO: end.toISOString() });
+        const mapped = googleEventToCalEvent(ev);
+        if (mapped) setGoogleEvents((prev) => [...prev, mapped]);
+        return mapped;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        return null;
+      } finally {
+        setLoading(false);
+      }
     }
-    setLocalEvents((prev) => [...prev, { id: `event-${Date.now()}`, date, title, time, cls: '' }]);
+    const created: CalEvent = { id: `event-${Date.now()}`, date, title, time, cls: '', durationMin };
+    setLocalEvents((prev) => [...prev, created]);
+    return created;
   };
 
   const removeEvent = (id: string) => {
