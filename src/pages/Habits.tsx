@@ -187,7 +187,7 @@ export function HabitsPage() {
         }
       />
 
-      <div className="seg" style={{ alignSelf: 'flex-start' }}>
+      <div className="seg" style={{ alignSelf: 'flex-end' }}>
         <label className="seg-opt">
           <input type="radio" name="habits-tab" checked={habitsTab === 'habits'} onChange={() => setHabitsTab('habits')} />
           Habits
