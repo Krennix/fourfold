@@ -8,6 +8,10 @@ export interface SchoologyAssignment {
   /** ISO 8601 due date/time. */
   due: string;
   allDay: boolean;
+  /** Course/category names from the ICS CATEGORIES property, if present. */
+  categories: string[];
+  /** RFC 5545 PRIORITY (1-4 high, 5 normal, 6-9 low, 0/absent = none). */
+  priority: number | null;
 }
 
 export type SchoologyStatus = 'idle' | 'loading' | 'ready' | 'error';

@@ -4,6 +4,7 @@ import { useSchool, type SchoolClass, type Preset } from '../state/SchoolContext
 import { useGoogleAuth } from '../state/GoogleAuthContext';
 import { useSchoology } from '../state/SchoologyContext';
 import { useAuth } from '../state/AuthContext';
+import { allCategories, matchCategoryToClass } from '../lib/homeworkMerge';
 import './Settings.css';
 
 function AccessSettings() {
@@ -116,6 +117,59 @@ function SchoologySettings() {
   );
 }
 
+function SchoologyClassMappingSettings() {
+  const { assignments } = useSchoology();
+  const { classes, classMappings, setClassMapping } = useSchool();
+  const categories = allCategories(assignments);
+
+  if (categories.length === 0) {
+    return (
+      <Widget>
+        <div className="widget-head"><h4>Schoology course mapping</h4></div>
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+          Connect a Schoology feed above to map its course categories to your classes.
+        </p>
+      </Widget>
+    );
+  }
+
+  return (
+    <Widget>
+      <div className="widget-head"><h4>Schoology course mapping</h4></div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Assignments are auto-matched to a class by course name. Override any of them here.
+      </p>
+      <div className="class-list">
+        {categories.map((cat) => {
+          const key = cat.trim().toLowerCase();
+          const current = classMappings[key] ?? matchCategoryToClass(cat, classes, {}) ?? '';
+          const isAuto = !classMappings[key];
+          return (
+            <div className="class-row" key={cat}>
+              <div className="class-row-main">
+                <span className="class-row-name">{cat}</span>
+                {isAuto && current && <span className="class-row-meta text-muted">Auto-matched to {classes.find((c) => c.id === current)?.name}</span>}
+                {!current && <span className="class-row-meta text-muted">Unmatched</span>}
+              </div>
+              <select
+                className="input"
+                style={{ maxWidth: 200 }}
+                value={current}
+                onChange={(e) => setClassMapping(cat, e.target.value || null)}
+              >
+                <option value="">No class</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          );
+        })}
+      </div>
+    </Widget>
+  );
+}
+
 function fmtHour(h: number) {
   const totalMins = Math.round(h * 60);
   const hour24 = Math.floor(totalMins / 60);
@@ -216,6 +270,7 @@ export function SettingsPage() {
       <AccessSettings />
       <GoogleCalendarSettings />
       <SchoologySettings />
+      <SchoologyClassMappingSettings />
 
       <Widget>
         <div className="widget-head">

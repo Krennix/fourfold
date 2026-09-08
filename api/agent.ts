@@ -5,7 +5,7 @@ import { verifySession } from './_lib/session.js';
 import { findFreeSlots, type AgentCalEvent } from './_lib/scheduling.js';
 import { toolsForMode, systemPromptForMode, DAILY_PLAN_SCHEMA, WATCHDOG_SCHEMA, type AgentMode } from './_lib/agentTools.js';
 
-const MODEL = 'claude-opus-5';
+const MODEL = 'claude-sonnet-5';
 const MAX_ITERATIONS = 6;
 const READ_ONLY_TOOLS = new Set(['get_calendar_events', 'get_tasks', 'get_assignments', 'find_free_slots']);
 

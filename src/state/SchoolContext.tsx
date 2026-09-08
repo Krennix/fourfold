@@ -33,9 +33,24 @@ export interface DayOverride {
 export interface Homework {
   id: number;
   title: string;
+  /** YYYY-MM-DD (or any Date-parseable string); empty/unparseable = no due date. */
   due: string;
   priority: 'high' | 'med' | 'low';
   done: boolean;
+  source?: 'manual';
+}
+
+/** Old records may carry a formatted display string (e.g. "Sep 10", no year) instead of a real date. */
+function normalizeDue(raw: string): string {
+  if (!raw) return raw;
+  // Legacy "Mon D" display strings (no year) parse in JS with a bogus default year — detect and fix explicitly.
+  if (/^[A-Za-z]{3}\s+\d{1,2}$/.test(raw.trim())) {
+    const withYear = `${raw} ${new Date().getFullYear()}`;
+    if (!Number.isNaN(new Date(withYear).getTime())) return withYear;
+    return '';
+  }
+  if (!Number.isNaN(new Date(raw).getTime())) return raw;
+  return '';
 }
 
 const DEFAULT_CLASSES: SchoolClass[] = [
@@ -71,6 +86,10 @@ interface StoredState {
   showBreaks: boolean;
   /** Homework/assignments, keyed by class id. */
   homework: Record<string, Homework[]>;
+  /** Completion state for Schoology-sourced homework, keyed by ICS uid. */
+  schoologyDone: Record<string, boolean>;
+  /** Manual overrides mapping a lowercased Schoology category/course name to a class id. */
+  classMappings: Record<string, string>;
 }
 
 interface SchoolContextValue extends StoredState {
@@ -85,6 +104,8 @@ interface SchoolContextValue extends StoredState {
   addHomework: (classId: string, hw: Omit<Homework, 'id' | 'done'>) => void;
   toggleHomework: (classId: string, id: number) => void;
   removeHomework: (classId: string, id: number) => void;
+  toggleSchoologyHomeworkDone: (uid: string) => void;
+  setClassMapping: (category: string, classId: string | null) => void;
 }
 
 const SchoolContext = createContext<SchoolContextValue | null>(null);
@@ -103,6 +124,8 @@ const DEFAULT_STATE: StoredState = {
   overrides: {},
   showBreaks: true,
   homework: DEFAULT_HOMEWORK,
+  schoologyDone: {},
+  classMappings: {},
 };
 
 export function SchoolProvider({ children }: { children: ReactNode }) {
@@ -167,15 +190,43 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const toggleSchoologyHomeworkDone: SchoolContextValue['toggleSchoologyHomeworkDone'] = (uid) => {
+    setState((s) => {
+      const schoologyDone = s.schoologyDone ?? {};
+      return { ...s, schoologyDone: { ...schoologyDone, [uid]: !schoologyDone[uid] } };
+    });
+  };
+
+  const setClassMapping: SchoolContextValue['setClassMapping'] = (category, classId) => {
+    setState((s) => {
+      const classMappings = { ...(s.classMappings ?? {}) };
+      const key = category.trim().toLowerCase();
+      if (classId) classMappings[key] = classId;
+      else delete classMappings[key];
+      return { ...s, classMappings };
+    });
+  };
+
+  const normalizedHomework = (() => {
+    const homework = state.homework ?? {};
+    const out: Record<string, Homework[]> = {};
+    for (const [classId, list] of Object.entries(homework)) {
+      out[classId] = list.map((h) => ({ ...h, due: normalizeDue(h.due) }));
+    }
+    return out;
+  })();
+
   return (
     <SchoolContext.Provider
       value={{
         ...state,
         classes: state.classes.map(normalizeClass),
         showBreaks: state.showBreaks ?? true,
-        homework: state.homework ?? {},
+        homework: normalizedHomework,
+        schoologyDone: state.schoologyDone ?? {},
+        classMappings: state.classMappings ?? {},
         addClass, updateClass, removeClass, addPreset, updatePreset, removePreset, setOverride, setShowBreaks,
-        addHomework, toggleHomework, removeHomework,
+        addHomework, toggleHomework, removeHomework, toggleSchoologyHomeworkDone, setClassMapping,
       }}
     >
       {children}

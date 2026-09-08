@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, WEEKDAYS, type Weekday, type Homework } from '../state/SchoolContext';
 import { useSchoology } from '../state/SchoologyContext';
 import { fetchBellSchedule, findNextClassMeeting, findPeriod, isNoSchoolDay, isoToLocalHour, type BellSchedule } from '../lib/harkerBell';
+import { classBadge, mergeHomeworkForClass, type MergedHomeworkItem } from '../lib/homeworkMerge';
 import './School.css';
 
 const SCHOOL_START = 8 + 10 / 60; // 8:10am
@@ -35,48 +36,21 @@ function isSameDate(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function fmtDue(due: string, allDay: boolean) {
+function fmtDueDisplay(due: string | null) {
+  if (!due) return 'No date';
   const d = new Date(due);
-  const datePart = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  if (allDay) return datePart;
-  return `${datePart}, ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
-}
-
-function SchoologyHomeworkWidget() {
-  const { status, icsUrl, assignments, error, refresh } = useSchoology();
-
-  if (!icsUrl) return null;
-
-  const now = Date.now();
-  const upcoming = assignments.filter((a) => new Date(a.due).getTime() >= now - 24 * 60 * 60 * 1000);
-
-  return (
-    <Widget>
-      <div className="widget-head">
-        <h4>Schoology homework</h4>
-        <button className="btn btn-ghost" type="button" onClick={() => void refresh()} disabled={status === 'loading'}>
-          {status === 'loading' ? 'Syncing…' : 'Refresh'}
-        </button>
-      </div>
-      {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
-      {!error && upcoming.length === 0 && <div className="empty-msg">Nothing due — you're all caught up.</div>}
-      <div>
-        {upcoming.map((a) => (
-          <div className="hw-row" key={a.uid}>
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <span className="hw-title">{a.title}</span>
-              <span className="text-muted" style={{ fontSize: 11 }}>Due {fmtDue(a.due, a.allDay)}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Widget>
-  );
+  if (Number.isNaN(d.getTime())) return 'No date';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 export function SchoolPage() {
-  const { classes, presets, overrides, setOverride, showBreaks, homework, addHomework: addHomeworkToClass, toggleHomework } = useSchool();
+  const {
+    classes, presets, overrides, setOverride, showBreaks, homework,
+    addHomework: addHomeworkToClass, toggleHomework, schoologyDone, toggleSchoologyHomeworkDone, classMappings,
+  } = useSchool();
+  const { assignments } = useSchoology();
   const [openClassId, setOpenClassId] = useState<string | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [menuDate, setMenuDate] = useState<string | null>(null);
   const [bellSchedules, setBellSchedules] = useState<Record<string, BellSchedule | null>>({});
@@ -87,6 +61,7 @@ export function SchoolPage() {
   const priorityRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
+    setShowCompleted(false);
     if (!openClassId) {
       setNextMeetingDate(null);
       return;
@@ -109,13 +84,20 @@ export function SchoolPage() {
   const addHomework = () => {
     if (!openClassId) return;
     const title = titleRef.current?.value || 'New assignment';
-    const dueRaw = dueRef.current?.value;
+    const due = dueRef.current?.value || '';
     const priority = (priorityRef.current?.value as Homework['priority']) || 'med';
-    const due = dueRaw ? new Date(`${dueRaw}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'No date';
     addHomeworkToClass(openClassId, { title, due, priority });
     if (titleRef.current) titleRef.current.value = '';
     if (dueRef.current) dueRef.current.value = '';
   };
+
+  const mergedByClass = useMemo(() => {
+    const out: Record<string, MergedHomeworkItem[]> = {};
+    for (const c of classes) {
+      out[c.id] = mergeHomeworkForClass(c.id, homework[c.id] || [], assignments, classes, classMappings, schoologyDone);
+    }
+    return out;
+  }, [classes, homework, assignments, classMappings, schoologyDone]);
 
   const weekDates = WEEKDAYS.map((_, i) => {
     const d = new Date(weekStart);
@@ -193,12 +175,12 @@ export function SchoolPage() {
       .map((b) => {
         const topPct = ((b.start - START_HOUR) / totalHours) * 100;
         const heightPct = ((b.end - b.start) / totalHours) * 100;
-        const hw = homework[b.classId] || [];
+        const openItems = (mergedByClass[b.classId] || []).filter((h) => !h.done);
         return {
           ...b,
           time: `${fmtHour(b.start)}–${fmtHour(b.end)}`,
           posStyle: { top: `${topPct}%`, height: `${heightPct}%` },
-          hasHomework: hw.some((h) => !h.done),
+          badge: classBadge(openItems),
         };
       });
 
@@ -233,7 +215,9 @@ export function SchoolPage() {
   });
 
   const cls = classes.find((c) => c.id === openClassId);
-  const panelHomework = cls ? (homework[cls.id] || []) : [];
+  const panelMerged = cls ? (mergedByClass[cls.id] || []) : [];
+  const panelOpen = panelMerged.filter((h) => !h.done);
+  const panelCompleted = panelMerged.filter((h) => h.done);
 
   const weekLabel = `${weekDates[0].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${weekDates[4].toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
@@ -317,15 +301,13 @@ export function SchoolPage() {
                 <div className="class-block" style={c.posStyle} onClick={() => setOpenClassId(c.classId)} key={`${col.key}-${c.classId}-${c.start}`}>
                   <span className="cb-name">{c.name}</span>
                   <span className="cb-meta">{c.time} &middot; {c.room}</span>
-                  {c.hasHomework && <span className="cb-hw" />}
+                  {c.badge && <span className={`cb-hw cb-hw-${c.badge.color}`}>{c.badge.count}</span>}
                 </div>
               ))}
             </div>
           ))}
         </div>
       </Widget>
-
-      <SchoologyHomeworkWidget />
 
       {classes.length === 0 && (
         <div className="empty-msg">No classes yet — add some in Settings.</div>
@@ -341,19 +323,45 @@ export function SchoolPage() {
 
             <h4 style={{ marginTop: 8 }}>Homework</h4>
             <div>
-              {panelHomework.map((hw) => (
-                <div className="hw-row" key={hw.id}>
-                  <div className={`hw-check${hw.done ? ' done' : ''}`} onClick={() => toggleHomework(cls.id, hw.id)}>
-                    {hw.done && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-                  </div>
+              {panelOpen.map((hw) => (
+                <div className="hw-row" key={hw.key}>
+                  <div
+                    className="hw-check"
+                    onClick={() => (hw.source === 'manual' ? toggleHomework(cls.id, hw.homeworkId!) : toggleSchoologyHomeworkDone(hw.uid!))}
+                  />
+                  <span className={`hw-urgency-dot ${hw.urgency}`} />
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <span className={`hw-title${hw.done ? ' done' : ''}`}>{hw.title}</span>
-                    <span className="text-muted" style={{ fontSize: 11 }}>Due {hw.due}</span>
+                    <span className="hw-title">{hw.title}</span>
+                    <span className="text-muted" style={{ fontSize: 11 }}>Due {fmtDueDisplay(hw.due)}</span>
                   </div>
-                  <span className={`tag ${PRIORITY_CLASS[hw.priority]}`}>{PRIORITY_LABEL[hw.priority]}</span>
+                  {hw.priorityLabel && <span className={`tag ${PRIORITY_CLASS[hw.priorityLabel]}`}>{PRIORITY_LABEL[hw.priorityLabel]}</span>}
                 </div>
               ))}
-              {panelHomework.length === 0 && <div className="empty-msg" style={{ fontSize: 12, padding: '8px 0' }}>No homework yet</div>}
+              {panelOpen.length === 0 && <div className="empty-msg" style={{ fontSize: 12, padding: '8px 0' }}>No homework yet</div>}
+
+              {panelCompleted.length > 0 && (
+                <div className="hw-completed-section">
+                  <button className="hw-completed-toggle" type="button" onClick={() => setShowCompleted((s) => !s)}>
+                    <svg className={showCompleted ? 'open' : ''} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+                    Completed ({panelCompleted.length})
+                  </button>
+                  {showCompleted && panelCompleted.map((hw) => (
+                    <div className="hw-row" key={hw.key}>
+                      <div
+                        className="hw-check done"
+                        onClick={() => (hw.source === 'manual' ? toggleHomework(cls.id, hw.homeworkId!) : toggleSchoologyHomeworkDone(hw.uid!))}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <span className="hw-title done">{hw.title}</span>
+                        <span className="text-muted" style={{ fontSize: 11 }}>Due {fmtDueDisplay(hw.due)}</span>
+                      </div>
+                      {hw.priorityLabel && <span className={`tag ${PRIORITY_CLASS[hw.priorityLabel]}`}>{PRIORITY_LABEL[hw.priorityLabel]}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', marginTop: 6, flexWrap: 'wrap' }}>
