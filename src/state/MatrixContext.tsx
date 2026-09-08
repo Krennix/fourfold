@@ -28,6 +28,7 @@ export interface NewTaskInput {
   dueDate?: string | null;
   link?: TaskLink | null;
   durationMin?: number | null;
+  time?: string | null;
 }
 
 type TaskState = Record<QuadKey, Task[]>;
@@ -54,7 +55,7 @@ export function MatrixProvider({ children }: { children: ReactNode }) {
       id: `task-${Date.now()}`,
       title: data.title,
       done: false,
-      time: null,
+      time: data.time ?? null,
       listTag: data.listTag || 'Inbox',
       dueDate: data.dueDate ?? null,
       link: data.link ?? null,

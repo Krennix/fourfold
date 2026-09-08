@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
+import { TaskDialog } from '../components/TaskDialog';
+import { useAutoSchedule } from '../lib/useAutoSchedule';
 import { useMatrix, type QuadKey } from '../state/MatrixContext';
 import './Matrix.css';
 
@@ -12,24 +14,17 @@ const QUAD_CONFIG: { key: QuadKey; numeral: string; label: string; sub: string; 
 
 export function MatrixPage() {
   const { tasks, addTask, removeTask, toggleDone, scheduleTask, unscheduleTask } = useMatrix();
+  const autoSchedule = useAutoSchedule();
   const [open, setOpen] = useState<Record<QuadKey, boolean>>({ q1: true, q2: true, q3: true, q4: true });
   const [dialogQuad, setDialogQuad] = useState<QuadKey | null>(null);
-
-  const titleRef = useRef<HTMLInputElement>(null);
-  const tagRef = useRef<HTMLInputElement>(null);
-  const quadRef = useRef<HTMLSelectElement>(null);
 
   const toggleOpen = (qkey: QuadKey) => setOpen((s) => ({ ...s, [qkey]: !s[qkey] }));
 
   const openDialog = (qkey: QuadKey) => setDialogQuad(qkey);
 
-  const saveTask = () => {
-    const title = titleRef.current?.value.trim();
-    const qkey = (quadRef.current?.value as QuadKey) || dialogQuad;
-    if (title && qkey) addTask(qkey, { title, listTag: tagRef.current?.value.trim() || 'Inbox' });
-    if (titleRef.current) titleRef.current.value = '';
-    if (tagRef.current) tagRef.current.value = '';
-    setDialogQuad(null);
+  const scheduleNow = async (qkey: QuadKey, id: string, title: string, durationMin: number | null) => {
+    const scheduled = await autoSchedule({ title, dueDate: null, durationMin: durationMin ?? 30, link: null });
+    if (scheduled.time) scheduleTask(qkey, id, scheduled.time);
   };
 
   return (
@@ -73,7 +68,7 @@ export function MatrixPage() {
                       <span className="tag tag-accent" style={{ cursor: 'pointer' }} onClick={() => unscheduleTask(q.key, t.id)}>{t.time}</span>
                     )}
                     {!t.time && (
-                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => scheduleTask(q.key, t.id, 'Thu 10:00 AM')} type="button">+ Schedule</button>
+                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => scheduleNow(q.key, t.id, t.title, t.durationMin)} type="button">+ Schedule</button>
                     )}
                     <span className="tag tag-neutral">{t.listTag}</span>
                     <button className="btn btn-icon" type="button" onClick={() => removeTask(q.key, t.id)} aria-label={`Remove ${t.title}`}>
@@ -119,25 +114,14 @@ export function MatrixPage() {
       </div>
 
       {dialogQuad && (
-        <div className="dialog-backdrop" onClick={() => setDialogQuad(null)}>
-          <div className="dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="dialog-title">Add task</div>
-            <div className="field"><label>Title</label><input className="input" type="text" ref={titleRef} placeholder="Task title" autoFocus /></div>
-            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              <div className="field" style={{ flex: 1 }}>
-                <label>Quadrant</label>
-                <select className="input" ref={quadRef} defaultValue={dialogQuad}>
-                  {QUAD_CONFIG.map((q) => <option key={q.key} value={q.key}>{q.numeral} · {q.label}</option>)}
-                </select>
-              </div>
-              <div className="field" style={{ flex: 1 }}><label>List tag</label><input className="input" type="text" ref={tagRef} placeholder="Inbox" /></div>
-            </div>
-            <div className="dialog-actions">
-              <button className="btn btn-secondary" type="button" onClick={() => setDialogQuad(null)}>Cancel</button>
-              <button className="btn btn-primary" type="button" onClick={saveTask}>Save</button>
-            </div>
-          </div>
-        </div>
+        <TaskDialog
+          initialQuad={dialogQuad}
+          onClose={() => setDialogQuad(null)}
+          onSave={async ({ title, quad, dueDate, link, durationMin }) => {
+            const scheduled = await autoSchedule({ title, dueDate, durationMin, link });
+            addTask(quad, { title, dueDate, link: scheduled.link, durationMin, time: scheduled.time });
+          }}
+        />
       )}
     </div>
   );

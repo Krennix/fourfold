@@ -6,6 +6,7 @@ import { CountdownIcon } from '../components/CountdownIcon';
 import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
 import { CountdownDialog } from '../components/CountdownDialog';
 import { TaskDialog } from '../components/TaskDialog';
+import { useAutoSchedule } from '../lib/useAutoSchedule';
 import { useHabits } from '../state/HabitsContext';
 import { useMatrix, type QuadKey } from '../state/MatrixContext';
 import { useCalendarEvents } from '../state/CalendarContext';
@@ -47,6 +48,7 @@ export function HomePage() {
   const { habits, toggleHabit } = useHabits();
   const { tasks, addTask } = useMatrix();
   const { eventsByDate } = useCalendarEvents();
+  const autoSchedule = useAutoSchedule();
   const { countdowns, addCountdown, updateCountdown, removeCountdown } = useCountdowns();
   const { mode: pomoMode, secondsLeft: pomoSecondsLeft, isRunning: pomoRunning, start: startPomodoro, toggleRun: togglePomodoro } = usePomodoro();
   const [cdDialogState, setCdDialogState] = useState<'add' | Countdown | null>(null);
@@ -274,7 +276,10 @@ export function HomePage() {
         <TaskDialog
           initialQuad={taskDialogQuad}
           onClose={() => setTaskDialogQuad(null)}
-          onSave={({ title, quad, dueDate, link, durationMin }) => addTask(quad, { title, dueDate, link, durationMin })}
+          onSave={async ({ title, quad, dueDate, link, durationMin }) => {
+            const scheduled = await autoSchedule({ title, dueDate, durationMin, link });
+            addTask(quad, { title, dueDate, link: scheduled.link, durationMin, time: scheduled.time });
+          }}
         />
       )}
 
