@@ -105,6 +105,7 @@ interface SchoolContextValue extends StoredState {
   setOverride: (dates: string[], override: DayOverride | null) => void;
   setShowBreaks: (show: boolean) => void;
   addHomework: (classId: string, hw: Omit<Homework, 'id' | 'done'>) => void;
+  updateHomework: (classId: string, id: number, hw: Omit<Homework, 'id' | 'done'>) => void;
   toggleHomework: (classId: string, id: number) => void;
   removeHomework: (classId: string, id: number) => void;
   toggleSchoologyHomeworkDone: (uid: string) => void;
@@ -188,6 +189,12 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
       return { ...s, homework: { ...homework, [classId]: (homework[classId] || []).map((h) => (h.id === id ? { ...h, done: !h.done } : h)) } };
     });
   };
+  const updateHomework: SchoolContextValue['updateHomework'] = (classId, id, hw) => {
+    setState((s) => {
+      const homework = s.homework ?? {};
+      return { ...s, homework: { ...homework, [classId]: (homework[classId] || []).map((h) => (h.id === id ? { ...h, ...hw } : h)) } };
+    });
+  };
   const removeHomework: SchoolContextValue['removeHomework'] = (classId, id) => {
     setState((s) => {
       const homework = s.homework ?? {};
@@ -242,7 +249,7 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
         classMappings: state.classMappings ?? {},
         classKeywords: state.classKeywords ?? {},
         addClass, updateClass, removeClass, addPreset, updatePreset, removePreset, setOverride, setShowBreaks,
-        addHomework, toggleHomework, removeHomework, toggleSchoologyHomeworkDone, setClassMapping, setClassKeywords,
+        addHomework, updateHomework, toggleHomework, removeHomework, toggleSchoologyHomeworkDone, setClassMapping, setClassKeywords,
       }}
     >
       {children}

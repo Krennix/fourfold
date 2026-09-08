@@ -46,11 +46,12 @@ function fmtDueDisplay(due: string | null) {
 export function SchoolPage() {
   const {
     classes, presets, overrides, setOverride, showBreaks, homework,
-    addHomework: addHomeworkToClass, toggleHomework, schoologyDone, toggleSchoologyHomeworkDone, classMappings, classKeywords,
+    addHomework: addHomeworkToClass, updateHomework, removeHomework, toggleHomework, schoologyDone, toggleSchoologyHomeworkDone, classMappings, classKeywords,
   } = useSchool();
   const { assignments } = useSchoology();
   const [openClassId, setOpenClassId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [menuDate, setMenuDate] = useState<string | null>(null);
   const [bellSchedules, setBellSchedules] = useState<Record<string, BellSchedule | null>>({});
@@ -63,6 +64,7 @@ export function SchoolPage() {
 
   useEffect(() => {
     setShowCompleted(false);
+    setEditingId(null);
     if (!openClassId) {
       setNextMeetingDate(null);
       return;
@@ -82,16 +84,46 @@ export function SchoolPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openClassId]);
 
-  const addHomework = () => {
+  const clearHomeworkForm = () => {
+    if (titleRef.current) titleRef.current.value = '';
+    if (descriptionRef.current) descriptionRef.current.value = '';
+    if (dueRef.current) dueRef.current.value = '';
+    if (priorityRef.current) priorityRef.current.value = 'med';
+  };
+
+  const saveHomework = () => {
     if (!openClassId) return;
     const title = titleRef.current?.value || 'New assignment';
     const description = descriptionRef.current?.value.trim() || undefined;
     const due = dueRef.current?.value || '';
     const priority = (priorityRef.current?.value as Homework['priority']) || 'med';
-    addHomeworkToClass(openClassId, { title, description, due, priority });
-    if (titleRef.current) titleRef.current.value = '';
-    if (descriptionRef.current) descriptionRef.current.value = '';
-    if (dueRef.current) dueRef.current.value = '';
+    if (editingId != null) {
+      updateHomework(openClassId, editingId, { title, description, due, priority });
+      setEditingId(null);
+    } else {
+      addHomeworkToClass(openClassId, { title, description, due, priority });
+    }
+    clearHomeworkForm();
+  };
+
+  const startEditHomework = (hw: MergedHomeworkItem) => {
+    if (hw.source !== 'manual' || hw.homeworkId === undefined) return;
+    setEditingId(hw.homeworkId);
+    if (titleRef.current) titleRef.current.value = hw.title;
+    if (descriptionRef.current) descriptionRef.current.value = hw.description || '';
+    if (dueRef.current) dueRef.current.value = hw.due || '';
+    if (priorityRef.current) priorityRef.current.value = hw.priorityLabel || 'med';
+  };
+
+  const cancelEditHomework = () => {
+    setEditingId(null);
+    clearHomeworkForm();
+  };
+
+  const deleteHomework = (hw: MergedHomeworkItem) => {
+    if (!openClassId || hw.source !== 'manual' || hw.homeworkId === undefined) return;
+    if (editingId === hw.homeworkId) cancelEditHomework();
+    removeHomework(openClassId, hw.homeworkId);
   };
 
   const mergedByClass = useMemo(() => {
@@ -339,6 +371,16 @@ export function SchoolPage() {
                     {hw.description && <span className="text-muted" style={{ fontSize: 11 }}>{hw.description}</span>}
                   </div>
                   {hw.priorityLabel && <span className={`tag ${PRIORITY_CLASS[hw.priorityLabel]}`}>{PRIORITY_LABEL[hw.priorityLabel]}</span>}
+                  {hw.source === 'manual' && (
+                    <div style={{ display: 'flex', gap: 2 }}>
+                      <button className="hw-action-btn" type="button" title="Edit" onClick={() => startEditHomework(hw)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                      </button>
+                      <button className="hw-action-btn" type="button" title="Delete" onClick={() => deleteHomework(hw)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               {panelOpen.length === 0 && <div className="empty-msg" style={{ fontSize: 12, padding: '8px 0' }}>No homework yet</div>}
@@ -363,6 +405,16 @@ export function SchoolPage() {
                         {hw.description && <span className="text-muted" style={{ fontSize: 11 }}>{hw.description}</span>}
                       </div>
                       {hw.priorityLabel && <span className={`tag ${PRIORITY_CLASS[hw.priorityLabel]}`}>{PRIORITY_LABEL[hw.priorityLabel]}</span>}
+                      {hw.source === 'manual' && (
+                        <div style={{ display: 'flex', gap: 2 }}>
+                          <button className="hw-action-btn" type="button" title="Edit" onClick={() => startEditHomework(hw)}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                          </button>
+                          <button className="hw-action-btn" type="button" title="Delete" onClick={() => deleteHomework(hw)}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -370,7 +422,7 @@ export function SchoolPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', marginTop: 6, flexWrap: 'wrap' }}>
-              <div className="field" style={{ flex: 2, minWidth: 160 }}><label>New assignment</label><input className="input" type="text" ref={titleRef} placeholder="e.g. Problem set 4" /></div>
+              <div className="field" style={{ flex: 2, minWidth: 160 }}><label>{editingId != null ? 'Edit assignment' : 'New assignment'}</label><input className="input" type="text" ref={titleRef} placeholder="e.g. Problem set 4" /></div>
               <div className="field" style={{ flex: 1, minWidth: 130 }}>
                 <label>Due date</label>
                 <input className="input" type="date" ref={dueRef} defaultValue={nextMeetingDate ?? undefined} key={`${openClassId ?? ''}-${nextMeetingDate ?? ''}`} />
@@ -392,7 +444,8 @@ export function SchoolPage() {
 
             <div className="dialog-actions">
               <button className="btn btn-secondary" type="button" onClick={() => setOpenClassId(null)}>Close</button>
-              <button className="btn btn-primary" type="button" onClick={addHomework}>Add homework</button>
+              {editingId != null && <button className="btn btn-secondary" type="button" onClick={cancelEditHomework}>Cancel edit</button>}
+              <button className="btn btn-primary" type="button" onClick={saveHomework}>{editingId != null ? 'Save changes' : 'Add homework'}</button>
             </div>
           </div>
         </div>
