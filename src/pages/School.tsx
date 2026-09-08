@@ -57,6 +57,7 @@ export function SchoolPage() {
   const [nextMeetingDate, setNextMeetingDate] = useState<string | null>(null);
 
   const titleRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const dueRef = useRef<HTMLInputElement>(null);
   const priorityRef = useRef<HTMLSelectElement>(null);
 
@@ -84,10 +85,12 @@ export function SchoolPage() {
   const addHomework = () => {
     if (!openClassId) return;
     const title = titleRef.current?.value || 'New assignment';
+    const description = descriptionRef.current?.value.trim() || undefined;
     const due = dueRef.current?.value || '';
     const priority = (priorityRef.current?.value as Homework['priority']) || 'med';
-    addHomeworkToClass(openClassId, { title, due, priority });
+    addHomeworkToClass(openClassId, { title, description, due, priority });
     if (titleRef.current) titleRef.current.value = '';
+    if (descriptionRef.current) descriptionRef.current.value = '';
     if (dueRef.current) dueRef.current.value = '';
   };
 
@@ -331,8 +334,9 @@ export function SchoolPage() {
                   />
                   <span className={`hw-urgency-dot ${hw.urgency}`} />
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <span className="hw-title">{hw.title}</span>
+                    <span className="hw-title" title={hw.description || undefined}>{hw.title}</span>
                     <span className="text-muted" style={{ fontSize: 11 }}>Due {fmtDueDisplay(hw.due)}</span>
+                    {hw.description && <span className="text-muted" style={{ fontSize: 11 }}>{hw.description}</span>}
                   </div>
                   {hw.priorityLabel && <span className={`tag ${PRIORITY_CLASS[hw.priorityLabel]}`}>{PRIORITY_LABEL[hw.priorityLabel]}</span>}
                 </div>
@@ -354,8 +358,9 @@ export function SchoolPage() {
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
                       </div>
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <span className="hw-title done">{hw.title}</span>
+                        <span className="hw-title done" title={hw.description || undefined}>{hw.title}</span>
                         <span className="text-muted" style={{ fontSize: 11 }}>Due {fmtDueDisplay(hw.due)}</span>
+                        {hw.description && <span className="text-muted" style={{ fontSize: 11 }}>{hw.description}</span>}
                       </div>
                       {hw.priorityLabel && <span className={`tag ${PRIORITY_CLASS[hw.priorityLabel]}`}>{PRIORITY_LABEL[hw.priorityLabel]}</span>}
                     </div>
@@ -378,6 +383,11 @@ export function SchoolPage() {
                   <option value="low">Low</option>
                 </select>
               </div>
+            </div>
+
+            <div className="field" style={{ marginTop: 6 }}>
+              <label>Description</label>
+              <textarea className="input" ref={descriptionRef} placeholder="Optional notes about this assignment" rows={2} />
             </div>
 
             <div className="dialog-actions">
