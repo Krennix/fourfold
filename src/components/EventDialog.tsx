@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useSchool } from '../state/SchoolContext';
-import { useCalendarEvents, type CalEvent, type EventExtras } from '../state/CalendarContext';
+import { useCalendarEvents, type CalEvent, type EventExtras, type RepeatFreq } from '../state/CalendarContext';
 import { MentionField } from './MentionField';
 
 function toDurationMin(startTime: string, endTime: string): number {
@@ -30,7 +30,7 @@ export function EventDialog({
   onClose: () => void;
 }) {
   const { classes } = useSchool();
-  const { events, addEvent, updateEvent } = useCalendarEvents();
+  const { events, addEvent, addRecurringEvent, updateEvent, removeEvent } = useCalendarEvents();
 
   const [title, setTitle] = useState(editing?.title ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
@@ -43,6 +43,8 @@ export function EventDialog({
       ? addMinutesToTime(to24h(editing.time), editing.durationMin)
       : '10:00',
   );
+  const [repeat, setRepeat] = useState<'none' | RepeatFreq>('none');
+  const [repeatUntil, setRepeatUntil] = useState(initialDate);
 
   const locationSuggestions = useMemo(() => {
     const rooms = classes.map((c) => c.room).filter(Boolean);
@@ -61,9 +63,19 @@ export function EventDialog({
     const time = allDay ? '' : startTime;
     if (editing) {
       updateEvent(editing.id, dateKey, title.trim(), time, durationMin, extras);
+    } else if (repeat !== 'none' && repeatUntil >= date) {
+      const [uy, um, ud] = repeatUntil.split('-').map(Number);
+      const untilKey = `${uy}-${um - 1}-${ud}`;
+      addRecurringEvent(dateKey, untilKey, repeat, title.trim(), time, durationMin, extras);
     } else {
       addEvent(dateKey, title.trim(), time, durationMin, extras);
     }
+    onClose();
+  };
+
+  const handleDelete = () => {
+    if (!editing) return;
+    removeEvent(editing.id);
     onClose();
   };
 
@@ -95,6 +107,25 @@ export function EventDialog({
               </div>
             </div>
           )}
+          {!editing && (
+            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end' }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Repeat</label>
+                <select className="input" value={repeat} onChange={(e) => setRepeat(e.target.value as 'none' | RepeatFreq)}>
+                  <option value="none">Does not repeat</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              {repeat !== 'none' && (
+                <div className="field" style={{ flex: 1 }}>
+                  <label>Until</label>
+                  <input className="input" type="date" min={date} value={repeatUntil} onChange={(e) => setRepeatUntil(e.target.value)} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="field">
@@ -123,6 +154,18 @@ export function EventDialog({
         </div>
 
         <div className="dialog-actions">
+          {editing && (
+            <button
+              className="btn btn-danger"
+              type="button"
+              disabled={!!editing.locked}
+              title={editing.locked ? 'Locked — unlock it first to delete' : undefined}
+              onClick={handleDelete}
+              style={{ marginRight: 'auto' }}
+            >
+              Delete
+            </button>
+          )}
           <button className="btn btn-secondary" type="button" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" type="button" disabled={!canSave} onClick={handleSave}>Save</button>
         </div>

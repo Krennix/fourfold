@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
-import { useCalendarEvents } from '../state/CalendarContext';
+import { useCalendarEvents, type CalEvent } from '../state/CalendarContext';
 import { useGoogleAuth } from '../state/GoogleAuthContext';
 import { EventDialog } from '../components/EventDialog';
 import './Calendar.css';
@@ -11,13 +11,63 @@ function toISODate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+/** "Y-M-D" (0-based month) -> "YYYY-MM-DD" for a date input / iso date key. */
+function isoFromKey(key: string): string {
+  const [y, m, d] = key.split('-').map(Number);
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/** Best-effort parse of a display time ("9:00 AM", "14:30") back into 24h "HH:MM". */
+function to24h(display: string): string {
+  const match = display.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return '09:00';
+  let h = Number(match[1]);
+  const m = match[2];
+  const meridiem = match[3]?.toUpperCase();
+  if (meridiem === 'PM' && h !== 12) h += 12;
+  if (meridiem === 'AM' && h === 12) h = 0;
+  return `${String(h).padStart(2, '0')}:${m}`;
+}
+
+function DropTimeDialog({
+  event,
+  dateKey,
+  onConfirm,
+  onCancel,
+}: {
+  event: CalEvent;
+  dateKey: string;
+  onConfirm: (time: string) => void;
+  onCancel: () => void;
+}) {
+  const [time, setTime] = useState(to24h(event.time));
+  return (
+    <div className="dialog-backdrop" onClick={onCancel}>
+      <div className="dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="dialog-title">Move "{event.title}" to {isoFromKey(dateKey)}</div>
+        <div className="field">
+          <label>Time</label>
+          <input className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} autoFocus />
+        </div>
+        <div className="dialog-actions">
+          <button className="btn btn-secondary" type="button" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-primary" type="button" onClick={() => onConfirm(time)}>Move</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CalendarPage() {
-  const { events, loading, error, refresh, removeEvent, toggleEventLocked } = useCalendarEvents();
+  const { events, loading, error, refresh, updateEvent, toggleEventLocked } = useCalendarEvents();
   const { status, email, connect, disconnect } = useGoogleAuth();
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [dialogDate, setDialogDate] = useState<string | null>(null);
+  const [editingEvent, setEditingEvent] = useState<CalEvent | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropPrompt, setDropPrompt] = useState<{ event: CalEvent; dateKey: string } | null>(null);
 
   useEffect(() => {
     if (status !== 'signed-in') return;
@@ -114,11 +164,31 @@ export function CalendarPage() {
         </div>
         <div className="month-grid">
           {DOW_LABELS.map((d) => <div className="dow" key={d}>{d}</div>)}
-          {cells.map((c, i) => (
+          {cells.map((c, i) => {
+            const dateKey = c.inMonth && typeof c.num === 'number' ? `${year}-${month}-${c.num}` : null;
+            return (
             <div
               className={`day-cell${c.cls ? ` ${c.cls}` : ''}${c.inMonth ? ' clickable' : ''}`}
               key={i}
               onClick={() => c.inMonth && typeof c.num === 'number' && setDialogDate(toISODate(year, month, c.num))}
+              onDragOver={(e) => { if (draggingId && dateKey) e.preventDefault(); }}
+              onDrop={(e) => {
+                if (!draggingId || !dateKey) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const dragged = events.find((ev) => ev.id === draggingId);
+                setDraggingId(null);
+                if (!dragged || dragged.locked || dragged.date === dateKey) return;
+                if (dragged.allDay) {
+                  updateEvent(dragged.id, dateKey, dragged.title, '', dragged.durationMin, {
+                    description: dragged.description,
+                    location: dragged.location,
+                    allDay: true,
+                  });
+                } else {
+                  setDropPrompt({ event: dragged, dateKey });
+                }
+              }}
             >
               {c.inMonth && (
                 <>
@@ -127,9 +197,12 @@ export function CalendarPage() {
                     <span
                       className={`evt-chip${ev.cls ? ` ${ev.cls}` : ''}${ev.locked ? ' locked' : ''}`}
                       key={ev.id}
-                      title={ev.locked ? 'Locked — set in stone. Click the lock to unlock.' : 'Click to remove'}
-                      onClick={(e) => { e.stopPropagation(); if (!ev.locked) removeEvent(ev.id); }}
-                      style={{ cursor: ev.locked ? 'default' : 'pointer' }}
+                      title={ev.locked ? 'Locked — set in stone. Click the lock to unlock.' : 'Click to edit'}
+                      draggable={!ev.locked}
+                      onDragStart={(e) => { e.stopPropagation(); setDraggingId(ev.id); e.dataTransfer.effectAllowed = 'move'; }}
+                      onDragEnd={(e) => { e.stopPropagation(); setDraggingId(null); }}
+                      onClick={(e) => { e.stopPropagation(); setEditingEvent(ev); }}
+                      style={{ cursor: ev.locked ? 'default' : 'grab' }}
                     >
                       {ev.cls === 'google' && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="8" width="9" height="6" rx="3" /><rect x="10" y="10" width="9" height="6" rx="3" /></svg>}
                       {ev.time} {ev.title}
@@ -152,11 +225,30 @@ export function CalendarPage() {
                 </>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </Widget>
 
       {dialogDate && <EventDialog initialDate={dialogDate} onClose={() => setDialogDate(null)} />}
+      {editingEvent && (
+        <EventDialog initialDate={isoFromKey(editingEvent.date)} editing={editingEvent} onClose={() => setEditingEvent(null)} />
+      )}
+      {dropPrompt && (
+        <DropTimeDialog
+          event={dropPrompt.event}
+          dateKey={dropPrompt.dateKey}
+          onCancel={() => setDropPrompt(null)}
+          onConfirm={(time) => {
+            updateEvent(dropPrompt.event.id, dropPrompt.dateKey, dropPrompt.event.title, time, dropPrompt.event.durationMin, {
+              description: dropPrompt.event.description,
+              location: dropPrompt.event.location,
+              allDay: false,
+            });
+            setDropPrompt(null);
+          }}
+        />
+      )}
     </div>
   );
 }

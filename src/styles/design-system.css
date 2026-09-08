@@ -275,6 +275,9 @@ figcaption {
 .btn-ghost { color: var(--color-accent); padding-inline: var(--space-1); }
 .btn-ghost:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
 .btn-ghost:active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+.btn-danger { border-color: var(--danger, #c0392b); color: var(--danger, #c0392b); }
+.btn-danger:hover { background: color-mix(in srgb, var(--danger, #c0392b) 10%, transparent); }
+.btn-danger:active { background: color-mix(in srgb, var(--danger, #c0392b) 18%, transparent); }
 .btn-icon { width: 36px; height: 36px; padding: 0; }
 .btn-block { width: 100%; margin-top: var(--space-2); }
 

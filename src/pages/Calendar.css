@@ -23,6 +23,8 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 3px;
 }
 .evt-chip.google { background: var(--color-neutral-200); color: var(--color-neutral-800); }
+.evt-chip[draggable="true"] { cursor: grab; }
+.evt-chip[draggable="true"]:active { cursor: grabbing; }
 .evt-chip.locked { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent-800) 40%, transparent); }
 .evt-chip svg { width: 9px; height: 9px; flex: none; }
 .evt-lock {
