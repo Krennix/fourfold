@@ -16,7 +16,7 @@ export function PageHeader({ kicker, title, actions }: { kicker: string; title: 
         <h6 className="text-muted" style={{ marginBottom: 6 }}>{kicker}</h6>
         <h1 style={{ fontSize: 34 }}>{title}</h1>
       </div>
-      {actions}
+      {actions && <div className="page-header-actions">{actions}</div>}
     </div>
   );
 }

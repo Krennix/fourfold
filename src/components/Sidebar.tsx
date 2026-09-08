@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../state/ThemeContext';
+import { Logo } from './Logo';
 import './Sidebar.css';
 
 const navItems = [
@@ -109,7 +110,10 @@ function ThemeToggle() {
 export function Sidebar() {
   return (
     <aside className="sidebar">
-      <div className="nav-brand">Fourfold</div>
+      <div className="nav-brand">
+        <Logo size={20} />
+        Fourfold
+      </div>
       <nav className="sidebar-nav">
         {navItems.map((item) => (
           <NavLink

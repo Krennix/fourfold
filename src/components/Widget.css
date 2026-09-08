@@ -26,6 +26,13 @@
   flex-wrap: wrap;
 }
 
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+}
+
 .page {
   display: flex;
   flex-direction: column;
