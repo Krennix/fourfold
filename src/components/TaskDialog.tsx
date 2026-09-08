@@ -1,8 +1,6 @@
-import { useMemo, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { QuadKey, TaskLink } from '../state/MatrixContext';
-import { useSchool } from '../state/SchoolContext';
-import { useCalendarEvents } from '../state/CalendarContext';
-import './TaskDialog.css';
+import { MentionField } from './MentionField';
 
 const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120, 180] as const;
 
@@ -13,23 +11,6 @@ const QUAD_OPTIONS: { key: QuadKey; numeral: string; label: string }[] = [
   { key: 'q4', numeral: 'IV', label: 'Not Urgent & Not Important' },
 ];
 
-interface Mention {
-  trigger: '@' | '~';
-  start: number;
-  query: string;
-}
-
-function findMention(text: string, caret: number): Mention | null {
-  const upto = text.slice(0, caret);
-  const at = upto.lastIndexOf('@');
-  const tilde = upto.lastIndexOf('~');
-  const start = Math.max(at, tilde);
-  if (start === -1) return null;
-  const query = upto.slice(start + 1);
-  if (/\s/.test(query)) return null;
-  return { trigger: text[start] as '@' | '~', start, query };
-}
-
 export function TaskDialog({
   initialQuad,
   onClose,
@@ -39,8 +20,6 @@ export function TaskDialog({
   onClose: () => void;
   onSave: (data: { title: string; description: string; quad: QuadKey; dueDate: string | null; link: TaskLink | null; durationMin: number | null; locked: boolean }) => void;
 }) {
-  const { classes } = useSchool();
-  const { events } = useCalendarEvents();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [quad, setQuad] = useState<QuadKey>(initialQuad);
@@ -48,40 +27,6 @@ export function TaskDialog({
   const [durationMin, setDurationMin] = useState<number>(30);
   const [link, setLink] = useState<TaskLink | null>(null);
   const [locked, setLocked] = useState(false);
-  const [mention, setMention] = useState<Mention | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const suggestions = useMemo(() => {
-    if (!mention) return [];
-    const q = mention.query.toLowerCase();
-    if (mention.trigger === '@') {
-      return classes
-        .filter((c) => c.name.toLowerCase().includes(q))
-        .slice(0, 6)
-        .map((c) => ({ id: c.id, label: c.name }));
-    }
-    const seen = new Set<string>();
-    return events
-      .filter((e) => e.title.toLowerCase().includes(q) && !seen.has(e.id) && seen.add(e.id))
-      .slice(0, 6)
-      .map((e) => ({ id: e.id, label: e.title }));
-  }, [mention, classes, events]);
-
-  const handleTitleChange = (value: string, caret: number) => {
-    setTitle(value);
-    setMention(findMention(value, caret));
-  };
-
-  const pickSuggestion = (id: string, label: string) => {
-    if (!mention) return;
-    const before = title.slice(0, mention.start);
-    const after = title.slice(mention.start + 1 + mention.query.length);
-    const inserted = `${mention.trigger}${label} `;
-    setTitle(`${before}${inserted}${after}`);
-    setLink({ type: mention.trigger === '@' ? 'class' : 'event', id, label });
-    setMention(null);
-    requestAnimationFrame(() => inputRef.current?.focus());
-  };
 
   const handleSave = () => {
     const trimmed = title.trim();
@@ -95,43 +40,27 @@ export function TaskDialog({
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
         <div className="dialog-title">New task</div>
 
-        <div className="field mention-field">
+        <div className="field">
           <label>Title</label>
-          <input
-            className="input"
-            type="text"
-            ref={inputRef}
+          <MentionField
             value={title}
+            onChange={setTitle}
+            onPick={setLink}
             placeholder="Finish reading ch. 4 @Calculus II"
             autoFocus
-            onChange={(e) => handleTitleChange(e.target.value, e.target.selectionStart ?? e.target.value.length)}
-            onKeyUp={(e) => handleTitleChange(e.currentTarget.value, e.currentTarget.selectionStart ?? e.currentTarget.value.length)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !mention) handleSave();
-              if (e.key === 'Escape') setMention(null);
-            }}
+            onEnter={handleSave}
           />
-          {mention && suggestions.length > 0 && (
-            <div className="mention-menu">
-              {suggestions.map((s) => (
-                <div className="mention-opt" key={s.id} onMouseDown={(e) => { e.preventDefault(); pickSuggestion(s.id, s.label); }}>
-                  <span className="mention-trigger">{mention.trigger}</span>{s.label}
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
-            Type <strong>@</strong> to link a class, <strong>~</strong> to link a calendar event.
-          </div>
         </div>
 
         <div className="field">
           <label>Description</label>
-          <textarea
-            className="input"
+          <MentionField
             value={description}
+            onChange={setDescription}
+            onPick={setLink}
             placeholder="Add any extra details (optional)"
-            onChange={(e) => setDescription(e.target.value)}
+            multiline
+            hint={false}
           />
         </div>
 

@@ -38,6 +38,7 @@ export interface Homework {
   priority: 'high' | 'med' | 'low';
   done: boolean;
   source?: 'manual';
+  description?: string;
 }
 
 /** Old records may carry a formatted display string (e.g. "Sep 10", no year) instead of a real date. */

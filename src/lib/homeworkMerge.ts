@@ -12,6 +12,7 @@ export interface MergedHomeworkItem {
   priorityLabel?: Homework['priority'];
   uid?: string;
   homeworkId?: number;
+  description?: string;
 }
 
 /** Manual mapping wins; otherwise exact/fuzzy match against class names. */
@@ -75,6 +76,7 @@ export function mergeHomeworkForClass(
     urgency: computeUrgency(hw.due || null, null, now),
     priorityLabel: hw.priority,
     homeworkId: hw.id,
+    description: hw.description,
   }));
 
   const matched = assignments.filter((a) => matchAssignmentToClass(a, classes, mappings, classKeywords) === classId);
@@ -86,6 +88,7 @@ export function mergeHomeworkForClass(
     done: schoologyDone[a.uid] ?? false,
     urgency: computeUrgency(a.due || null, a.priority, now),
     uid: a.uid,
+    description: a.description ?? undefined,
   }));
 
   const all = [...manualItems, ...schoologyItems].filter((item) => !(item.done && isPastDue(item.due, now)));

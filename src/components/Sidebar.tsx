@@ -1,7 +1,10 @@
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../state/ThemeContext';
 import { Logo } from './Logo';
 import './Sidebar.css';
+
+const COLLAPSE_KEY = 'sidebar-collapsed';
 
 const navItems = [
   {
@@ -79,9 +82,10 @@ const navItems = [
   },
 ];
 
-function ThemeToggle() {
+function ThemeToggle({ collapsed }: { collapsed: boolean }) {
   const { theme, setTheme } = useTheme();
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const label = isDark ? 'Light mode' : 'Dark mode';
 
   return (
     <button
@@ -89,6 +93,7 @@ function ThemeToggle() {
       className="side-link theme-toggle"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={collapsed ? label : undefined}
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         {isDark ? (
@@ -102,17 +107,33 @@ function ThemeToggle() {
           </>
         )}
       </svg>
-      {isDark ? 'Light mode' : 'Dark mode'}
+      {!collapsed && label}
     </button>
   );
 }
 
 export function Sidebar() {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
+    } catch {
+      // ignore storage errors (private browsing, etc.)
+    }
+  }, [collapsed]);
+
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
       <div className="nav-brand">
         <Logo size={20} />
-        Fourfold
+        {!collapsed && 'Fourfold'}
       </div>
       <nav className="sidebar-nav">
         {navItems.map((item) => (
@@ -121,23 +142,40 @@ export function Sidebar() {
             to={item.to}
             end={item.to === '/'}
             className={({ isActive }) => `side-link${isActive ? ' active' : ''}`}
+            title={collapsed ? item.label : undefined}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               {item.icon}
             </svg>
-            {item.label}
+            {!collapsed && item.label}
           </NavLink>
         ))}
       </nav>
       <div className="sidebar-footer">
-        <ThemeToggle />
-        <NavLink to="/settings" className={({ isActive }) => `side-link${isActive ? ' active' : ''}`}>
+        <ThemeToggle collapsed={collapsed} />
+        <NavLink
+          to="/settings"
+          className={({ isActive }) => `side-link${isActive ? ' active' : ''}`}
+          title={collapsed ? 'Settings' : undefined}
+        >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />
             <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
           </svg>
-          Settings
+          {!collapsed && 'Settings'}
         </NavLink>
+        <button
+          type="button"
+          className="side-link collapse-toggle"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : undefined}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            {collapsed ? <path d="m9 6 6 6-6 6" /> : <path d="m15 6-6 6 6 6" />}
+          </svg>
+          {!collapsed && 'Collapse'}
+        </button>
       </div>
     </aside>
   );
