@@ -29,7 +29,7 @@ export interface EventExtras {
   allDay?: boolean;
 }
 
-export type RepeatFreq = 'daily' | 'weekly' | 'monthly';
+export type RepeatFreq = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 /** Advance a "Y-M-D" (0-based month) date key by one repeat step. */
 function advanceDateKey(date: string, freq: RepeatFreq): string {
@@ -37,7 +37,8 @@ function advanceDateKey(date: string, freq: RepeatFreq): string {
   const next = new Date(y, m, d);
   if (freq === 'daily') next.setDate(next.getDate() + 1);
   else if (freq === 'weekly') next.setDate(next.getDate() + 7);
-  else next.setMonth(next.getMonth() + 1);
+  else if (freq === 'monthly') next.setMonth(next.getMonth() + 1);
+  else next.setFullYear(next.getFullYear() + 1);
   return `${next.getFullYear()}-${next.getMonth()}-${next.getDate()}`;
 }
 
