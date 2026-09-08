@@ -1,23 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
-import { MentionField } from '../components/MentionField';
 import { useCalendarEvents } from '../state/CalendarContext';
 import { useGoogleAuth } from '../state/GoogleAuthContext';
+import { EventDialog } from '../components/EventDialog';
 import './Calendar.css';
 
 const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function toISODate(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 export function CalendarPage() {
-  const { events, loading, error, refresh, addEvent, removeEvent, toggleEventLocked } = useCalendarEvents();
+  const { events, loading, error, refresh, removeEvent, toggleEventLocked } = useCalendarEvents();
   const { status, email, connect, disconnect } = useGoogleAuth();
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  const [title, setTitle] = useState('');
-  const dateRef = useRef<HTMLInputElement>(null);
-  const timeRef = useRef<HTMLInputElement>(null);
+  const [dialogDate, setDialogDate] = useState<string | null>(null);
 
   useEffect(() => {
     if (status !== 'signed-in') return;
@@ -37,20 +37,6 @@ export function CalendarPage() {
     });
   };
   const goToday = () => { setViewYear(now.getFullYear()); setViewMonth(now.getMonth()); };
-
-  const saveEvent = () => {
-    const trimmedTitle = title.trim() || 'New event';
-    const date = dateRef.current?.value;
-    const time = timeRef.current?.value || '';
-    if (date) {
-      const [y, m, d] = date.split('-').map(Number);
-      addEvent(`${y}-${m - 1}-${d}`, trimmedTitle, time);
-    }
-    setTitle('');
-    if (dateRef.current) dateRef.current.value = '';
-    if (timeRef.current) timeRef.current.value = '';
-    setDialogOpen(false);
-  };
 
   const year = viewYear;
   const month = viewMonth;
@@ -109,7 +95,7 @@ export function CalendarPage() {
                 <button className="btn btn-ghost" type="button" onClick={disconnect}>Disconnect</button>
               </>
             )}
-            <button className="btn btn-primary" type="button" onClick={() => setDialogOpen(true)}>
+            <button className="btn btn-primary" type="button" onClick={() => setDialogDate(toISODate(realY, realM, realD))}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
               Add event
             </button>
@@ -129,7 +115,11 @@ export function CalendarPage() {
         <div className="month-grid">
           {DOW_LABELS.map((d) => <div className="dow" key={d}>{d}</div>)}
           {cells.map((c, i) => (
-            <div className={`day-cell${c.cls ? ` ${c.cls}` : ''}`} key={i}>
+            <div
+              className={`day-cell${c.cls ? ` ${c.cls}` : ''}${c.inMonth ? ' clickable' : ''}`}
+              key={i}
+              onClick={() => c.inMonth && typeof c.num === 'number' && setDialogDate(toISODate(year, month, c.num))}
+            >
               {c.inMonth && (
                 <>
                   <span className="day-num">{c.num}</span>
@@ -138,7 +128,7 @@ export function CalendarPage() {
                       className={`evt-chip${ev.cls ? ` ${ev.cls}` : ''}${ev.locked ? ' locked' : ''}`}
                       key={ev.id}
                       title={ev.locked ? 'Locked — set in stone. Click the lock to unlock.' : 'Click to remove'}
-                      onClick={() => !ev.locked && removeEvent(ev.id)}
+                      onClick={(e) => { e.stopPropagation(); if (!ev.locked) removeEvent(ev.id); }}
                       style={{ cursor: ev.locked ? 'default' : 'pointer' }}
                     >
                       {ev.cls === 'google' && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="8" width="9" height="6" rx="3" /><rect x="10" y="10" width="9" height="6" rx="3" /></svg>}
@@ -166,24 +156,7 @@ export function CalendarPage() {
         </div>
       </Widget>
 
-      {dialogOpen && (
-        <div className="dialog-backdrop" onClick={() => setDialogOpen(false)}>
-          <div className="dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="dialog-title">Add event</div>
-            <div className="field"><label>Title</label><MentionField value={title} onChange={setTitle} placeholder="Event title" hint={false} /></div>
-            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              <div className="field" style={{ flex: 1 }}><label>Date</label><input className="input" type="date" ref={dateRef} /></div>
-              <div className="field" style={{ flex: 1 }}><label>Time</label><input className="input" type="time" ref={timeRef} /></div>
-            </div>
-            <div className="dialog-actions">
-              <button className="btn btn-secondary" type="button" onClick={() => setDialogOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" type="button" onClick={saveEvent}>
-                {status === 'signed-in' ? 'Save to Google Calendar' : 'Save event'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {dialogDate && <EventDialog initialDate={dialogDate} onClose={() => setDialogDate(null)} />}
     </div>
   );
 }

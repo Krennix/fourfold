@@ -12,6 +12,8 @@
   padding: 6px; display: flex; flex-direction: column; gap: 4px; background: transparent;
 }
 .day-cell.blank { border-color: transparent; }
+.day-cell.clickable { cursor: pointer; }
+.day-cell.clickable:hover { border-color: var(--color-accent); background: var(--color-accent-100); }
 .day-cell.today { border-color: var(--color-accent); border-width: 1.5px; }
 .day-num { font-family: var(--font-heading); font-size: 13px; font-weight: 600; }
 .day-cell.today .day-num { color: var(--color-accent-700); }

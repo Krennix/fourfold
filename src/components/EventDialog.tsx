@@ -3,16 +3,6 @@ import { useSchool } from '../state/SchoolContext';
 import { useCalendarEvents, type CalEvent, type EventExtras } from '../state/CalendarContext';
 import { MentionField } from './MentionField';
 
-export interface EventDialogSaveData {
-  title: string;
-  description: string;
-  location: string;
-  date: string; // YYYY-MM-DD
-  allDay: boolean;
-  startTime: string; // HH:MM
-  endTime: string; // HH:MM
-}
-
 function toDurationMin(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(':').map(Number);
   const [eh, em] = endTime.split(':').map(Number);
@@ -109,7 +99,7 @@ export function EventDialog({
 
         <div className="field">
           <label>Title</label>
-          <input className="input" type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event title" autoFocus />
+          <MentionField value={title} onChange={setTitle} placeholder="Event title" autoFocus />
         </div>
 
         <div className="field">
