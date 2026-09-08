@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
+import { MentionField } from '../components/MentionField';
 import { useCalendarEvents } from '../state/CalendarContext';
 import { useGoogleAuth } from '../state/GoogleAuthContext';
 import './Calendar.css';
@@ -14,7 +15,7 @@ export function CalendarPage() {
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const titleRef = useRef<HTMLInputElement>(null);
+  const [title, setTitle] = useState('');
   const dateRef = useRef<HTMLInputElement>(null);
   const timeRef = useRef<HTMLInputElement>(null);
 
@@ -38,14 +39,14 @@ export function CalendarPage() {
   const goToday = () => { setViewYear(now.getFullYear()); setViewMonth(now.getMonth()); };
 
   const saveEvent = () => {
-    const title = titleRef.current?.value.trim() || 'New event';
+    const trimmedTitle = title.trim() || 'New event';
     const date = dateRef.current?.value;
     const time = timeRef.current?.value || '';
     if (date) {
       const [y, m, d] = date.split('-').map(Number);
-      addEvent(`${y}-${m - 1}-${d}`, title, time);
+      addEvent(`${y}-${m - 1}-${d}`, trimmedTitle, time);
     }
-    if (titleRef.current) titleRef.current.value = '';
+    setTitle('');
     if (dateRef.current) dateRef.current.value = '';
     if (timeRef.current) timeRef.current.value = '';
     setDialogOpen(false);
@@ -169,7 +170,7 @@ export function CalendarPage() {
         <div className="dialog-backdrop" onClick={() => setDialogOpen(false)}>
           <div className="dialog" onClick={(e) => e.stopPropagation()}>
             <div className="dialog-title">Add event</div>
-            <div className="field"><label>Title</label><input className="input" type="text" ref={titleRef} placeholder="Event title" /></div>
+            <div className="field"><label>Title</label><MentionField value={title} onChange={setTitle} placeholder="Event title" hint={false} /></div>
             <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
               <div className="field" style={{ flex: 1 }}><label>Date</label><input className="input" type="date" ref={dateRef} /></div>
               <div className="field" style={{ flex: 1 }}><label>Time</label><input className="input" type="time" ref={timeRef} /></div>

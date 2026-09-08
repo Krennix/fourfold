@@ -18,6 +18,15 @@ export interface CalEvent {
   durationMin?: number;
   /** Fixed/"set in stone" — shouldn't be moved, rescheduled, or deleted by drag/AI actions. */
   locked?: boolean;
+  description?: string;
+  location?: string;
+  allDay?: boolean;
+}
+
+export interface EventExtras {
+  description?: string;
+  location?: string;
+  allDay?: boolean;
 }
 
 export interface CalendarContextValue {
@@ -25,8 +34,8 @@ export interface CalendarContextValue {
   loading: boolean;
   error: string | null;
   refresh: (monthStart: Date, monthEnd: Date) => void;
-  addEvent: (date: string, title: string, time: string, durationMin?: number) => Promise<CalEvent | null>;
-  updateEvent: (id: string, date: string, title: string, time: string, durationMin?: number) => Promise<CalEvent | null>;
+  addEvent: (date: string, title: string, time: string, durationMin?: number, extras?: EventExtras) => Promise<CalEvent | null>;
+  updateEvent: (id: string, date: string, title: string, time: string, durationMin?: number, extras?: EventExtras) => Promise<CalEvent | null>;
   removeEvent: (id: string) => void;
   toggleEventLocked: (id: string) => void;
   eventsByDate: (date: string) => CalEvent[];
@@ -59,12 +68,23 @@ function googleEventToCalEvent(ev: GoogleCalendarEvent): CalEvent | null {
   if (!startISO) return null;
   const start = new Date(startISO);
   const date = `${start.getFullYear()}-${start.getMonth()}-${start.getDate()}`;
+  const allDay = !ev.start.dateTime;
   const time = ev.start.dateTime
     ? start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
     : 'All day';
   const endISO = ev.end.dateTime ?? ev.end.date;
   const durationMin = ev.start.dateTime && endISO ? (new Date(endISO).getTime() - start.getTime()) / 60000 : undefined;
-  return { id: ev.id, date, time, title: ev.summary || '(no title)', cls: 'google', durationMin };
+  return {
+    id: ev.id,
+    date,
+    time,
+    title: ev.summary || '(no title)',
+    cls: 'google',
+    durationMin,
+    description: ev.description,
+    location: ev.location,
+    allDay,
+  };
 }
 
 export function CalendarProvider({ children }: { children: ReactNode }) {
@@ -117,17 +137,35 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     [status, accessToken],
   );
 
+  // Google's all-day events use exclusive date-only ranges: the end date is the day *after* the last day shown.
+  function allDayRange(y: number, m: number, d: number): { startISO: string; endISO: string } {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const start = new Date(y, m, d);
+    const end = new Date(y, m, d + 1);
+    return {
+      startISO: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
+      endISO: `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`,
+    };
+  }
+
   // `date` is "Y-M-D" with a 0-based month, matching the key used for eventsByDate/day-cell lookups.
-  const addEvent: CalendarContextValue['addEvent'] = async (date, title, time, durationMin = 60) => {
+  const addEvent: CalendarContextValue['addEvent'] = async (date, title, time, durationMin = 60, extras = {}) => {
+    const { description, location, allDay } = extras;
     if (status === 'signed-in' && accessToken) {
       const [y, m, d] = date.split('-').map(Number);
-      const [h, min] = (time || '09:00').split(':').map(Number);
-      const start = new Date(y, m, d, h || 9, min || 0);
-      const end = new Date(start.getTime() + durationMin * 60000);
+      let timing: { allDay?: boolean; startISO: string; endISO: string };
+      if (allDay) {
+        timing = { allDay: true, ...allDayRange(y, m, d) };
+      } else {
+        const [h, min] = (time || '09:00').split(':').map(Number);
+        const start = new Date(y, m, d, h || 9, min || 0);
+        const end = new Date(start.getTime() + durationMin * 60000);
+        timing = { startISO: start.toISOString(), endISO: end.toISOString() };
+      }
       setLoading(true);
       setError(null);
       try {
-        const ev = await insertEvent(accessToken, { summary: title, startISO: start.toISOString(), endISO: end.toISOString() });
+        const ev = await insertEvent(accessToken, { summary: title, description, location, ...timing });
         const mapped = googleEventToCalEvent(ev);
         if (mapped) setGoogleEvents((prev) => [...prev, mapped]);
         return mapped;
@@ -138,27 +176,44 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     }
-    const created: CalEvent = { id: `event-${Date.now()}`, date, title, time, cls: '', durationMin };
+    const created: CalEvent = {
+      id: `event-${Date.now()}`,
+      date,
+      title,
+      time: allDay ? 'All day' : time,
+      cls: '',
+      durationMin,
+      description,
+      location,
+      allDay,
+    };
     setLocalEvents((prev) => [...prev, created]);
     return created;
   };
 
   // `date` is "Y-M-D" with a 0-based month, matching `addEvent`.
-  const updateEvent: CalendarContextValue['updateEvent'] = async (id, date, title, time, durationMin = 60) => {
+  const updateEvent: CalendarContextValue['updateEvent'] = async (id, date, title, time, durationMin = 60, extras = {}) => {
     if (lockedIds.has(id)) {
       setError('That event is locked — unlock it before moving it.');
       return null;
     }
+    const { description, location, allDay } = extras;
     const googleEvent = googleEvents.find((e) => e.id === id);
     if (googleEvent && accessToken) {
       const [y, m, d] = date.split('-').map(Number);
-      const [h, min] = (time || '09:00').split(':').map(Number);
-      const start = new Date(y, m, d, h || 9, min || 0);
-      const end = new Date(start.getTime() + durationMin * 60000);
+      let timing: { allDay?: boolean; startISO: string; endISO: string };
+      if (allDay) {
+        timing = { allDay: true, ...allDayRange(y, m, d) };
+      } else {
+        const [h, min] = (time || '09:00').split(':').map(Number);
+        const start = new Date(y, m, d, h || 9, min || 0);
+        const end = new Date(start.getTime() + durationMin * 60000);
+        timing = { startISO: start.toISOString(), endISO: end.toISOString() };
+      }
       setLoading(true);
       setError(null);
       try {
-        const ev = await patchGoogleEvent(accessToken, id, { summary: title, startISO: start.toISOString(), endISO: end.toISOString() });
+        const ev = await patchGoogleEvent(accessToken, id, { summary: title, description, location, ...timing });
         const mapped = googleEventToCalEvent(ev);
         if (mapped) setGoogleEvents((prev) => prev.map((e) => (e.id === id ? mapped : e)));
         return mapped;
@@ -169,7 +224,17 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     }
-    const updated: CalEvent = { id, date, title, time, cls: '', durationMin };
+    const updated: CalEvent = {
+      id,
+      date,
+      title,
+      time: allDay ? 'All day' : time,
+      cls: '',
+      durationMin,
+      description,
+      location,
+      allDay,
+    };
     setLocalEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
     return updated;
   };

@@ -56,6 +56,8 @@ export async function fetchPrimaryCalendarEmail(accessToken: string): Promise<st
 export interface GoogleCalendarEvent {
   id: string;
   summary: string;
+  description?: string;
+  location?: string;
   start: { dateTime?: string; date?: string };
   end: { dateTime?: string; date?: string };
 }
@@ -72,16 +74,25 @@ export async function listEvents(accessToken: string, timeMin: Date, timeMax: Da
   return data.items ?? [];
 }
 
+export interface EventTiming {
+  /** All-day events use date-only strings ("YYYY-MM-DD"); timed events use full ISO datetimes. */
+  allDay?: boolean;
+  startISO: string;
+  endISO: string;
+}
+
 export async function insertEvent(
   accessToken: string,
-  event: { summary: string; startISO: string; endISO: string },
+  event: { summary: string; description?: string; location?: string } & EventTiming,
 ): Promise<GoogleCalendarEvent> {
   return calendarFetch(accessToken, '/calendars/primary/events', {
     method: 'POST',
     body: JSON.stringify({
       summary: event.summary,
-      start: { dateTime: event.startISO },
-      end: { dateTime: event.endISO },
+      ...(event.description !== undefined ? { description: event.description } : {}),
+      ...(event.location !== undefined ? { location: event.location } : {}),
+      start: event.allDay ? { date: event.startISO } : { dateTime: event.startISO },
+      end: event.allDay ? { date: event.endISO } : { dateTime: event.endISO },
     }),
   });
 }
@@ -93,14 +104,16 @@ export async function deleteEvent(accessToken: string, eventId: string): Promise
 export async function updateEvent(
   accessToken: string,
   eventId: string,
-  event: { summary?: string; startISO?: string; endISO?: string },
+  event: { summary?: string; description?: string; location?: string } & Partial<EventTiming>,
 ): Promise<GoogleCalendarEvent> {
   return calendarFetch(accessToken, `/calendars/primary/events/${eventId}`, {
     method: 'PATCH',
     body: JSON.stringify({
       ...(event.summary !== undefined ? { summary: event.summary } : {}),
-      ...(event.startISO ? { start: { dateTime: event.startISO } } : {}),
-      ...(event.endISO ? { end: { dateTime: event.endISO } } : {}),
+      ...(event.description !== undefined ? { description: event.description } : {}),
+      ...(event.location !== undefined ? { location: event.location } : {}),
+      ...(event.startISO ? { start: event.allDay ? { date: event.startISO } : { dateTime: event.startISO } } : {}),
+      ...(event.endISO ? { end: event.allDay ? { date: event.endISO } : { dateTime: event.endISO } } : {}),
     }),
   });
 }

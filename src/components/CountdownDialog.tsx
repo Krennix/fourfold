@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { CountdownIcon, COUNTDOWN_TYPES, COUNTDOWN_TYPE_LABELS } from './CountdownIcon';
+import { MentionField } from './MentionField';
 import type { Countdown, CountdownType } from '../state/CountdownsContext';
 
 export interface HolidayPreset {
@@ -30,22 +31,22 @@ export function CountdownDialog({
   onClose: () => void;
 }) {
   const [type, setType] = useState<CountdownType>(countdown?.type ?? 'birthday');
+  const [name, setName] = useState(countdown?.name ?? '');
 
-  const nameRef = useRef<HTMLInputElement>(null);
   const monthRef = useRef<HTMLInputElement>(null);
   const dayRef = useRef<HTMLInputElement>(null);
 
   const applyPreset = (preset: HolidayPreset) => {
-    if (nameRef.current) nameRef.current.value = preset.name;
+    setName(preset.name);
     if (monthRef.current) monthRef.current.value = String(preset.month);
     if (dayRef.current) dayRef.current.value = String(preset.day);
   };
 
   const handleSave = () => {
-    const name = nameRef.current?.value.trim();
+    const trimmed = name.trim();
     const month = Number(monthRef.current?.value);
     const day = Number(dayRef.current?.value);
-    if (name && month >= 1 && month <= 12 && day >= 1 && day <= 31) onSave(name, month, day, type);
+    if (trimmed && month >= 1 && month <= 12 && day >= 1 && day <= 31) onSave(trimmed, month, day, type);
     onClose();
   };
 
@@ -55,7 +56,7 @@ export function CountdownDialog({
         <div className="dialog-title">{countdown ? 'Edit countdown' : 'Add countdown'}</div>
         <div className="field">
           <label>Name</label>
-          <input className="input" type="text" ref={nameRef} placeholder="Event name" defaultValue={countdown?.name ?? ''} />
+          <MentionField value={name} onChange={setName} placeholder="Event name" hint={false} />
         </div>
         <div className="field">
           <label>Type</label>
