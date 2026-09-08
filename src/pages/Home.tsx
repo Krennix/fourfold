@@ -21,6 +21,13 @@ const QUAD_LABELS: Record<QuadKey, string> = {
   q4: 'Eliminate',
 };
 
+function formatDuration(min: number) {
+  if (min < 60) return `${min}m`;
+  const hrs = Math.floor(min / 60);
+  const rem = min % 60;
+  return rem ? `${hrs}h ${rem}m` : `${hrs}h`;
+}
+
 function daysUntilNext(month: number, day: number) {
   const now = new Date();
   let target = new Date(now.getFullYear(), month - 1, day);
@@ -167,6 +174,7 @@ export function HomePage() {
                     {active.map((t) => (
                       <div className="task-chip" key={t.id}>
                         {t.title}
+                        {t.durationMin && <span className="text-muted"> · {formatDuration(t.durationMin)}</span>}
                         {t.dueDate && <span className="text-muted"> · Due {t.dueDate}</span>}
                       </div>
                     ))}
@@ -266,7 +274,7 @@ export function HomePage() {
         <TaskDialog
           initialQuad={taskDialogQuad}
           onClose={() => setTaskDialogQuad(null)}
-          onSave={({ title, quad, dueDate, link }) => addTask(quad, { title, dueDate, link })}
+          onSave={({ title, quad, dueDate, link, durationMin }) => addTask(quad, { title, dueDate, link, durationMin })}
         />
       )}
 

@@ -67,6 +67,7 @@ export function MatrixPage() {
                   </div>
                   <span className={`ttitle${t.done ? ' done' : ''}`}>{t.title}</span>
                   <span className="tmeta">
+                    {t.durationMin && <span className="tag tag-neutral">{t.durationMin < 60 ? `${t.durationMin}m` : `${Math.floor(t.durationMin / 60)}h${t.durationMin % 60 ? ` ${t.durationMin % 60}m` : ''}`}</span>}
                     {t.dueDate && <span className="tag tag-outline">Due {t.dueDate}</span>}
                     {t.time && (
                       <span className="tag tag-accent" style={{ cursor: 'pointer' }} onClick={() => unscheduleTask(q.key, t.id)}>{t.time}</span>
