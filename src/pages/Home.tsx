@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Widget, PageHeader } from '../components/Widget';
 import { StreakFire } from '../components/StreakFire';
@@ -12,6 +12,7 @@ import { useMatrix, type QuadKey } from '../state/MatrixContext';
 import { useCalendarEvents } from '../state/CalendarContext';
 import { useCountdowns, type Countdown } from '../state/CountdownsContext';
 import { usePomodoro, POMODORO_MODES, POMODORO_MODE_LABELS } from '../state/PomodoroContext';
+import { useAgent } from '../state/AgentContext';
 import './Home.css';
 import './Countdowns.css';
 
@@ -54,6 +55,13 @@ export function HomePage() {
   const [cdDialogState, setCdDialogState] = useState<'add' | Countdown | null>(null);
   const [cdMenu, setCdMenu] = useState<{ x: number; y: number; countdown: Countdown } | null>(null);
   const [taskDialogQuad, setTaskDialogQuad] = useState<QuadKey | null>(null);
+  const [assistantInput, setAssistantInput] = useState('');
+  const { watchdogFlags, checkWatchdog, dismissFlag, dailyPlan, isPlanning, generateDailyPlan, isThinking, sendChatMessage } = useAgent();
+
+  useEffect(() => {
+    void checkWatchdog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const doneCount = habits.filter((h) => h.done).length;
   const pct = habits.length ? Math.round((doneCount / habits.length) * 100) : 0;
@@ -174,7 +182,7 @@ export function HomePage() {
                     <div className="quad-label">{QUAD_LABELS[qkey]}</div>
                     {active.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No tasks</div>}
                     {active.map((t) => (
-                      <div className="task-chip" key={t.id}>
+                      <div className="task-chip" key={t.id} title={t.description || undefined}>
                         {t.title}
                         {t.durationMin && <span className="text-muted"> · {formatDuration(t.durationMin)}</span>}
                         {t.dueDate && <span className="text-muted"> · Due {t.dueDate}</span>}
@@ -203,6 +211,58 @@ export function HomePage() {
         </div>
 
         <div className="home-col">
+          <Widget>
+            <div className="widget-head">
+              <h4>Assistant</h4>
+              <Link className="btn btn-ghost" style={{ fontSize: 12 }} to="/agent">
+                Open assistant
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+              </Link>
+            </div>
+            {watchdogFlags.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {watchdogFlags.map((f) => (
+                  <div key={`${f.title}-${f.detail}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12 }}>
+                    <span style={{ flex: 1, minWidth: 0 }}><strong>{f.title}</strong> — <span className="text-muted">{f.detail}</span></span>
+                    <button className="btn btn-icon" type="button" aria-label="Dismiss" onClick={() => dismissFlag(f)} style={{ flex: 'none' }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!dailyPlan && (
+              <button className="btn btn-secondary" type="button" onClick={() => void generateDailyPlan()} disabled={isPlanning} style={{ alignSelf: 'flex-start' }}>
+                {isPlanning ? 'Planning…' : 'Plan my day'}
+              </button>
+            )}
+            {dailyPlan && (
+              <Link className="btn btn-secondary" to="/agent" style={{ alignSelf: 'flex-start' }}>
+                Review today's plan ({dailyPlan.length})
+              </Link>
+            )}
+            <form
+              style={{ display: 'flex', gap: 6 }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                const text = assistantInput.trim();
+                if (!text || isThinking) return;
+                setAssistantInput('');
+                void sendChatMessage(text);
+              }}
+            >
+              <input
+                style={{ flex: 1, padding: '6px 10px', border: '1px solid var(--color-divider)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg)', color: 'var(--color-text)', font: 'inherit', fontSize: 13 }}
+                placeholder="Ask the assistant…"
+                value={assistantInput}
+                onChange={(e) => setAssistantInput(e.target.value)}
+              />
+              <button className="btn btn-primary" type="submit" disabled={isThinking || !assistantInput.trim()}>
+                Send
+              </button>
+            </form>
+          </Widget>
+
           <Widget>
             <div className="widget-head">
               <h4>Today's Habits</h4>
@@ -276,9 +336,9 @@ export function HomePage() {
         <TaskDialog
           initialQuad={taskDialogQuad}
           onClose={() => setTaskDialogQuad(null)}
-          onSave={async ({ title, quad, dueDate, link, durationMin }) => {
+          onSave={async ({ title, description, quad, dueDate, link, durationMin }) => {
             const scheduled = await autoSchedule({ title, dueDate, durationMin, link });
-            addTask(quad, { title, dueDate, link: scheduled.link, durationMin, time: scheduled.time });
+            addTask(quad, { title, description, dueDate, link: scheduled.link, durationMin, time: scheduled.time });
           }}
         />
       )}

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useGoogleAuth } from './GoogleAuthContext';
-import { deleteEvent, insertEvent, listEvents, type GoogleCalendarEvent } from '../lib/googleCalendar';
+import { deleteEvent, insertEvent, listEvents, updateEvent as patchGoogleEvent, type GoogleCalendarEvent } from '../lib/googleCalendar';
 
 const STORAGE_KEY = 'fourfold.calendar.v1';
 
@@ -14,12 +14,13 @@ export interface CalEvent {
   durationMin?: number;
 }
 
-interface CalendarContextValue {
+export interface CalendarContextValue {
   events: CalEvent[];
   loading: boolean;
   error: string | null;
   refresh: (monthStart: Date, monthEnd: Date) => void;
   addEvent: (date: string, title: string, time: string, durationMin?: number) => Promise<CalEvent | null>;
+  updateEvent: (id: string, date: string, title: string, time: string, durationMin?: number) => Promise<CalEvent | null>;
   removeEvent: (id: string) => void;
   eventsByDate: (date: string) => CalEvent[];
 }
@@ -107,6 +108,33 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     return created;
   };
 
+  // `date` is "Y-M-D" with a 0-based month, matching `addEvent`.
+  const updateEvent: CalendarContextValue['updateEvent'] = async (id, date, title, time, durationMin = 60) => {
+    const googleEvent = googleEvents.find((e) => e.id === id);
+    if (googleEvent && accessToken) {
+      const [y, m, d] = date.split('-').map(Number);
+      const [h, min] = (time || '09:00').split(':').map(Number);
+      const start = new Date(y, m, d, h || 9, min || 0);
+      const end = new Date(start.getTime() + durationMin * 60000);
+      setLoading(true);
+      setError(null);
+      try {
+        const ev = await patchGoogleEvent(accessToken, id, { summary: title, startISO: start.toISOString(), endISO: end.toISOString() });
+        const mapped = googleEventToCalEvent(ev);
+        if (mapped) setGoogleEvents((prev) => prev.map((e) => (e.id === id ? mapped : e)));
+        return mapped;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    }
+    const updated: CalEvent = { id, date, title, time, cls: '', durationMin };
+    setLocalEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
+    return updated;
+  };
+
   const removeEvent = (id: string) => {
     const googleEvent = googleEvents.find((e) => e.id === id);
     if (googleEvent && accessToken) {
@@ -123,7 +151,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   const eventsByDate = (date: string) => events.filter((e) => e.date === date).sort((a, b) => a.time.localeCompare(b.time));
 
   return (
-    <CalendarContext.Provider value={{ events, loading, error, refresh, addEvent, removeEvent, eventsByDate }}>
+    <CalendarContext.Provider value={{ events, loading, error, refresh, addEvent, updateEvent, removeEvent, eventsByDate }}>
       {children}
     </CalendarContext.Provider>
   );

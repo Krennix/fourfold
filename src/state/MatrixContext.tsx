@@ -13,6 +13,7 @@ export interface TaskLink {
 export interface Task {
   id: string;
   title: string;
+  description: string;
   done: boolean;
   time: string | null;
   listTag: string;
@@ -24,6 +25,7 @@ export interface Task {
 
 export interface NewTaskInput {
   title: string;
+  description?: string;
   listTag?: string;
   dueDate?: string | null;
   link?: TaskLink | null;
@@ -35,7 +37,7 @@ type TaskState = Record<QuadKey, Task[]>;
 
 const EMPTY_TASKS: TaskState = { q1: [], q2: [], q3: [], q4: [] };
 
-interface MatrixContextValue {
+export interface MatrixContextValue {
   tasks: TaskState;
   addTask: (qkey: QuadKey, data: NewTaskInput) => void;
   removeTask: (qkey: QuadKey, id: string) => void;
@@ -54,6 +56,7 @@ export function MatrixProvider({ children }: { children: ReactNode }) {
     const task: Task = {
       id: `task-${Date.now()}`,
       title: data.title,
+      description: data.description ?? '',
       done: false,
       time: data.time ?? null,
       listTag: data.listTag || 'Inbox',

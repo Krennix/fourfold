@@ -50,3 +50,46 @@ export function findPeriod(sched: BellSchedule, period: number): BellPeriod | un
   const target = `class ${period}`;
   return sched.schedule.find((p) => p.name.trim().toLowerCase() === target);
 }
+
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Walks forward day by day (starting today) to find the next date this class actually meets,
+ * honoring day overrides (special/no-school presets) ahead of the normal bell schedule.
+ * Returns a YYYY-MM-DD string suitable for an `<input type="date">`, or null if none found within range.
+ */
+export async function findNextClassMeeting(
+  classId: string,
+  periods: number[],
+  overrides: Record<string, { presetId: string | null }>,
+  presets: { id: string; meetings: { classId: string }[] }[],
+  from: Date = new Date(),
+  maxDays = 21,
+): Promise<string | null> {
+  for (let i = 0; i < maxDays; i++) {
+    const d = new Date(from);
+    d.setDate(from.getDate() + i);
+    d.setHours(0, 0, 0, 0);
+    const key = dayKey(d);
+    const override = overrides[key];
+
+    if (override) {
+      if (override.presetId === null) continue; // no school this date
+      const preset = presets.find((p) => p.id === override.presetId);
+      if (preset?.meetings.some((m) => m.classId === classId)) return key;
+      continue;
+    }
+
+    if (periods.length === 0) continue;
+    try {
+      const sched = await fetchBellSchedule(d);
+      if (isNoSchoolDay(sched)) continue;
+      if (periods.some((p) => findPeriod(sched, p))) return key;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}

@@ -30,6 +30,14 @@ export interface DayOverride {
   presetId: string | null;
 }
 
+export interface Homework {
+  id: number;
+  title: string;
+  due: string;
+  priority: 'high' | 'med' | 'low';
+  done: boolean;
+}
+
 const DEFAULT_CLASSES: SchoolClass[] = [
   { id: 'calc', name: 'Calculus II', room: 'Rm 214', periods: [1] },
   { id: 'chem', name: 'Chemistry', room: 'Lab B', periods: [2] },
@@ -61,6 +69,8 @@ interface StoredState {
   overrides: Record<string, DayOverride>;
   /** Whether to show non-class bell periods (breaks, lunch, advisory, office hours, ...) on the School tab. */
   showBreaks: boolean;
+  /** Homework/assignments, keyed by class id. */
+  homework: Record<string, Homework[]>;
 }
 
 interface SchoolContextValue extends StoredState {
@@ -72,11 +82,28 @@ interface SchoolContextValue extends StoredState {
   removePreset: (id: string) => void;
   setOverride: (dates: string[], override: DayOverride | null) => void;
   setShowBreaks: (show: boolean) => void;
+  addHomework: (classId: string, hw: Omit<Homework, 'id' | 'done'>) => void;
+  toggleHomework: (classId: string, id: number) => void;
+  removeHomework: (classId: string, id: number) => void;
 }
 
 const SchoolContext = createContext<SchoolContextValue | null>(null);
 
-const DEFAULT_STATE: StoredState = { classes: DEFAULT_CLASSES, presets: DEFAULT_PRESETS, overrides: {}, showBreaks: true };
+const DEFAULT_HOMEWORK: Record<string, Homework[]> = {
+  calc: [{ id: 1, title: 'Problem set 6', due: 'Sep 10', priority: 'high', done: false }],
+  cs: [
+    { id: 2, title: 'Read chapter 3', due: 'Sep 9', priority: 'low', done: true },
+    { id: 3, title: 'Lab 2 writeup', due: 'Sep 12', priority: 'med', done: false },
+  ],
+};
+
+const DEFAULT_STATE: StoredState = {
+  classes: DEFAULT_CLASSES,
+  presets: DEFAULT_PRESETS,
+  overrides: {},
+  showBreaks: true,
+  homework: DEFAULT_HOMEWORK,
+};
 
 export function SchoolProvider({ children }: { children: ReactNode }) {
   const { handleSessionExpired } = useAuth();
@@ -121,13 +148,34 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, showBreaks: show }));
   };
 
+  const addHomework: SchoolContextValue['addHomework'] = (classId, hw) => {
+    setState((s) => {
+      const homework = s.homework ?? {};
+      return { ...s, homework: { ...homework, [classId]: [...(homework[classId] || []), { ...hw, id: Date.now(), done: false }] } };
+    });
+  };
+  const toggleHomework: SchoolContextValue['toggleHomework'] = (classId, id) => {
+    setState((s) => {
+      const homework = s.homework ?? {};
+      return { ...s, homework: { ...homework, [classId]: (homework[classId] || []).map((h) => (h.id === id ? { ...h, done: !h.done } : h)) } };
+    });
+  };
+  const removeHomework: SchoolContextValue['removeHomework'] = (classId, id) => {
+    setState((s) => {
+      const homework = s.homework ?? {};
+      return { ...s, homework: { ...homework, [classId]: (homework[classId] || []).filter((h) => h.id !== id) } };
+    });
+  };
+
   return (
     <SchoolContext.Provider
       value={{
         ...state,
         classes: state.classes.map(normalizeClass),
         showBreaks: state.showBreaks ?? true,
+        homework: state.homework ?? {},
         addClass, updateClass, removeClass, addPreset, updatePreset, removePreset, setOverride, setShowBreaks,
+        addHomework, toggleHomework, removeHomework,
       }}
     >
       {children}

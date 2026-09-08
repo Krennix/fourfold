@@ -1,30 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
-import { useSchool, WEEKDAYS, type Weekday } from '../state/SchoolContext';
+import { useSchool, WEEKDAYS, type Weekday, type Homework } from '../state/SchoolContext';
 import { useSchoology } from '../state/SchoologyContext';
-import { fetchBellSchedule, findPeriod, isNoSchoolDay, isoToLocalHour, type BellSchedule } from '../lib/harkerBell';
+import { fetchBellSchedule, findNextClassMeeting, findPeriod, isNoSchoolDay, isoToLocalHour, type BellSchedule } from '../lib/harkerBell';
 import './School.css';
-
-interface Homework {
-  id: number;
-  title: string;
-  due: string;
-  priority: 'high' | 'med' | 'low';
-  done: boolean;
-}
 
 const SCHOOL_START = 8 + 10 / 60; // 8:10am
 const SCHOOL_END = 15 + 25 / 60; // 3:25pm
 const PRIORITY_LABEL: Record<Homework['priority'], string> = { high: 'High', med: 'Medium', low: 'Low' };
 const PRIORITY_CLASS: Record<Homework['priority'], string> = { high: 'pill-high', med: 'pill-med', low: 'pill-low' };
-
-const INITIAL_HOMEWORK: Record<string, Homework[]> = {
-  calc: [{ id: 1, title: 'Problem set 6', due: 'Sep 10', priority: 'high', done: false }],
-  cs: [
-    { id: 2, title: 'Read chapter 3', due: 'Sep 9', priority: 'low', done: true },
-    { id: 3, title: 'Lab 2 writeup', due: 'Sep 12', priority: 'med', done: false },
-  ],
-};
 
 function fmtHour(h: number) {
   const totalMins = Math.round(h * 60);
@@ -91,20 +75,36 @@ function SchoologyHomeworkWidget() {
 }
 
 export function SchoolPage() {
-  const { classes, presets, overrides, setOverride, showBreaks } = useSchool();
-  const [homework, setHomework] = useState(INITIAL_HOMEWORK);
+  const { classes, presets, overrides, setOverride, showBreaks, homework, addHomework: addHomeworkToClass, toggleHomework } = useSchool();
   const [openClassId, setOpenClassId] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
   const [menuDate, setMenuDate] = useState<string | null>(null);
   const [bellSchedules, setBellSchedules] = useState<Record<string, BellSchedule | null>>({});
+  const [nextMeetingDate, setNextMeetingDate] = useState<string | null>(null);
 
   const titleRef = useRef<HTMLInputElement>(null);
   const dueRef = useRef<HTMLInputElement>(null);
   const priorityRef = useRef<HTMLSelectElement>(null);
 
-  const toggleHomework = (classId: string, id: number) => {
-    setHomework((s) => ({ ...s, [classId]: (s[classId] || []).map((h) => (h.id === id ? { ...h, done: !h.done } : h)) }));
-  };
+  useEffect(() => {
+    if (!openClassId) {
+      setNextMeetingDate(null);
+      return;
+    }
+    const cls = classes.find((c) => c.id === openClassId);
+    if (!cls) {
+      setNextMeetingDate(null);
+      return;
+    }
+    let cancelled = false;
+    findNextClassMeeting(openClassId, cls.periods, overrides, presets).then((date) => {
+      if (!cancelled) setNextMeetingDate(date);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openClassId]);
 
   const addHomework = () => {
     if (!openClassId) return;
@@ -112,7 +112,7 @@ export function SchoolPage() {
     const dueRaw = dueRef.current?.value;
     const priority = (priorityRef.current?.value as Homework['priority']) || 'med';
     const due = dueRaw ? new Date(`${dueRaw}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'No date';
-    setHomework((s) => ({ ...s, [openClassId]: [...(s[openClassId] || []), { id: Date.now(), title, due, priority, done: false }] }));
+    addHomeworkToClass(openClassId, { title, due, priority });
     if (titleRef.current) titleRef.current.value = '';
     if (dueRef.current) dueRef.current.value = '';
   };
@@ -358,7 +358,10 @@ export function SchoolPage() {
 
             <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end', marginTop: 6, flexWrap: 'wrap' }}>
               <div className="field" style={{ flex: 2, minWidth: 160 }}><label>New assignment</label><input className="input" type="text" ref={titleRef} placeholder="e.g. Problem set 4" /></div>
-              <div className="field" style={{ flex: 1, minWidth: 130 }}><label>Due date</label><input className="input" type="date" ref={dueRef} /></div>
+              <div className="field" style={{ flex: 1, minWidth: 130 }}>
+                <label>Due date</label>
+                <input className="input" type="date" ref={dueRef} defaultValue={nextMeetingDate ?? undefined} key={`${openClassId ?? ''}-${nextMeetingDate ?? ''}`} />
+              </div>
               <div className="field" style={{ flex: 1, minWidth: 110 }}>
                 <label>Priority</label>
                 <select className="input" ref={priorityRef} defaultValue="med">

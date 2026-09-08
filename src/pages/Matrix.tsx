@@ -3,6 +3,7 @@ import { Widget, PageHeader } from '../components/Widget';
 import { TaskDialog } from '../components/TaskDialog';
 import { useAutoSchedule } from '../lib/useAutoSchedule';
 import { useMatrix, type QuadKey } from '../state/MatrixContext';
+import { useSchool, type Homework } from '../state/SchoolContext';
 import './Matrix.css';
 
 const QUAD_CONFIG: { key: QuadKey; numeral: string; label: string; sub: string; badgeStyle: React.CSSProperties }[] = [
@@ -12,8 +13,25 @@ const QUAD_CONFIG: { key: QuadKey; numeral: string; label: string; sub: string; 
   { key: 'q4', numeral: 'IV', label: 'Not Urgent & Not Important', sub: 'Eliminate', badgeStyle: { background: 'var(--color-neutral-300)', color: 'var(--color-neutral-800)' } },
 ];
 
+/** Maps a homework item's priority onto an Eisenhower quadrant so it surfaces on the matrix too. */
+const PRIORITY_QUAD: Record<Homework['priority'], QuadKey> = { high: 'q1', med: 'q2', low: 'q4' };
+
+interface HomeworkTaskRow {
+  source: 'homework';
+  classId: string;
+  hwId: number;
+  id: string;
+  title: string;
+  done: boolean;
+  dueDate: string | null;
+  listTag: string;
+  durationMin: null;
+  time: null;
+}
+
 export function MatrixPage() {
   const { tasks, addTask, removeTask, toggleDone, scheduleTask, unscheduleTask } = useMatrix();
+  const { classes, homework, toggleHomework } = useSchool();
   const autoSchedule = useAutoSchedule();
   const [open, setOpen] = useState<Record<QuadKey, boolean>>({ q1: true, q2: true, q3: true, q4: true });
   const [dialogQuad, setDialogQuad] = useState<QuadKey | null>(null);
@@ -26,6 +44,25 @@ export function MatrixPage() {
     const scheduled = await autoSchedule({ title, dueDate: null, durationMin: durationMin ?? 30, link: null });
     if (scheduled.time) scheduleTask(qkey, id, scheduled.time);
   };
+
+  const classById = Object.fromEntries(classes.map((c) => [c.id, c]));
+  const homeworkRows: Record<QuadKey, HomeworkTaskRow[]> = { q1: [], q2: [], q3: [], q4: [] };
+  for (const [classId, items] of Object.entries(homework)) {
+    for (const hw of items) {
+      homeworkRows[PRIORITY_QUAD[hw.priority]].push({
+        source: 'homework',
+        classId,
+        hwId: hw.id,
+        id: `hw-${classId}-${hw.id}`,
+        title: hw.title,
+        done: hw.done,
+        dueDate: hw.due === 'No date' ? null : hw.due,
+        listTag: classById[classId]?.name ?? 'School',
+        durationMin: null,
+        time: null,
+      });
+    }
+  }
 
   return (
     <div className="page">
@@ -42,10 +79,13 @@ export function MatrixPage() {
 
       <div className="matrix-grid">
         {QUAD_CONFIG.map((q) => {
-          const all = tasks[q.key];
-          const activeTasks = all.filter((t) => !t.done);
-          const completedTasks = all.filter((t) => t.done);
+          const combined = [...tasks[q.key].map((t) => ({ ...t, source: 'matrix' as const })), ...homeworkRows[q.key]];
+          const activeTasks = combined.filter((t) => !t.done);
+          const completedTasks = combined.filter((t) => t.done);
           const isOpen = open[q.key];
+
+          const toggle = (t: (typeof combined)[number]) =>
+            t.source === 'homework' ? toggleHomework(t.classId, t.hwId) : toggleDone(q.key, t.id);
 
           return (
             <Widget key={q.key}>
@@ -57,23 +97,27 @@ export function MatrixPage() {
 
               {activeTasks.map((t) => (
                 <div className="task-row" key={t.id}>
-                  <div className={`tcheck${t.done ? ' done' : ''}`} onClick={() => toggleDone(q.key, t.id)}>
+                  <div className={`tcheck${t.done ? ' done' : ''}`} onClick={() => toggle(t)}>
                     {t.done && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                   </div>
-                  <span className={`ttitle${t.done ? ' done' : ''}`}>{t.title}</span>
+                  <span className={`ttitle${t.done ? ' done' : ''}`} title={'description' in t ? t.description || undefined : undefined}>{t.title}</span>
                   <span className="tmeta">
                     {t.durationMin && <span className="tag tag-neutral">{t.durationMin < 60 ? `${t.durationMin}m` : `${Math.floor(t.durationMin / 60)}h${t.durationMin % 60 ? ` ${t.durationMin % 60}m` : ''}`}</span>}
                     {t.dueDate && <span className="tag tag-outline">Due {t.dueDate}</span>}
-                    {t.time && (
+                    {t.source !== 'homework' && t.time && (
                       <span className="tag tag-accent" style={{ cursor: 'pointer' }} onClick={() => unscheduleTask(q.key, t.id)}>{t.time}</span>
                     )}
-                    {!t.time && (
+                    {t.source !== 'homework' && !t.time && (
                       <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => scheduleNow(q.key, t.id, t.title, t.durationMin)} type="button">+ Schedule</button>
                     )}
                     <span className="tag tag-neutral">{t.listTag}</span>
-                    <button className="btn btn-icon" type="button" onClick={() => removeTask(q.key, t.id)} aria-label={`Remove ${t.title}`}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                    </button>
+                    {t.source === 'homework' ? (
+                      <span className="tag tag-outline" title="Managed on the School tab">Homework</span>
+                    ) : (
+                      <button className="btn btn-icon" type="button" onClick={() => removeTask(q.key, t.id)} aria-label={`Remove ${t.title}`}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                      </button>
+                    )}
                   </span>
                 </div>
               ))}
@@ -91,15 +135,19 @@ export function MatrixPage() {
                   <div style={{ display: isOpen ? 'flex' : 'none', flexDirection: 'column' }}>
                     {completedTasks.map((t) => (
                       <div className="task-row" key={t.id}>
-                        <div className="tcheck done" onClick={() => toggleDone(q.key, t.id)}>
+                        <div className="tcheck done" onClick={() => toggle(t)}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
                         </div>
                         <span className="ttitle done">{t.title}</span>
                         <span className="tmeta">
                           <span className="tag tag-neutral">{t.listTag}</span>
-                          <button className="btn btn-icon" type="button" onClick={() => removeTask(q.key, t.id)} aria-label={`Remove ${t.title}`}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                          </button>
+                          {t.source === 'homework' ? (
+                            <span className="tag tag-outline" title="Managed on the School tab">Homework</span>
+                          ) : (
+                            <button className="btn btn-icon" type="button" onClick={() => removeTask(q.key, t.id)} aria-label={`Remove ${t.title}`}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                            </button>
+                          )}
                         </span>
                       </div>
                     ))}
@@ -117,9 +165,9 @@ export function MatrixPage() {
         <TaskDialog
           initialQuad={dialogQuad}
           onClose={() => setDialogQuad(null)}
-          onSave={async ({ title, quad, dueDate, link, durationMin }) => {
+          onSave={async ({ title, description, quad, dueDate, link, durationMin }) => {
             const scheduled = await autoSchedule({ title, dueDate, durationMin, link });
-            addTask(quad, { title, dueDate, link: scheduled.link, durationMin, time: scheduled.time });
+            addTask(quad, { title, description, dueDate, link: scheduled.link, durationMin, time: scheduled.time });
           }}
         />
       )}
