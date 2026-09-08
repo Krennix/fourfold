@@ -100,3 +100,79 @@
 .collapse-toggle:hover {
   opacity: 1;
 }
+
+.mobile-topbar {
+  display: none;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    height: 52px;
+    padding: 0 var(--space-4);
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-divider);
+  }
+
+  .mobile-topbar .nav-brand {
+    padding: 0;
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: none;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-text);
+    cursor: pointer;
+  }
+
+  .mobile-menu-btn svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: color-mix(in srgb, #000 45%, transparent);
+  }
+
+  .sidebar,
+  .sidebar.collapsed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    width: min(280px, 82vw);
+    max-width: 82vw;
+    background: var(--color-bg);
+    box-shadow: var(--shadow-lg);
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .collapse-toggle {
+    display: none;
+  }
+}
