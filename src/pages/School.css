@@ -87,6 +87,14 @@
 .hw-title { flex: 1; min-width: 0; font-size: 13.5px; }
 .hw-title.done { text-decoration: line-through; color: color-mix(in srgb, var(--color-text) 45%, transparent); }
 
+.hw-action-btn {
+  width: 22px; height: 22px; padding: 0; flex: none; display: flex; align-items: center; justify-content: center;
+  border: none; background: none; border-radius: var(--radius-sm); cursor: pointer;
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+}
+.hw-action-btn:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
+.hw-action-btn svg { width: 14px; height: 14px; }
+
 .pill-high { background: var(--color-accent-800); color: var(--color-bg); }
 .pill-med { background: var(--color-accent-300); color: var(--color-accent-800); }
 .pill-low { background: var(--color-neutral-200); color: var(--color-neutral-800); }
