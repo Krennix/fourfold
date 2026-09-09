@@ -160,7 +160,8 @@ function GoogleIcsSettings() {
         you can add as many as you like. In Google Calendar, go to{' '}
         <strong>Settings → (your calendar) → Integrate calendar</strong>, and copy the{' '}
         <strong>Secret address in iCal format</strong>. Events show up here alongside your synced/local ones; you can
-        edit or hide them locally (that never writes back to Google — only Google Calendar itself can).
+        edit or hide them locally (that never writes back to Google — only Google Calendar itself can). (Pasting the
+        "embed this calendar" link works too, for calendars that are public — it gets converted automatically.)
       </p>
 
       {feeds.length > 0 && (
