@@ -198,11 +198,15 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   const toggleEventLocked = useCallback((id: string, source?: EventSource) => {
     const event = [...googleEvents, ...localEvents].find((e) => matchesSource(e, id, source));
     if (!event) return;
-    const key = eventKey(event);
     setLockedKeys((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      if (isLocked(event, prev)) {
+        // Clear both possible forms — a pre-multi-calendar lock may only be present as the bare id.
+        next.delete(eventKey(event));
+        next.delete(event.id);
+      } else {
+        next.add(eventKey(event));
+      }
       return next;
     });
   }, [googleEvents, localEvents]);
@@ -322,7 +326,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   const updateEvent: CalendarContextValue['updateEvent'] = async (id, date, title, time, durationMin = 60, extras = {}, source) => {
     const googleEvent = googleEvents.find((e) => matchesSource(e, id, source));
     const existing = googleEvent ?? localEvents.find((e) => matchesSource(e, id, source));
-    if (existing && lockedKeys.has(eventKey(existing))) {
+    if (existing && isLocked(existing, lockedKeys)) {
       setError('That event is locked — unlock it before moving it.');
       return null;
     }
@@ -376,7 +380,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   const removeEvent = (id: string, source?: EventSource) => {
     const googleEvent = googleEvents.find((e) => matchesSource(e, id, source));
     const existing = googleEvent ?? localEvents.find((e) => matchesSource(e, id, source));
-    if (existing && lockedKeys.has(eventKey(existing))) {
+    if (existing && isLocked(existing, lockedKeys)) {
       setError('That event is locked — unlock it before deleting it.');
       return;
     }
@@ -397,7 +401,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     setLocalEvents((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const events = [...googleEvents, ...localEvents].map((e) => (lockedKeys.has(eventKey(e)) ? { ...e, locked: true } : e));
+  const events = [...googleEvents, ...localEvents].map((e) => (isLocked(e, lockedKeys) ? { ...e, locked: true } : e));
   const eventsByDate = (date: string) => events.filter((e) => e.date === date).sort((a, b) => a.time.localeCompare(b.time));
 
   return (
