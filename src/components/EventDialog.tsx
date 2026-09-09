@@ -101,7 +101,8 @@ export function EventDialog({
         <div className="dialog-title">{editing ? 'Edit event' : 'Add event'}</div>
         {editing?.source === 'ics' && (
           <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-            This event comes from a read-only calendar feed — edit or delete it in Google Calendar instead.
+            This event comes from a Google Calendar backup feed. Changes here are local-only — they won't sync back
+            to Google, and re-syncing the feed won't overwrite them.
           </p>
         )}
 
@@ -193,8 +194,8 @@ export function EventDialog({
             <button
               className="btn btn-danger"
               type="button"
-              disabled={!!editing.locked || editing.source === 'ics'}
-              title={editing.source === 'ics' ? 'Read-only feed event' : editing.locked ? 'Locked — unlock it first to delete' : undefined}
+              disabled={!!editing.locked}
+              title={editing.locked ? 'Locked — unlock it first to delete' : editing.source === 'ics' ? 'Hides it locally — the feed itself is unaffected' : undefined}
               onClick={handleDelete}
               style={{ marginRight: 'auto' }}
             >
@@ -202,7 +203,7 @@ export function EventDialog({
             </button>
           )}
           <button className="btn btn-secondary" type="button" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" type="button" disabled={!canSave || editing?.source === 'ics'} onClick={handleSave}>Save</button>
+          <button className="btn btn-primary" type="button" disabled={!canSave} onClick={handleSave}>Save</button>
         </div>
       </div>
     </div>

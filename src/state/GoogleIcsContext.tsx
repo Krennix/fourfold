@@ -11,14 +11,24 @@ export interface GoogleIcsEvent {
   allDay: boolean;
 }
 
+export interface GoogleIcsFeed {
+  id: string;
+  label: string;
+  url: string;
+  events: GoogleIcsEvent[];
+  error?: string;
+}
+
 export type GoogleIcsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 interface GoogleIcsContextValue {
   status: GoogleIcsStatus;
-  icsUrl: string | null;
-  events: GoogleIcsEvent[];
+  feeds: GoogleIcsFeed[];
+  /** All events across every feed, each tagged with which feed it came from. */
+  events: (GoogleIcsEvent & { feedId: string; feedLabel: string })[];
   error: string | null;
-  saveIcsUrl: (url: string) => Promise<void>;
+  addFeed: (label: string, url: string) => Promise<void>;
+  removeFeed: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -39,15 +49,16 @@ async function authedFetch(path: string, init: RequestInit, onExpired: () => voi
 }
 
 /**
- * Read-only backup for Google Calendar sync: a pasted "secret address in iCal format" feed,
- * fetched and merged into the calendar view as non-editable events. Independent of the OAuth
- * link in GoogleAuthContext — this keeps working even if that link is unconfigured or broken.
+ * Read-only backup for Google Calendar sync: one or more pasted "secret address in iCal format"
+ * feeds, fetched and merged into the calendar view. Independent of the OAuth link in
+ * GoogleAuthContext — this keeps working even if that link is unconfigured or broken. Events
+ * from these feeds can still be edited/hidden locally (see CalendarContext's ICS overrides) —
+ * those tweaks just never write back to Google.
  */
 export function GoogleIcsProvider({ children }: { children: ReactNode }) {
   const { handleSessionExpired } = useAuth();
   const [status, setStatus] = useState<GoogleIcsStatus>('idle');
-  const [icsUrl, setIcsUrl] = useState<string | null>(null);
-  const [events, setEvents] = useState<GoogleIcsEvent[]>([]);
+  const [feeds, setFeeds] = useState<GoogleIcsFeed[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -57,24 +68,22 @@ export function GoogleIcsProvider({ children }: { children: ReactNode }) {
       const res = await authedFetch('/api/googleIcsFeed', { method: 'GET' }, handleSessionExpired);
       if (!res) return;
       const body = await res.json();
-      setIcsUrl(body.icsUrl ?? null);
-      setEvents(body.events ?? []);
-      setError(body.error ?? null);
+      setFeeds(body.feeds ?? []);
       setStatus('ready');
     } catch {
       setStatus('error');
-      setError('Could not load the backup calendar feed.');
+      setError('Could not load the backup calendar feeds.');
     }
   }, [handleSessionExpired]);
 
-  const saveIcsUrl = useCallback(
-    async (url: string) => {
+  const saveFeeds = useCallback(
+    async (next: { id: string; label: string; url: string }[]) => {
       setStatus('loading');
       setError(null);
       try {
         const res = await authedFetch(
           '/api/googleIcsFeed',
-          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icsUrl: url }) },
+          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feeds: next }) },
           handleSessionExpired,
         );
         if (!res) return;
@@ -84,8 +93,7 @@ export function GoogleIcsProvider({ children }: { children: ReactNode }) {
           setStatus('error');
           return;
         }
-        setIcsUrl(body.icsUrl ?? null);
-        setEvents(body.events ?? []);
+        setFeeds(body.feeds ?? []);
         setStatus('ready');
       } catch {
         setStatus('error');
@@ -95,13 +103,30 @@ export function GoogleIcsProvider({ children }: { children: ReactNode }) {
     [handleSessionExpired],
   );
 
+  const addFeed = useCallback(
+    async (label: string, url: string) => {
+      const id = crypto.randomUUID();
+      await saveFeeds([...feeds.map((f) => ({ id: f.id, label: f.label, url: f.url })), { id, label, url }]);
+    },
+    [feeds, saveFeeds],
+  );
+
+  const removeFeed = useCallback(
+    async (id: string) => {
+      await saveFeeds(feeds.filter((f) => f.id !== id).map((f) => ({ id: f.id, label: f.label, url: f.url })));
+    },
+    [feeds, saveFeeds],
+  );
+
   useEffect(() => {
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const events = feeds.flatMap((f) => f.events.map((e) => ({ ...e, feedId: f.id, feedLabel: f.label })));
+
   return (
-    <GoogleIcsContext.Provider value={{ status, icsUrl, events, error, saveIcsUrl, refresh }}>
+    <GoogleIcsContext.Provider value={{ status, feeds, events, error, addFeed, removeFeed, refresh }}>
       {children}
     </GoogleIcsContext.Provider>
   );
