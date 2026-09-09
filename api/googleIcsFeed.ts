@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
 import { verifySession } from './_lib/session.js';
-import { parseIcsCalendarEvents } from './_lib/ics.js';
+import { parseIcsCalendarEvents, type IcsCalendarEvent } from './_lib/ics.js';
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL ?? '',
@@ -28,17 +28,61 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
-async function fetchEvents(icsUrl: string) {
+interface StoredFeed {
+  id: string;
+  label: string;
+  url: string;
+}
+
+function isStoredFeed(value: unknown): value is StoredFeed {
+  if (!value || typeof value !== 'object') return false;
+  const f = value as Record<string, unknown>;
+  return typeof f.id === 'string' && typeof f.label === 'string' && typeof f.url === 'string';
+}
+
+/** Old single-feed shape (`{ icsUrl }`), from before multiple feeds were supported — migrated
+ * to a one-item `feeds` list on first read so existing users don't lose their saved feed. */
+interface LegacyStored {
+  icsUrl?: string;
+}
+
+async function loadStoredFeeds(key: string): Promise<StoredFeed[]> {
+  const stored = (await redis.get<{ feeds?: unknown[] } & LegacyStored>(key)) ?? null;
+  if (!stored) return [];
+  if (Array.isArray(stored.feeds)) return stored.feeds.filter(isStoredFeed);
+  if (stored.icsUrl) return [{ id: 'legacy', label: 'Google Calendar', url: stored.icsUrl }];
+  return [];
+}
+
+async function fetchEvents(icsUrl: string): Promise<IcsCalendarEvent[]> {
   const res = await fetch(icsUrl, { headers: { Accept: 'text/calendar, text/plain' } });
   if (!res.ok) throw new Error(`Feed returned ${res.status}`);
   const text = await res.text();
   return parseIcsCalendarEvents(text).sort((a, b) => a.startISO.localeCompare(b.startISO));
 }
 
+interface FeedResult extends StoredFeed {
+  events: IcsCalendarEvent[];
+  error?: string;
+}
+
+async function fetchAll(feeds: StoredFeed[]): Promise<FeedResult[]> {
+  return Promise.all(
+    feeds.map(async (feed) => {
+      try {
+        return { ...feed, events: await fetchEvents(feed.url) };
+      } catch {
+        return { ...feed, events: [], error: 'Could not reach that calendar feed.' };
+      }
+    }),
+  );
+}
+
 /** Read-only backup path for Google Calendar: instead of the OAuth link (which needs a working
- * Google Cloud client and can go stale), the user can paste their calendar's "secret address in
- * iCal format" (Google Calendar → Settings → that calendar → Integrate calendar) and get the same
- * events shown here, merged in as non-editable entries. No token to expire, nothing to disconnect. */
+ * Google Cloud client and can go stale), the user can paste one or more calendars' "secret
+ * address in iCal format" (Google Calendar → Settings → that calendar → Integrate calendar) and
+ * get the same events shown here, merged in as non-editable entries. No token to expire, nothing
+ * to disconnect. */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const email = verifySession(bearerToken(req));
   if (!email) {
@@ -49,38 +93,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const key = `fourfold:${email}:googleIcsFeed`;
 
   if (req.method === 'GET') {
-    const stored = (await redis.get<{ icsUrl: string }>(key)) ?? null;
-    if (!stored?.icsUrl) {
-      res.status(200).json({ icsUrl: null, events: [] });
-      return;
-    }
-    try {
-      const events = await fetchEvents(stored.icsUrl);
-      res.status(200).json({ icsUrl: stored.icsUrl, events });
-    } catch {
-      res.status(200).json({ icsUrl: stored.icsUrl, events: [], error: 'Could not reach that calendar feed.' });
-    }
+    const feeds = await loadStoredFeeds(key);
+    res.status(200).json({ feeds: await fetchAll(feeds) });
     return;
   }
 
   if (req.method === 'PUT') {
-    const icsUrl = typeof req.body?.icsUrl === 'string' ? normalizeIcsUrl(req.body.icsUrl.trim()) : '';
-    if (icsUrl && !isHttpUrl(icsUrl)) {
-      res.status(400).json({ error: 'That does not look like a valid URL.' });
+    const rawFeeds = req.body?.feeds;
+    if (!Array.isArray(rawFeeds) || !rawFeeds.every(isStoredFeed)) {
+      res.status(400).json({ error: 'Malformed feed list.' });
       return;
     }
-    if (!icsUrl) {
-      await redis.set(key, { icsUrl: '' });
-      res.status(200).json({ icsUrl: null, events: [] });
+    const invalidUrl = rawFeeds.find((f) => !isHttpUrl(normalizeIcsUrl(f.url)));
+    if (invalidUrl) {
+      res.status(400).json({ error: `"${invalidUrl.label || invalidUrl.url}" does not have a valid URL.` });
       return;
     }
-    try {
-      const events = await fetchEvents(icsUrl);
-      await redis.set(key, { icsUrl });
-      res.status(200).json({ icsUrl, events });
-    } catch {
-      res.status(400).json({ error: 'Could not fetch or parse that feed. Double-check the URL.' });
-    }
+    const feeds: StoredFeed[] = rawFeeds.map((f) => ({ id: f.id, label: f.label, url: normalizeIcsUrl(f.url) }));
+    await redis.set(key, { feeds });
+    res.status(200).json({ feeds: await fetchAll(feeds) });
     return;
   }
 

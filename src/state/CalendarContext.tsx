@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useGoogleAuth, type LinkedAccount } from './GoogleAuthContext';
 import { useGoogleIcs, type GoogleIcsEvent } from './GoogleIcsContext';
 import { GoogleAuthError, deleteEvent, insertEvent, listEvents, updateEvent as patchGoogleEvent, type GoogleCalendarEvent } from '../lib/googleCalendar';
@@ -11,6 +11,14 @@ const STORAGE_KEY = 'fourfold.calendar.v1';
  * are bare event ids, and the lock check/toggle below accepts either form rather than migrating
  * (and silently dropping) them. Keep this the same key name as before that support was added. */
 const LOCKED_STORAGE_KEY = 'fourfold.calendar.locked.v1';
+/** Local-only edits/hides for events pulled from a read-only ICS feed (see GoogleIcsContext) —
+ * there's no write API for a plain ICS subscription, so tweaks live here instead, keyed by
+ * `eventKey` and overlaid onto the freshly-fetched feed event on every read. */
+const ICS_OVERRIDES_STORAGE_KEY = 'fourfold.calendar.icsOverrides.v1';
+
+type IcsOverride = Partial<Pick<CalEvent, 'date' | 'time' | 'title' | 'durationMin' | 'description' | 'location' | 'allDay'>> & {
+  hidden?: boolean;
+};
 
 export interface CalEvent {
   id: string;
@@ -19,7 +27,8 @@ export interface CalEvent {
   title: string;
   cls: '' | 'google';
   /** Set for events pulled from a read-only ICS "secret address" feed (see GoogleIcsContext) —
-   * these have no backing write API, so edits/removes/lock-toggling must be blocked. */
+   * these have no backing write API, so edits/removes are applied as local-only overrides
+   * instead of ever reaching Google. */
   source?: 'ics';
   /** Length of the event in minutes, when known (absent for legacy/local events). */
   durationMin?: number;
@@ -133,6 +142,16 @@ function loadLockedKeys(): Set<string> {
   return new Set();
 }
 
+function loadIcsOverrides(): Record<string, IcsOverride> {
+  try {
+    const raw = localStorage.getItem(ICS_OVERRIDES_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore malformed storage
+  }
+  return {};
+}
+
 function googleEventToCalEvent(
   ev: GoogleCalendarEvent,
   source: { accountEmail: string; calendarId: string; calendarColor: string },
@@ -163,24 +182,31 @@ function googleEventToCalEvent(
   };
 }
 
-function icsEventToCalEvent(ev: GoogleIcsEvent): CalEvent {
+/** `accountEmail`/`calendarId` are repurposed here (no real Google account backs an ICS feed) so
+ * `eventKey`/`matchesSource` disambiguate same-uid events across multiple feeds for free, and so
+ * overrides/hides can be looked up by that same composite key. */
+function icsEventToCalEvent(
+  ev: GoogleIcsEvent & { feedId: string; feedLabel: string },
+  overrides: Record<string, IcsOverride>,
+): CalEvent | null {
   const start = new Date(ev.startISO);
-  const date = `${start.getFullYear()}-${start.getMonth()}-${start.getDate()}`;
-  const time = ev.allDay ? 'All day' : start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  const durationMin = !ev.allDay ? (new Date(ev.endISO).getTime() - start.getTime()) / 60000 : undefined;
-  return {
+  const base: CalEvent = {
     id: ev.uid,
-    date,
-    time,
+    date: `${start.getFullYear()}-${start.getMonth()}-${start.getDate()}`,
+    time: ev.allDay ? 'All day' : start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
     title: ev.title,
     cls: 'google',
     source: 'ics',
-    durationMin,
+    durationMin: !ev.allDay ? (new Date(ev.endISO).getTime() - start.getTime()) / 60000 : undefined,
     description: ev.description ?? undefined,
     location: ev.location ?? undefined,
     allDay: ev.allDay,
-    locked: true,
+    accountEmail: 'ics',
+    calendarId: ev.feedId,
   };
+  const override = overrides[eventKey(base)];
+  if (override?.hidden) return null;
+  return override ? { ...base, ...override } : base;
 }
 
 function googleDestinationsFor(accounts: LinkedAccount[]): GoogleDestination[] {
@@ -199,10 +225,15 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   const [localEvents, setLocalEvents] = useState<CalEvent[]>(loadLocalEvents);
   const [googleEvents, setGoogleEvents] = useState<CalEvent[]>([]);
   const [lockedKeys, setLockedKeys] = useState<Set<string>>(loadLockedKeys);
+  const [icsOverrides, setIcsOverrides] = useState<Record<string, IcsOverride>>(loadIcsOverrides);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const googleDestinations = googleDestinationsFor(accounts);
+  const mappedIcsEvents = useMemo(
+    () => icsEvents.map((ev) => icsEventToCalEvent(ev, icsOverrides)).filter((e): e is CalEvent => e !== null),
+    [icsEvents, icsOverrides],
+  );
 
   useEffect(() => {
     try {
@@ -220,9 +251,17 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     }
   }, [lockedKeys]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(ICS_OVERRIDES_STORAGE_KEY, JSON.stringify(icsOverrides));
+    } catch {
+      // storage unavailable — state still works for this session
+    }
+  }, [icsOverrides]);
+
   const toggleEventLocked = useCallback((id: string, source?: EventSource) => {
-    const event = [...googleEvents, ...localEvents].find((e) => matchesSource(e, id, source));
-    if (!event || event.source === 'ics') return;
+    const event = [...googleEvents, ...localEvents, ...mappedIcsEvents].find((e) => matchesSource(e, id, source));
+    if (!event) return;
     setLockedKeys((prev) => {
       const next = new Set(prev);
       if (isLocked(event, prev)) {
@@ -234,7 +273,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       }
       return next;
     });
-  }, [googleEvents, localEvents]);
+  }, [googleEvents, localEvents, mappedIcsEvents]);
 
   /** Runs `run` with a valid access token for `email`, minted from the server-stored refresh
    * token. If Google rejects the token mid-call (revoked/expired), forces one non-cached refresh
@@ -369,9 +408,16 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
 
   // `date` is "Y-M-D" with a 0-based month, matching `addEvent`.
   const updateEvent: CalendarContextValue['updateEvent'] = async (id, date, title, time, durationMin = 60, extras = {}, source) => {
-    if (icsEvents.some((e) => e.uid === id)) {
-      setError('That event comes from a read-only calendar feed — edit it in Google Calendar instead.');
-      return null;
+    const icsEvent = mappedIcsEvents.find((e) => matchesSource(e, id, source));
+    if (icsEvent) {
+      if (isLocked(icsEvent, lockedKeys)) {
+        setError('That event is locked — unlock it before moving it.');
+        return null;
+      }
+      const { description, location, allDay } = extras;
+      const updated: CalEvent = { ...icsEvent, date, title, time: allDay ? 'All day' : time, durationMin, description, location, allDay };
+      setIcsOverrides((prev) => ({ ...prev, [eventKey(icsEvent)]: { date, title, time: updated.time, durationMin, description, location, allDay } }));
+      return updated;
     }
     const googleEvent = googleEvents.find((e) => matchesSource(e, id, source));
     const existing = googleEvent ?? localEvents.find((e) => matchesSource(e, id, source));
@@ -424,8 +470,14 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   };
 
   const removeEvent = (id: string, source?: EventSource) => {
-    if (icsEvents.some((e) => e.uid === id)) {
-      setError('That event comes from a read-only calendar feed — delete it in Google Calendar instead.');
+    const icsEvent = mappedIcsEvents.find((e) => matchesSource(e, id, source));
+    if (icsEvent) {
+      if (isLocked(icsEvent, lockedKeys)) {
+        setError('That event is locked — unlock it before deleting it.');
+        return;
+      }
+      // Hidden locally rather than truly deleted — a plain ICS subscription has no delete API.
+      setIcsOverrides((prev) => ({ ...prev, [eventKey(icsEvent)]: { hidden: true } }));
       return;
     }
     const googleEvent = googleEvents.find((e) => matchesSource(e, id, source));
@@ -446,7 +498,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     setLocalEvents((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const events = [...googleEvents, ...localEvents, ...icsEvents.map(icsEventToCalEvent)].map((e) =>
+  const events = [...googleEvents, ...localEvents, ...mappedIcsEvents].map((e) =>
     isLocked(e, lockedKeys) ? { ...e, locked: true } : e,
   );
   const eventsByDate = (date: string) => events.filter((e) => e.date === date).sort((a, b) => a.time.localeCompare(b.time));

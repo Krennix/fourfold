@@ -134,50 +134,75 @@ function GoogleCalendarSettings() {
 }
 
 function GoogleIcsSettings() {
-  const { status, icsUrl, error, saveIcsUrl, refresh } = useGoogleIcs();
-  const [draft, setDraft] = useState(icsUrl ?? '');
-  const [dirty, setDirty] = useState(false);
+  const { status, feeds, error, addFeed, removeFeed, refresh } = useGoogleIcs();
+  const [labelDraft, setLabelDraft] = useState('');
+  const [urlDraft, setUrlDraft] = useState('');
 
-  const shown = dirty ? draft : (icsUrl ?? draft);
-
-  const handleSave = () => {
-    setDirty(false);
-    void saveIcsUrl(draft.trim());
+  const handleAdd = () => {
+    if (!urlDraft.trim()) return;
+    void addFeed(labelDraft.trim() || 'Google Calendar', urlDraft.trim());
+    setLabelDraft('');
+    setUrlDraft('');
   };
 
   return (
     <Widget>
       <div className="widget-head">
-        <h4>Google Calendar backup feed</h4>
-        {icsUrl && (
+        <h4>Google Calendar backup feeds</h4>
+        {feeds.length > 0 && (
           <button className="btn btn-ghost" type="button" onClick={() => void refresh()} disabled={status === 'loading'}>
             {status === 'loading' ? 'Syncing…' : 'Sync now'}
           </button>
         )}
       </div>
       <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-        A read-only fallback that doesn't depend on the OAuth connection above — nothing to disconnect or reconnect.
-        In Google Calendar, go to <strong>Settings → (your calendar) → Integrate calendar</strong>, and copy the{' '}
-        <strong>Secret address in iCal format</strong>. Events from it show up here alongside your synced/local ones,
-        but can only be edited or deleted in Google Calendar itself.
+        A read-only fallback that doesn't depend on the OAuth connection above — nothing to disconnect or reconnect, and
+        you can add as many as you like. In Google Calendar, go to{' '}
+        <strong>Settings → (your calendar) → Integrate calendar</strong>, and copy the{' '}
+        <strong>Secret address in iCal format</strong>. Events show up here alongside your synced/local ones; you can
+        edit or hide them locally (that never writes back to Google — only Google Calendar itself can).
       </p>
+
+      {feeds.length > 0 && (
+        <div className="class-list">
+          {feeds.map((f) => (
+            <div className="class-row" key={f.id}>
+              <div className="class-row-main">
+                <span className="class-row-name">{f.label}</span>
+                <span className="class-row-meta text-muted">
+                  {f.error ? f.error : `${f.events.length} event${f.events.length === 1 ? '' : 's'}`}
+                </span>
+              </div>
+              <div className="class-row-actions">
+                <button className="btn btn-ghost" type="button" onClick={() => void removeFeed(f.id)}>Remove</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          className="input"
+          type="text"
+          style={{ width: 160 }}
+          placeholder="Label (e.g. Work)"
+          value={labelDraft}
+          onChange={(e) => setLabelDraft(e.target.value)}
+        />
         <input
           className="input"
           type="url"
           style={{ flex: 1, minWidth: 240 }}
           placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
-          value={shown}
-          onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
+          value={urlDraft}
+          onChange={(e) => setUrlDraft(e.target.value)}
         />
-        <button className="btn btn-primary" type="button" onClick={handleSave} disabled={status === 'loading' || !draft.trim()}>
-          Save
+        <button className="btn btn-primary" type="button" onClick={handleAdd} disabled={status === 'loading' || !urlDraft.trim()}>
+          Add feed
         </button>
       </div>
       {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
-      {icsUrl && !error && (
-        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>Connected. Its events now show up on the Calendar tab.</p>
-      )}
     </Widget>
   );
 }
