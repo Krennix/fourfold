@@ -17,7 +17,7 @@ interface GoogleTokenClientConfig {
 }
 
 interface GoogleTokenClient {
-  requestAccessToken: (overrideConfig?: { prompt?: '' | 'consent' | 'select_account' }) => void;
+  requestAccessToken: (overrideConfig?: { prompt?: '' | 'consent' | 'select_account'; hint?: string }) => void;
 }
 
 interface GoogleIdCredentialResponse {
