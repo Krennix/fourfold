@@ -16,7 +16,27 @@ function bearerToken(req: VercelRequest): string | null {
 
 /** Calendar apps hand out `webcal://` links as an alias for the same feed over https. */
 function normalizeIcsUrl(value: string): string {
-  return value.replace(/^webcal:\/\//i, 'https://');
+  const httpsified = value.replace(/^webcal:\/\//i, 'https://');
+  return convertEmbedLinkToIcs(httpsified);
+}
+
+/**
+ * People often paste the "embed this calendar" widget link (calendar.google.com/calendar/embed?
+ * src=...) instead of the actual iCal feed — it looks like a calendar URL but only returns an
+ * HTML page, not event data. If we can pull a calendar id out of it, redirect to the equivalent
+ * public ICS feed instead so the paste still works. Only public calendars support this; private
+ * ones still need the real "secret address in iCal format" URL, which doesn't need conversion.
+ */
+function convertEmbedLinkToIcs(value: string): string {
+  try {
+    const url = new URL(value);
+    if (url.hostname !== 'calendar.google.com' || !url.pathname.startsWith('/calendar/embed')) return value;
+    const src = url.searchParams.get('src');
+    if (!src) return value;
+    return `https://calendar.google.com/calendar/ical/${encodeURIComponent(src)}/public/basic.ics`;
+  } catch {
+    return value;
+  }
 }
 
 function isHttpUrl(value: string): boolean {
