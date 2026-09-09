@@ -1,14 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  dropTokenClient,
-  fetchPrimaryCalendarEmail,
-  getTokenClient,
-  revokeToken,
-} from '../lib/googleCalendar';
 import { getStoredSession } from './AuthContext';
 
 const LINKED_EMAILS_KEY = 'fourfold.google.linkedEmails.v1';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+/** Popup message payload from api/googleOAuthCallback.ts — kept in sync with that file. */
+const OAUTH_MESSAGE_TYPE = 'fourfold-google-oauth';
 
 export interface LinkedCalendar {
   id: string;
@@ -19,7 +15,6 @@ export interface LinkedCalendar {
 
 export interface LinkedAccount {
   email: string;
-  accessToken: string | null;
   status: 'connecting' | 'signed-in' | 'error';
   error: string | null;
   calendars: LinkedCalendar[];
@@ -39,7 +34,10 @@ interface GoogleAuthContextValue {
   connectNewAccount: () => void;
   reconnectAccount: (email: string) => void;
   disconnectAccount: (email: string) => void;
-  getAccessToken: (email: string) => string | null;
+  /** Server-minted access token for an account, cached in-memory for its lifetime. Refreshed
+   * from the stored server-side refresh token on demand — there is no client-side scheduling
+   * timer, so this keeps working across reloads, sleep, and background tabs. */
+  getAccessToken: (email: string, opts?: { force?: boolean }) => Promise<string | null>;
   /** Set right after a new account finishes OAuth, so Settings can show the calendar picker for it. */
   pendingPicker: PendingPicker | null;
   dismissPendingPicker: () => void;
@@ -62,7 +60,7 @@ function saveLinkedEmails(emails: string[]) {
   try {
     localStorage.setItem(LINKED_EMAILS_KEY, JSON.stringify(emails));
   } catch {
-    // storage unavailable — silent reauth just won't have anything to try next load
+    // storage unavailable — just won't have a fallback list on next load
   }
 }
 
@@ -80,136 +78,153 @@ async function persistLinkedCalendars(accounts: LinkedAccount[]) {
   }
 }
 
+interface CachedToken {
+  token: string;
+  expiresAt: number;
+}
+
 export function GoogleAuthProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [pendingPicker, setPendingPicker] = useState<PendingPicker | null>(null);
-  const refreshTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
-  const clearRefreshTimer = useCallback((email: string) => {
-    const timer = refreshTimers.current.get(email);
-    if (timer) {
-      clearTimeout(timer);
-      refreshTimers.current.delete(email);
-    }
-  }, []);
+  const tokenCache = useRef<Map<string, CachedToken>>(new Map());
 
   const handleAccountError = useCallback((email: string, message: string) => {
     setAccounts((prev) => prev.map((a) => (a.email === email ? { ...a, status: 'error', error: message } : a)));
   }, []);
 
-  // `scheduleRefresh` and `handleAccountToken` each need to call the other (a refresh, once it
-  // succeeds, must schedule its own next refresh) — a ref breaks the circular `const` reference
-  // rather than trying to order two mutually-recursive useCallbacks.
-  const handleAccountTokenRef = useRef<(email: string, token: string, expiresInSeconds: number) => void>(() => {});
+  const getAccessToken = useCallback(async (email: string, opts?: { force?: boolean }): Promise<string | null> => {
+    const cached = tokenCache.current.get(email);
+    if (!opts?.force && cached && cached.expiresAt - 30_000 > Date.now()) return cached.token;
 
-  const scheduleRefresh = useCallback(
-    (email: string, expiresInSeconds: number) => {
-      clearRefreshTimer(email);
-      const refreshInMs = Math.max(0, (expiresInSeconds - 60) * 1000);
-      const timer = setTimeout(() => {
-        if (!CLIENT_ID) return;
-        getTokenClient(
-          email,
-          CLIENT_ID,
-          (token, expiresIn) => handleAccountTokenRef.current(email, token, expiresIn),
-          (message) => handleAccountError(email, message),
-        ).requestAccessToken({ prompt: '', hint: email });
-      }, refreshInMs);
-      refreshTimers.current.set(email, timer);
-    },
-    [clearRefreshTimer, handleAccountError],
-  );
-
-  const handleAccountToken = useCallback(
-    (email: string, token: string, expiresInSeconds: number) => {
-      setAccounts((prev) => {
-        const idx = prev.findIndex((a) => a.email === email);
-        const account: LinkedAccount = {
-          email,
-          accessToken: token,
-          status: 'signed-in',
-          error: null,
-          calendars: idx >= 0 ? prev[idx].calendars : [],
-        };
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = account;
-          return next;
-        }
-        return [...prev, account];
+    const session = getStoredSession();
+    if (!session) return null;
+    try {
+      const res = await fetch(`/api/googleAccessToken?email=${encodeURIComponent(email)}`, {
+        headers: { Authorization: `Bearer ${session.token}` },
       });
-      scheduleRefresh(email, expiresInSeconds);
-    },
-    [scheduleRefresh],
-  );
+      const body = await res.json();
+      if (!res.ok) {
+        handleAccountError(email, body.error ?? 'Could not refresh that account — reconnect it.');
+        return null;
+      }
+      tokenCache.current.set(email, { token: body.accessToken, expiresAt: Date.now() + body.expiresInSeconds * 1000 });
+      setAccounts((prev) =>
+        prev.map((a) => (a.email === email && a.status !== 'signed-in' ? { ...a, status: 'signed-in', error: null } : a)),
+      );
+      return body.accessToken;
+    } catch {
+      handleAccountError(email, 'Could not reach the server to refresh that account.');
+      return null;
+    }
+  }, [handleAccountError]);
 
-  useEffect(() => {
-    handleAccountTokenRef.current = handleAccountToken;
-  }, [handleAccountToken]);
-
-  const connectNewAccount = useCallback(() => {
-    if (!CLIENT_ID) return;
+  const openOAuthPopup = useCallback((hint: string | undefined, onDone: (result: { ok: true; email: string } | { ok: false; error: string }) => void) => {
+    const session = getStoredSession();
+    if (!session || !CLIENT_ID) return;
     setConnectError(null);
     setConnecting(true);
-    const onToken = (token: string, expiresInSeconds: number) => {
+
+    const popup = window.open('about:blank', 'fourfold-google-oauth', 'width=520,height=680');
+    if (!popup) {
       setConnecting(false);
-      fetchPrimaryCalendarEmail(token)
-        .then((email) => {
-          // Drop the temp-keyed client rather than rekeying it to `email` — it closes over this
-          // one-time onToken (which opens the calendar picker), and a token client's callback
-          // can't be rebound after creation, so reusing it would make every later silent refresh
-          // for this account reopen the picker instead of just refreshing the token.
-          dropTokenClient('new');
-          handleAccountToken(email, token, expiresInSeconds);
-          const emails = loadLinkedEmails();
-          if (!emails.includes(email)) saveLinkedEmails([...emails, email]);
-          setPendingPicker({ email, accessToken: token });
-        })
-        .catch(() => {
-          dropTokenClient('new');
-          setConnectError('Could not determine that account\'s email address.');
-        });
-    };
-    const onError = (message: string) => {
+      setConnectError('Your browser blocked the sign-in popup — allow popups for this site and try again.');
+      return;
+    }
+
+    const finish = (result: { ok: true; email: string } | { ok: false; error: string }) => {
+      window.removeEventListener('message', onMessage);
+      clearInterval(pollClosed);
       setConnecting(false);
-      dropTokenClient('new');
-      setConnectError(message);
+      onDone(result);
     };
-    getTokenClient('new', CLIENT_ID, onToken, onError).requestAccessToken({ prompt: 'select_account' });
-  }, [handleAccountToken]);
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type !== OAUTH_MESSAGE_TYPE) return;
+      if (event.data.ok) finish({ ok: true, email: event.data.email });
+      else finish({ ok: false, error: event.data.error ?? 'Connection failed.' });
+    };
+    window.addEventListener('message', onMessage);
+
+    const pollClosed = window.setInterval(() => {
+      if (popup.closed) {
+        window.removeEventListener('message', onMessage);
+        clearInterval(pollClosed);
+        setConnecting(false);
+      }
+    }, 500);
+
+    fetch(`/api/googleOAuthStart${hint ? `?hint=${encodeURIComponent(hint)}` : ''}`, {
+      headers: { Authorization: `Bearer ${session.token}` },
+    })
+      .then((res) => res.json())
+      .then((body) => {
+        if (!body.authUrl) {
+          popup.close();
+          finish({ ok: false, error: body.error ?? 'Could not start Google sign-in.' });
+          return;
+        }
+        popup.location.href = body.authUrl;
+      })
+      .catch(() => {
+        popup.close();
+        finish({ ok: false, error: 'Could not reach the server to start Google sign-in.' });
+      });
+  }, []);
+
+  const connectNewAccount = useCallback(() => {
+    openOAuthPopup(undefined, (result) => {
+      if (!result.ok) {
+        setConnectError(result.error);
+        return;
+      }
+      const { email } = result;
+      setAccounts((prev) => {
+        if (prev.some((a) => a.email === email)) return prev;
+        return [...prev, { email, status: 'signed-in', error: null, calendars: [] }];
+      });
+      const emails = loadLinkedEmails();
+      if (!emails.includes(email)) saveLinkedEmails([...emails, email]);
+      void getAccessToken(email).then((token) => {
+        if (token) setPendingPicker({ email, accessToken: token });
+      });
+    });
+  }, [openOAuthPopup, getAccessToken]);
 
   const reconnectAccount = useCallback(
     (email: string) => {
-      if (!CLIENT_ID) return;
       setAccounts((prev) => prev.map((a) => (a.email === email ? { ...a, status: 'connecting', error: null } : a)));
-      getTokenClient(
-        email,
-        CLIENT_ID,
-        (token, expiresIn) => handleAccountToken(email, token, expiresIn),
-        (message) => handleAccountError(email, message),
-      ).requestAccessToken({ prompt: 'consent', hint: email });
+      openOAuthPopup(email, (result) => {
+        if (!result.ok) {
+          handleAccountError(email, result.error);
+          return;
+        }
+        tokenCache.current.delete(email);
+        setAccounts((prev) => prev.map((a) => (a.email === email ? { ...a, status: 'signed-in', error: null } : a)));
+      });
     },
-    [handleAccountToken, handleAccountError],
+    [openOAuthPopup, handleAccountError],
   );
 
-  // `setAccounts` is called here with a plain value rather than an updater function, and the
-  // side effects (revoke, persist) sit outside it — a functional updater runs twice under
-  // StrictMode in dev, which would double-revoke the token and double-PUT the persisted state.
   const disconnectAccount = useCallback(
     (email: string) => {
-      const account = accounts.find((a) => a.email === email);
-      if (account?.accessToken) revokeToken(account.accessToken);
-      const next = accounts.filter((a) => a.email !== email);
-      setAccounts(next);
-      void persistLinkedCalendars(next);
-      dropTokenClient(email);
-      clearRefreshTimer(email);
+      const session = getStoredSession();
+      tokenCache.current.delete(email);
+      setAccounts((prev) => prev.filter((a) => a.email !== email));
       saveLinkedEmails(loadLinkedEmails().filter((e) => e !== email));
       setPendingPicker((p) => (p?.email === email ? null : p));
+      if (session) {
+        void fetch(`/api/googleCalendars?email=${encodeURIComponent(email)}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${session.token}` },
+        }).catch(() => {
+          // best-effort — local state is already updated
+        });
+      }
     },
-    [accounts, clearRefreshTimer],
+    [],
   );
 
   const updateAccountCalendars = useCallback(
@@ -219,11 +234,6 @@ export function GoogleAuthProvider({ children }: { children: ReactNode }) {
       void persistLinkedCalendars(next);
       setPendingPicker((p) => (p?.email === email ? null : p));
     },
-    [accounts],
-  );
-
-  const getAccessToken = useCallback(
-    (email: string) => accounts.find((a) => a.email === email)?.accessToken ?? null,
     [accounts],
   );
 
@@ -251,32 +261,15 @@ export function GoogleAuthProvider({ children }: { children: ReactNode }) {
       setAccounts(
         emails.map((email) => ({
           email,
-          accessToken: null,
-          status: 'connecting' as const,
+          status: 'signed-in' as const,
           error: null,
           calendars: persisted.find((a) => a.email === email)?.calendars ?? [],
         })),
       );
-
-      const trySilent = (email: string) => {
-        if (cancelled) return;
-        if (!window.google) {
-          setTimeout(() => trySilent(email), 200);
-          return;
-        }
-        getTokenClient(
-          email,
-          CLIENT_ID,
-          (token, expiresIn) => handleAccountToken(email, token, expiresIn),
-          (message) => handleAccountError(email, message),
-        ).requestAccessToken({ prompt: '', hint: email });
-      };
-      emails.forEach(trySilent);
     })();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const dismissPendingPicker = useCallback(() => setPendingPicker(null), []);

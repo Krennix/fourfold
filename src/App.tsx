@@ -8,6 +8,7 @@ import { SchoologyProvider } from './state/SchoologyContext';
 import { HabitsProvider } from './state/HabitsContext';
 import { MatrixProvider } from './state/MatrixContext';
 import { GoogleAuthProvider } from './state/GoogleAuthContext';
+import { GoogleIcsProvider } from './state/GoogleIcsContext';
 import { CalendarProvider } from './state/CalendarContext';
 import { CountdownsProvider } from './state/CountdownsContext';
 import { PomodoroProvider } from './state/PomodoroContext';
@@ -31,6 +32,7 @@ function App() {
       <HabitsProvider>
         <MatrixProvider>
           <GoogleAuthProvider>
+          <GoogleIcsProvider>
           <CalendarProvider>
             <CountdownsProvider>
             <PomodoroProvider>
@@ -55,6 +57,7 @@ function App() {
             </PomodoroProvider>
             </CountdownsProvider>
           </CalendarProvider>
+          </GoogleIcsProvider>
           </GoogleAuthProvider>
         </MatrixProvider>
       </HabitsProvider>

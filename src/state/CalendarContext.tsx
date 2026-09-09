@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useGoogleAuth, type LinkedAccount } from './GoogleAuthContext';
-import { deleteEvent, insertEvent, listEvents, updateEvent as patchGoogleEvent, type GoogleCalendarEvent } from '../lib/googleCalendar';
+import { useGoogleIcs, type GoogleIcsEvent } from './GoogleIcsContext';
+import { GoogleAuthError, deleteEvent, insertEvent, listEvents, updateEvent as patchGoogleEvent, type GoogleCalendarEvent } from '../lib/googleCalendar';
 
 const STORAGE_KEY = 'fourfold.calendar.v1';
 /** Google-sourced events are refetched fresh on every refresh, so "locked" can't live on the
@@ -17,6 +18,9 @@ export interface CalEvent {
   time: string;
   title: string;
   cls: '' | 'google';
+  /** Set for events pulled from a read-only ICS "secret address" feed (see GoogleIcsContext) —
+   * these have no backing write API, so edits/removes/lock-toggling must be blocked. */
+  source?: 'ics';
   /** Length of the event in minutes, when known (absent for legacy/local events). */
   durationMin?: number;
   /** Fixed/"set in stone" — shouldn't be moved, rescheduled, or deleted by drag/AI actions. */
@@ -159,9 +163,29 @@ function googleEventToCalEvent(
   };
 }
 
+function icsEventToCalEvent(ev: GoogleIcsEvent): CalEvent {
+  const start = new Date(ev.startISO);
+  const date = `${start.getFullYear()}-${start.getMonth()}-${start.getDate()}`;
+  const time = ev.allDay ? 'All day' : start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const durationMin = !ev.allDay ? (new Date(ev.endISO).getTime() - start.getTime()) / 60000 : undefined;
+  return {
+    id: ev.uid,
+    date,
+    time,
+    title: ev.title,
+    cls: 'google',
+    source: 'ics',
+    durationMin,
+    description: ev.description ?? undefined,
+    location: ev.location ?? undefined,
+    allDay: ev.allDay,
+    locked: true,
+  };
+}
+
 function googleDestinationsFor(accounts: LinkedAccount[]): GoogleDestination[] {
   return accounts
-    .filter((a) => a.status === 'signed-in' && a.accessToken)
+    .filter((a) => a.status === 'signed-in')
     .flatMap((a) =>
       a.calendars
         .filter((c) => c.selected)
@@ -171,6 +195,7 @@ function googleDestinationsFor(accounts: LinkedAccount[]): GoogleDestination[] {
 
 export function CalendarProvider({ children }: { children: ReactNode }) {
   const { accounts, getAccessToken } = useGoogleAuth();
+  const { events: icsEvents } = useGoogleIcs();
   const [localEvents, setLocalEvents] = useState<CalEvent[]>(loadLocalEvents);
   const [googleEvents, setGoogleEvents] = useState<CalEvent[]>([]);
   const [lockedKeys, setLockedKeys] = useState<Set<string>>(loadLockedKeys);
@@ -197,7 +222,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
 
   const toggleEventLocked = useCallback((id: string, source?: EventSource) => {
     const event = [...googleEvents, ...localEvents].find((e) => matchesSource(e, id, source));
-    if (!event) return;
+    if (!event || event.source === 'ics') return;
     setLockedKeys((prev) => {
       const next = new Set(prev);
       if (isLocked(event, prev)) {
@@ -211,6 +236,25 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     });
   }, [googleEvents, localEvents]);
 
+  /** Runs `run` with a valid access token for `email`, minted from the server-stored refresh
+   * token. If Google rejects the token mid-call (revoked/expired), forces one non-cached refresh
+   * and retries once before giving up — this replaces the old client-side refresh-timer scheme. */
+  const callWithToken = useCallback(
+    async <T,>(email: string, run: (accessToken: string) => Promise<T>): Promise<T> => {
+      const token = await getAccessToken(email);
+      if (!token) throw new Error('That Google account is no longer connected.');
+      try {
+        return await run(token);
+      } catch (err) {
+        if (!(err instanceof GoogleAuthError)) throw err;
+        const fresh = await getAccessToken(email, { force: true });
+        if (!fresh) throw new Error('That Google account is no longer connected.');
+        return run(fresh);
+      }
+    },
+    [getAccessToken],
+  );
+
   const refresh = useCallback(
     (monthStart: Date, monthEnd: Date) => {
       const targets = googleDestinationsFor(accounts);
@@ -222,7 +266,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       setError(null);
       Promise.allSettled(
         targets.map((t) =>
-          listEvents(getAccessToken(t.accountEmail)!, t.calendarId, monthStart, monthEnd).then((items) =>
+          callWithToken(t.accountEmail, (accessToken) => listEvents(accessToken, t.calendarId, monthStart, monthEnd)).then((items) =>
             items
               .map((item) => googleEventToCalEvent(item, { accountEmail: t.accountEmail, calendarId: t.calendarId, calendarColor: t.color }))
               .filter((e): e is CalEvent => e !== null),
@@ -236,7 +280,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
         })
         .finally(() => setLoading(false));
     },
-    [accounts, getAccessToken],
+    [accounts, callWithToken],
   );
 
   // Google's all-day events use exclusive date-only ranges: the end date is the day *after* the last day shown.
@@ -263,9 +307,8 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   const addEvent: CalendarContextValue['addEvent'] = async (date, title, time, durationMin = 60, extras = {}, target = 'local') => {
     const { description, location, allDay } = extras;
     if (target !== 'local') {
-      const accessToken = getAccessToken(target.accountEmail);
       const destination = googleDestinations.find((d) => d.accountEmail === target.accountEmail && d.calendarId === target.calendarId);
-      if (!accessToken || !destination) {
+      if (!destination) {
         setError('That Google calendar is no longer connected.');
         return null;
       }
@@ -273,7 +316,9 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       try {
-        const ev = await insertEvent(accessToken, target.calendarId, { summary: title, description, location, ...timing });
+        const ev = await callWithToken(target.accountEmail, (accessToken) =>
+          insertEvent(accessToken, target.calendarId, { summary: title, description, location, ...timing }),
+        );
         const mapped = googleEventToCalEvent(ev, { accountEmail: target.accountEmail, calendarId: target.calendarId, calendarColor: destination.color });
         if (mapped) setGoogleEvents((prev) => [...prev, mapped]);
         return mapped;
@@ -324,6 +369,10 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
 
   // `date` is "Y-M-D" with a 0-based month, matching `addEvent`.
   const updateEvent: CalendarContextValue['updateEvent'] = async (id, date, title, time, durationMin = 60, extras = {}, source) => {
+    if (icsEvents.some((e) => e.uid === id)) {
+      setError('That event comes from a read-only calendar feed — edit it in Google Calendar instead.');
+      return null;
+    }
     const googleEvent = googleEvents.find((e) => matchesSource(e, id, source));
     const existing = googleEvent ?? localEvents.find((e) => matchesSource(e, id, source));
     if (existing && isLocked(existing, lockedKeys)) {
@@ -334,16 +383,13 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     if (googleEvent?.accountEmail && googleEvent.calendarId) {
       const accountEmail = googleEvent.accountEmail;
       const calendarId = googleEvent.calendarId;
-      const accessToken = getAccessToken(accountEmail);
-      if (!accessToken) {
-        setError('That Google account is no longer connected.');
-        return null;
-      }
       const timing = timingFor(date, time, durationMin, allDay);
       setLoading(true);
       setError(null);
       try {
-        const ev = await patchGoogleEvent(accessToken, calendarId, id, { summary: title, description, location, ...timing });
+        const ev = await callWithToken(accountEmail, (accessToken) =>
+          patchGoogleEvent(accessToken, calendarId, id, { summary: title, description, location, ...timing }),
+        );
         const mapped = googleEventToCalEvent(ev, {
           accountEmail,
           calendarId,
@@ -378,6 +424,10 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   };
 
   const removeEvent = (id: string, source?: EventSource) => {
+    if (icsEvents.some((e) => e.uid === id)) {
+      setError('That event comes from a read-only calendar feed — delete it in Google Calendar instead.');
+      return;
+    }
     const googleEvent = googleEvents.find((e) => matchesSource(e, id, source));
     const existing = googleEvent ?? localEvents.find((e) => matchesSource(e, id, source));
     if (existing && isLocked(existing, lockedKeys)) {
@@ -387,13 +437,8 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     if (googleEvent?.accountEmail && googleEvent.calendarId) {
       const accountEmail = googleEvent.accountEmail;
       const calendarId = googleEvent.calendarId;
-      const accessToken = getAccessToken(accountEmail);
-      if (!accessToken) {
-        setError('That Google account is no longer connected.');
-        return;
-      }
       setError(null);
-      deleteEvent(accessToken, calendarId, id)
+      callWithToken(accountEmail, (accessToken) => deleteEvent(accessToken, calendarId, id))
         .then(() => setGoogleEvents((prev) => prev.filter((e) => !(e.id === id && e.accountEmail === accountEmail && e.calendarId === calendarId))))
         .catch((err) => setError(err instanceof Error ? err.message : String(err)));
       return;
@@ -401,7 +446,9 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     setLocalEvents((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const events = [...googleEvents, ...localEvents].map((e) => (isLocked(e, lockedKeys) ? { ...e, locked: true } : e));
+  const events = [...googleEvents, ...localEvents, ...icsEvents.map(icsEventToCalEvent)].map((e) =>
+    isLocked(e, lockedKeys) ? { ...e, locked: true } : e,
+  );
   const eventsByDate = (date: string) => events.filter((e) => e.date === date).sort((a, b) => a.time.localeCompare(b.time));
 
   return (

@@ -1,47 +1,9 @@
-const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 const API_BASE = 'https://www.googleapis.com/calendar/v3';
 
-type GoogleTokenClient = ReturnType<NonNullable<Window['google']>['accounts']['oauth2']['initTokenClient']>;
-
-const tokenClients = new Map<string, GoogleTokenClient>();
-
-/**
- * One GIS token client per linked account, cached by account email (or a
- * temporary key like 'new' while acquiring an as-yet-unknown account) so
- * concurrently held tokens for different accounts don't clobber each other.
- */
-export function getTokenClient(
-  key: string,
-  clientId: string,
-  onToken: (token: string, expiresInSeconds: number) => void,
-  onError: (message: string) => void,
-) {
-  if (!window.google) throw new Error('Google Identity Services script has not loaded yet');
-  const existing = tokenClients.get(key);
-  if (existing) return existing;
-  const client = window.google.accounts.oauth2.initTokenClient({
-    client_id: clientId,
-    scope: CALENDAR_SCOPE,
-    callback: (response) => {
-      if (response.error) {
-        onError(response.error_description || response.error);
-        return;
-      }
-      onToken(response.access_token, response.expires_in);
-    },
-    error_callback: (error) => onError(error.message || error.type),
-  });
-  tokenClients.set(key, client);
-  return client;
-}
-
-export function dropTokenClient(key: string) {
-  tokenClients.delete(key);
-}
-
-export function revokeToken(accessToken: string) {
-  window.google?.accounts.oauth2.revoke(accessToken);
-}
+/** Thrown when Google rejects the access token itself (401/403) — the caller should mint a
+ * fresh token from the server (`/api/googleAccessToken`) and retry once, rather than treating
+ * this the same as a generic API failure. */
+export class GoogleAuthError extends Error {}
 
 async function calendarFetch(accessToken: string, path: string, init?: RequestInit) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -54,6 +16,7 @@ async function calendarFetch(accessToken: string, path: string, init?: RequestIn
   });
   if (!res.ok) {
     const body = await res.text();
+    if (res.status === 401 || res.status === 403) throw new GoogleAuthError(`Google Calendar API error ${res.status}: ${body}`);
     throw new Error(`Google Calendar API error ${res.status}: ${body}`);
   }
   if (res.status === 204) return null;

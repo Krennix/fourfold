@@ -4,6 +4,7 @@ import { useSchool, type SchoolClass, type Preset } from '../state/SchoolContext
 import { useGoogleAuth, type LinkedAccount } from '../state/GoogleAuthContext';
 import { GoogleCalendarPicker } from '../components/GoogleCalendarPicker';
 import { useSchoology } from '../state/SchoologyContext';
+import { useGoogleIcs } from '../state/GoogleIcsContext';
 import { useAuth } from '../state/AuthContext';
 import { allCategories, matchCategoryToClass } from '../lib/homeworkMerge';
 import './Settings.css';
@@ -25,9 +26,17 @@ function AccessSettings() {
 }
 
 function AccountRow({ account }: { account: LinkedAccount }) {
-  const { reconnectAccount, disconnectAccount, updateAccountCalendars } = useGoogleAuth();
-  const [editing, setEditing] = useState(false);
+  const { reconnectAccount, disconnectAccount, updateAccountCalendars, getAccessToken } = useGoogleAuth();
+  const [editingToken, setEditingToken] = useState<string | null>(null);
+  const [tokenLoading, setTokenLoading] = useState(false);
   const selectedCalendars = account.calendars.filter((c) => c.selected);
+
+  const openPicker = async () => {
+    setTokenLoading(true);
+    const token = await getAccessToken(account.email);
+    setTokenLoading(false);
+    if (token) setEditingToken(token);
+  };
 
   return (
     <div className="class-row">
@@ -43,23 +52,25 @@ function AccountRow({ account }: { account: LinkedAccount }) {
         </span>
       </div>
       <div className="class-row-actions">
-        {account.status === 'signed-in' && account.accessToken && (
-          <button className="btn btn-ghost" type="button" onClick={() => setEditing(true)}>Edit calendars</button>
+        {account.status === 'signed-in' && (
+          <button className="btn btn-ghost" type="button" onClick={openPicker} disabled={tokenLoading}>
+            {tokenLoading ? 'Loading…' : 'Edit calendars'}
+          </button>
         )}
         {account.status === 'error' && (
           <button className="btn btn-ghost" type="button" onClick={() => reconnectAccount(account.email)}>Reconnect</button>
         )}
         <button className="btn btn-ghost" type="button" onClick={() => disconnectAccount(account.email)}>Disconnect</button>
       </div>
-      {editing && account.accessToken && (
+      {editingToken && (
         <GoogleCalendarPicker
           accountEmail={account.email}
-          accessToken={account.accessToken}
+          accessToken={editingToken}
           initialSelection={account.calendars}
-          onCancel={() => setEditing(false)}
+          onCancel={() => setEditingToken(null)}
           onSave={(calendars) => {
             updateAccountCalendars(account.email, calendars);
-            setEditing(false);
+            setEditingToken(null);
           }}
         />
       )}
@@ -103,8 +114,8 @@ function GoogleCalendarSettings() {
             <li>Open <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer">Google Cloud Console</a> and create (or pick) a project.</li>
             <li>APIs &amp; Services → Library → enable the <strong>Google Calendar API</strong>.</li>
             <li>APIs &amp; Services → OAuth consent screen → set it up as External and add your own Google account as a test user.</li>
-            <li>APIs &amp; Services → Credentials → Create Credentials → <strong>OAuth client ID</strong> → Application type <strong>Web application</strong> → add <code>http://localhost:5173</code> as an authorized JavaScript origin.</li>
-            <li>Copy the client ID into a <code>.env</code> file at the project root as <code>VITE_GOOGLE_CLIENT_ID=&hellip;</code>, then restart the dev server.</li>
+            <li>APIs &amp; Services → Credentials → Create Credentials → <strong>OAuth client ID</strong> → Application type <strong>Web application</strong> → add <code>http://localhost:5173</code> as an authorized JavaScript origin, and add <code>http://localhost:5173/api/googleOAuthCallback</code> (and your deployed origin's equivalent) as an authorized redirect URI.</li>
+            <li>Copy the client ID and client secret into <code>.env</code> as <code>VITE_GOOGLE_CLIENT_ID=&hellip;</code>, <code>GOOGLE_CLIENT_ID=&hellip;</code> (same value, no <code>VITE_</code> prefix) and <code>GOOGLE_CLIENT_SECRET=&hellip;</code>, then restart the dev server. The secret refreshes tokens server-side so a linked account stays connected without needing regular re-approval.</li>
           </ol>
         </>
       )}
@@ -117,6 +128,55 @@ function GoogleCalendarSettings() {
           onCancel={dismissPendingPicker}
           onSave={(calendars) => updateAccountCalendars(pendingPicker.email, calendars)}
         />
+      )}
+    </Widget>
+  );
+}
+
+function GoogleIcsSettings() {
+  const { status, icsUrl, error, saveIcsUrl, refresh } = useGoogleIcs();
+  const [draft, setDraft] = useState(icsUrl ?? '');
+  const [dirty, setDirty] = useState(false);
+
+  const shown = dirty ? draft : (icsUrl ?? draft);
+
+  const handleSave = () => {
+    setDirty(false);
+    void saveIcsUrl(draft.trim());
+  };
+
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Google Calendar backup feed</h4>
+        {icsUrl && (
+          <button className="btn btn-ghost" type="button" onClick={() => void refresh()} disabled={status === 'loading'}>
+            {status === 'loading' ? 'Syncing…' : 'Sync now'}
+          </button>
+        )}
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        A read-only fallback that doesn't depend on the OAuth connection above — nothing to disconnect or reconnect.
+        In Google Calendar, go to <strong>Settings → (your calendar) → Integrate calendar</strong>, and copy the{' '}
+        <strong>Secret address in iCal format</strong>. Events from it show up here alongside your synced/local ones,
+        but can only be edited or deleted in Google Calendar itself.
+      </p>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          className="input"
+          type="url"
+          style={{ flex: 1, minWidth: 240 }}
+          placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
+          value={shown}
+          onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
+        />
+        <button className="btn btn-primary" type="button" onClick={handleSave} disabled={status === 'loading' || !draft.trim()}>
+          Save
+        </button>
+      </div>
+      {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
+      {icsUrl && !error && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>Connected. Its events now show up on the Calendar tab.</p>
       )}
     </Widget>
   );
@@ -346,6 +406,7 @@ export function SettingsPage() {
 
       <AccessSettings />
       <GoogleCalendarSettings />
+      <GoogleIcsSettings />
       <SchoologySettings />
       <SchoologyClassMappingSettings />
 
