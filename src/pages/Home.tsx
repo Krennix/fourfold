@@ -13,6 +13,7 @@ import { useCalendarEvents } from '../state/CalendarContext';
 import { useCountdowns, type Countdown } from '../state/CountdownsContext';
 import { usePomodoro, POMODORO_MODES, POMODORO_MODE_LABELS } from '../state/PomodoroContext';
 import { useAgent } from '../state/AgentContext';
+import { useQuadrantHomework } from '../lib/useQuadrantHomework';
 import './Home.css';
 import './Countdowns.css';
 
@@ -48,6 +49,7 @@ const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
 export function HomePage() {
   const { habits, toggleHabit } = useHabits();
   const { tasks, addTask } = useMatrix();
+  const homeworkRows = useQuadrantHomework();
   const { eventsByDate } = useCalendarEvents();
   const autoSchedule = useAutoSchedule();
   const { countdowns, addCountdown, updateCountdown, removeCountdown } = useCountdowns();
@@ -168,7 +170,8 @@ export function HomePage() {
             </div>
             <div className="quad-grid">
               {(Object.keys(QUAD_LABELS) as QuadKey[]).map((qkey) => {
-                const active = tasks[qkey].filter((t) => !t.done);
+                const combined = [...tasks[qkey], ...homeworkRows[qkey]];
+                const active = combined.filter((t) => !t.done);
                 return (
                   <div
                     className="quad quad-clickable"
@@ -182,7 +185,7 @@ export function HomePage() {
                     <div className="quad-label">{QUAD_LABELS[qkey]}</div>
                     {active.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No tasks</div>}
                     {active.map((t) => (
-                      <div className="task-chip" key={t.id} title={t.description || undefined}>
+                      <div className="task-chip" key={t.id} title={'description' in t ? t.description || undefined : undefined}>
                         {t.title}
                         {t.durationMin && <span className="text-muted"> · {formatDuration(t.durationMin)}</span>}
                         {t.dueDate && <span className="text-muted"> · Due {t.dueDate}</span>}

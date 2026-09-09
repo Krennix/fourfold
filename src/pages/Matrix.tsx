@@ -1,12 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { TaskDialog } from '../components/TaskDialog';
 import { useAutoSchedule } from '../lib/useAutoSchedule';
 import { useMatrix, type QuadKey } from '../state/MatrixContext';
-import { useSchool, type Homework } from '../state/SchoolContext';
-import { useSchoology } from '../state/SchoologyContext';
-import { mergeHomeworkForClass, type MergedHomeworkItem } from '../lib/homeworkMerge';
-import type { Urgency } from '../lib/urgency';
+import { useSchool } from '../state/SchoolContext';
+import { useQuadrantHomework } from '../lib/useQuadrantHomework';
 import './Matrix.css';
 
 const QUAD_CONFIG: { key: QuadKey; numeral: string; label: string; sub: string; badgeStyle: React.CSSProperties }[] = [
@@ -16,29 +14,10 @@ const QUAD_CONFIG: { key: QuadKey; numeral: string; label: string; sub: string; 
   { key: 'q4', numeral: 'IV', label: 'Not Urgent & Not Important', sub: 'Eliminate', badgeStyle: { background: 'var(--color-neutral-300)', color: 'var(--color-neutral-800)' } },
 ];
 
-/** Maps a homework item's priority onto an Eisenhower quadrant so it surfaces on the matrix too. */
-const PRIORITY_QUAD: Record<Homework['priority'], QuadKey> = { high: 'q1', med: 'q2', low: 'q4' };
-/** Schoology items have no manual priority — fall back to due-date/ICS-priority urgency. */
-const URGENCY_QUAD: Record<Urgency, QuadKey> = { red: 'q1', yellow: 'q2', blue: 'q4' };
-
-interface HomeworkTaskRow {
-  source: 'homework';
-  classId: string;
-  hwId?: number;
-  uid?: string;
-  id: string;
-  title: string;
-  done: boolean;
-  dueDate: string | null;
-  listTag: string;
-  durationMin: null;
-  time: null;
-}
-
 export function MatrixPage() {
   const { tasks, addTask, removeTask, toggleDone, scheduleTask, unscheduleTask, toggleTaskLocked } = useMatrix();
-  const { classes, homework, toggleHomework, schoologyDone, toggleSchoologyHomeworkDone, classMappings, classKeywords } = useSchool();
-  const { assignments } = useSchoology();
+  const { toggleHomework, toggleSchoologyHomeworkDone } = useSchool();
+  const homeworkRows = useQuadrantHomework();
   const autoSchedule = useAutoSchedule();
   const [open, setOpen] = useState<Record<QuadKey, boolean>>({ q1: true, q2: true, q3: true, q4: true });
   const [dialogQuad, setDialogQuad] = useState<QuadKey | null>(null);
@@ -51,35 +30,6 @@ export function MatrixPage() {
     const scheduled = await autoSchedule({ title, dueDate: null, durationMin: durationMin ?? 30, link: null });
     if (scheduled.time) scheduleTask(qkey, id, scheduled.time);
   };
-
-  const classById = Object.fromEntries(classes.map((c) => [c.id, c]));
-  const mergedByClass = useMemo(() => {
-    const out: Record<string, MergedHomeworkItem[]> = {};
-    for (const c of classes) {
-      out[c.id] = mergeHomeworkForClass(c.id, homework[c.id] || [], assignments, classes, classMappings, classKeywords, schoologyDone);
-    }
-    return out;
-  }, [classes, homework, assignments, classMappings, classKeywords, schoologyDone]);
-
-  const homeworkRows: Record<QuadKey, HomeworkTaskRow[]> = { q1: [], q2: [], q3: [], q4: [] };
-  for (const [classId, items] of Object.entries(mergedByClass)) {
-    for (const hw of items) {
-      const quad = hw.source === 'manual' ? PRIORITY_QUAD[hw.priorityLabel!] : URGENCY_QUAD[hw.urgency];
-      homeworkRows[quad].push({
-        source: 'homework',
-        classId,
-        hwId: hw.homeworkId,
-        uid: hw.uid,
-        id: `hw-${hw.key}`,
-        title: hw.title,
-        done: hw.done,
-        dueDate: hw.due,
-        listTag: classById[classId]?.name ?? 'School',
-        durationMin: null,
-        time: null,
-      });
-    }
-  }
 
   return (
     <div className="page">
