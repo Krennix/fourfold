@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, type SchoolClass, type Preset } from '../state/SchoolContext';
-import { useGoogleAuth } from '../state/GoogleAuthContext';
+import { useGoogleAuth, type LinkedAccount } from '../state/GoogleAuthContext';
+import { GoogleCalendarPicker } from '../components/GoogleCalendarPicker';
 import { useSchoology } from '../state/SchoologyContext';
 import { useAuth } from '../state/AuthContext';
 import { allCategories, matchCategoryToClass } from '../lib/homeworkMerge';
@@ -23,33 +24,75 @@ function AccessSettings() {
   );
 }
 
+function AccountRow({ account }: { account: LinkedAccount }) {
+  const { reconnectAccount, disconnectAccount, updateAccountCalendars } = useGoogleAuth();
+  const [editing, setEditing] = useState(false);
+  const selectedCalendars = account.calendars.filter((c) => c.selected);
+
+  return (
+    <div className="class-row">
+      <div className="class-row-main">
+        <span className="class-row-name">{account.email}</span>
+        <span className="class-row-meta text-muted">
+          {account.status === 'error' && (account.error || 'Needs reconnecting')}
+          {account.status === 'connecting' && 'Connecting…'}
+          {account.status === 'signed-in' &&
+            (selectedCalendars.length > 0
+              ? selectedCalendars.map((c) => c.summary).join(', ')
+              : 'No calendars selected yet')}
+        </span>
+      </div>
+      <div className="class-row-actions">
+        {account.status === 'signed-in' && account.accessToken && (
+          <button className="btn btn-ghost" type="button" onClick={() => setEditing(true)}>Edit calendars</button>
+        )}
+        {account.status === 'error' && (
+          <button className="btn btn-ghost" type="button" onClick={() => reconnectAccount(account.email)}>Reconnect</button>
+        )}
+        <button className="btn btn-ghost" type="button" onClick={() => disconnectAccount(account.email)}>Disconnect</button>
+      </div>
+      {editing && account.accessToken && (
+        <GoogleCalendarPicker
+          accountEmail={account.email}
+          accessToken={account.accessToken}
+          initialSelection={account.calendars}
+          onCancel={() => setEditing(false)}
+          onSave={(calendars) => {
+            updateAccountCalendars(account.email, calendars);
+            setEditing(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 function GoogleCalendarSettings() {
-  const { status, email, error, connect, disconnect } = useGoogleAuth();
+  const { status, accounts, connecting, connectError, connectNewAccount, pendingPicker, dismissPendingPicker, updateAccountCalendars } = useGoogleAuth();
 
   return (
     <Widget>
       <div className="widget-head">
         <h4>Google Calendar</h4>
-        {status === 'signed-in' && <button className="btn btn-ghost" type="button" onClick={disconnect}>Disconnect</button>}
-        {(status === 'signed-out' || status === 'connecting' || status === 'error') && (
-          <button className="btn btn-primary" type="button" onClick={connect} disabled={status === 'connecting'}>
-            {status === 'connecting' ? 'Connecting…' : 'Connect Google Calendar'}
+        {status === 'ready' && (
+          <button className="btn btn-primary" type="button" onClick={connectNewAccount} disabled={connecting}>
+            {connecting ? 'Connecting…' : accounts.length > 0 ? 'Add another Google account' : 'Connect Google Calendar'}
           </button>
         )}
       </div>
 
-      {status === 'signed-in' && (
+      {status === 'ready' && accounts.length > 0 && (
+        <div className="class-list">
+          {accounts.map((account) => <AccountRow account={account} key={account.email} />)}
+        </div>
+      )}
+      {status === 'ready' && accounts.length === 0 && (
         <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-          Connected as <strong>{email ?? '…'}</strong>. Events on the Calendar page now read from and write to this account.
+          Not connected yet. The Calendar page falls back to a local, device-only schedule until you connect an account.
         </p>
       )}
-      {status === 'error' && error && (
-        <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>
-      )}
-      {status === 'signed-out' && (
-        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-          Not connected yet. The Calendar page falls back to a local, device-only schedule until you connect.
-        </p>
+      {connectError && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{connectError}</p>
       )}
       {status === 'unconfigured' && (
         <>
@@ -64,6 +107,16 @@ function GoogleCalendarSettings() {
             <li>Copy the client ID into a <code>.env</code> file at the project root as <code>VITE_GOOGLE_CLIENT_ID=&hellip;</code>, then restart the dev server.</li>
           </ol>
         </>
+      )}
+
+      {pendingPicker && (
+        <GoogleCalendarPicker
+          accountEmail={pendingPicker.email}
+          accessToken={pendingPicker.accessToken}
+          initialSelection={[]}
+          onCancel={dismissPendingPicker}
+          onSave={(calendars) => updateAccountCalendars(pendingPicker.email, calendars)}
+        />
       )}
     </Widget>
   );

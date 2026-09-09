@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useSchool } from '../state/SchoolContext';
-import { useCalendarEvents, type CalEvent, type EventExtras, type RepeatFreq } from '../state/CalendarContext';
+import { useCalendarEvents, type CalEvent, type EventExtras, type EventTarget, type RepeatFreq } from '../state/CalendarContext';
 import { MentionField } from './MentionField';
+
+const LOCAL_TARGET = 'local';
 
 function toDurationMin(startTime: string, endTime: string): number {
   const [sh, sm] = startTime.split(':').map(Number);
@@ -30,7 +32,14 @@ export function EventDialog({
   onClose: () => void;
 }) {
   const { classes } = useSchool();
-  const { events, addEvent, addRecurringEvent, updateEvent, removeEvent } = useCalendarEvents();
+  const { events, googleDestinations, addEvent, addRecurringEvent, updateEvent, removeEvent } = useCalendarEvents();
+
+  const [targetKeyValue, setTargetKeyValue] = useState(LOCAL_TARGET);
+  const target: EventTarget = useMemo(() => {
+    if (targetKeyValue === LOCAL_TARGET) return 'local';
+    const dest = googleDestinations.find((d) => `${d.accountEmail}:${d.calendarId}` === targetKeyValue);
+    return dest ? { accountEmail: dest.accountEmail, calendarId: dest.calendarId } : 'local';
+  }, [targetKeyValue, googleDestinations]);
 
   const [title, setTitle] = useState(editing?.title ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
@@ -62,20 +71,23 @@ export function EventDialog({
     const durationMin = allDay ? undefined : toDurationMin(startTime, endTime);
     const time = allDay ? '' : startTime;
     if (editing) {
-      updateEvent(editing.id, dateKey, title.trim(), time, durationMin, extras);
+      updateEvent(editing.id, dateKey, title.trim(), time, durationMin, extras, {
+        accountEmail: editing.accountEmail,
+        calendarId: editing.calendarId,
+      });
     } else if (repeat !== 'none' && repeatUntil >= date) {
       const [uy, um, ud] = repeatUntil.split('-').map(Number);
       const untilKey = `${uy}-${um - 1}-${ud}`;
-      addRecurringEvent(dateKey, untilKey, repeat, title.trim(), time, durationMin, extras);
+      addRecurringEvent(dateKey, untilKey, repeat, title.trim(), time, durationMin, extras, target);
     } else {
-      addEvent(dateKey, title.trim(), time, durationMin, extras);
+      addEvent(dateKey, title.trim(), time, durationMin, extras, target);
     }
     onClose();
   };
 
   const handleDelete = () => {
     if (!editing) return;
-    removeEvent(editing.id);
+    removeEvent(editing.id, { accountEmail: editing.accountEmail, calendarId: editing.calendarId });
     onClose();
   };
 
@@ -105,6 +117,19 @@ export function EventDialog({
                 <label>To</label>
                 <input className="input" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
               </div>
+            </div>
+          )}
+          {!editing && googleDestinations.length > 0 && (
+            <div className="field">
+              <label>Save to</label>
+              <select className="input" value={targetKeyValue} onChange={(e) => setTargetKeyValue(e.target.value)}>
+                <option value={LOCAL_TARGET}>Local only (this device)</option>
+                {googleDestinations.map((d) => (
+                  <option key={`${d.accountEmail}:${d.calendarId}`} value={`${d.accountEmail}:${d.calendarId}`}>
+                    {d.summary} ({d.accountEmail})
+                  </option>
+                ))}
+              </select>
             </div>
           )}
           {!editing && (

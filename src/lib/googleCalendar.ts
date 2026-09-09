@@ -1,17 +1,25 @@
-const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 const API_BASE = 'https://www.googleapis.com/calendar/v3';
 
-let tokenClient: ReturnType<NonNullable<Window['google']>['accounts']['oauth2']['initTokenClient']> | null = null;
-let tokenClientForId: string | null = null;
+type GoogleTokenClient = ReturnType<NonNullable<Window['google']>['accounts']['oauth2']['initTokenClient']>;
 
+const tokenClients = new Map<string, GoogleTokenClient>();
+
+/**
+ * One GIS token client per linked account, cached by account email (or a
+ * temporary key like 'new' while acquiring an as-yet-unknown account) so
+ * concurrently held tokens for different accounts don't clobber each other.
+ */
 export function getTokenClient(
+  key: string,
   clientId: string,
   onToken: (token: string, expiresInSeconds: number) => void,
   onError: (message: string) => void,
 ) {
   if (!window.google) throw new Error('Google Identity Services script has not loaded yet');
-  if (tokenClient && tokenClientForId === clientId) return tokenClient;
-  tokenClient = window.google.accounts.oauth2.initTokenClient({
+  const existing = tokenClients.get(key);
+  if (existing) return existing;
+  const client = window.google.accounts.oauth2.initTokenClient({
     client_id: clientId,
     scope: CALENDAR_SCOPE,
     callback: (response) => {
@@ -23,8 +31,12 @@ export function getTokenClient(
     },
     error_callback: (error) => onError(error.message || error.type),
   });
-  tokenClientForId = clientId;
-  return tokenClient;
+  tokenClients.set(key, client);
+  return client;
+}
+
+export function dropTokenClient(key: string) {
+  tokenClients.delete(key);
 }
 
 export function revokeToken(accessToken: string) {
@@ -53,6 +65,23 @@ export async function fetchPrimaryCalendarEmail(accessToken: string): Promise<st
   return data.id;
 }
 
+export interface GoogleCalendarListEntry {
+  id: string;
+  summary: string;
+  backgroundColor: string;
+  primary?: boolean;
+}
+
+export async function listCalendarList(accessToken: string): Promise<GoogleCalendarListEntry[]> {
+  const data = await calendarFetch(accessToken, '/users/me/calendarList');
+  return (data.items ?? []).map((item: Record<string, unknown>) => ({
+    id: item.id,
+    summary: (item.summary as string) ?? (item.id as string),
+    backgroundColor: (item.backgroundColor as string) ?? '#4285f4',
+    primary: item.primary === true,
+  }));
+}
+
 export interface GoogleCalendarEvent {
   id: string;
   summary: string;
@@ -62,7 +91,12 @@ export interface GoogleCalendarEvent {
   end: { dateTime?: string; date?: string };
 }
 
-export async function listEvents(accessToken: string, timeMin: Date, timeMax: Date): Promise<GoogleCalendarEvent[]> {
+export async function listEvents(
+  accessToken: string,
+  calendarId: string,
+  timeMin: Date,
+  timeMax: Date,
+): Promise<GoogleCalendarEvent[]> {
   const params = new URLSearchParams({
     timeMin: timeMin.toISOString(),
     timeMax: timeMax.toISOString(),
@@ -70,7 +104,7 @@ export async function listEvents(accessToken: string, timeMin: Date, timeMax: Da
     orderBy: 'startTime',
     maxResults: '250',
   });
-  const data = await calendarFetch(accessToken, `/calendars/primary/events?${params}`);
+  const data = await calendarFetch(accessToken, `/calendars/${encodeURIComponent(calendarId)}/events?${params}`);
   return data.items ?? [];
 }
 
@@ -83,9 +117,10 @@ export interface EventTiming {
 
 export async function insertEvent(
   accessToken: string,
+  calendarId: string,
   event: { summary: string; description?: string; location?: string } & EventTiming,
 ): Promise<GoogleCalendarEvent> {
-  return calendarFetch(accessToken, '/calendars/primary/events', {
+  return calendarFetch(accessToken, `/calendars/${encodeURIComponent(calendarId)}/events`, {
     method: 'POST',
     body: JSON.stringify({
       summary: event.summary,
@@ -97,16 +132,19 @@ export async function insertEvent(
   });
 }
 
-export async function deleteEvent(accessToken: string, eventId: string): Promise<void> {
-  await calendarFetch(accessToken, `/calendars/primary/events/${eventId}`, { method: 'DELETE' });
+export async function deleteEvent(accessToken: string, calendarId: string, eventId: string): Promise<void> {
+  await calendarFetch(accessToken, `/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function updateEvent(
   accessToken: string,
+  calendarId: string,
   eventId: string,
   event: { summary?: string; description?: string; location?: string } & Partial<EventTiming>,
 ): Promise<GoogleCalendarEvent> {
-  return calendarFetch(accessToken, `/calendars/primary/events/${eventId}`, {
+  return calendarFetch(accessToken, `/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`, {
     method: 'PATCH',
     body: JSON.stringify({
       ...(event.summary !== undefined ? { summary: event.summary } : {}),

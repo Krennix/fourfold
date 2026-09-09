@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Widget, PageHeader } from '../components/Widget';
-import { useCalendarEvents, type CalEvent } from '../state/CalendarContext';
+import { useCalendarEvents, eventKey, type CalEvent } from '../state/CalendarContext';
 import { useGoogleAuth } from '../state/GoogleAuthContext';
 import { EventDialog } from '../components/EventDialog';
 import './Calendar.css';
@@ -60,19 +61,20 @@ function DropTimeDialog({
 
 export function CalendarPage() {
   const { events, loading, error, refresh, updateEvent, toggleEventLocked } = useCalendarEvents();
-  const { status, email, connect, disconnect } = useGoogleAuth();
+  const { status, accounts } = useGoogleAuth();
+  const signedInCount = accounts.filter((a) => a.status === 'signed-in').length;
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [dialogDate, setDialogDate] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalEvent | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dropPrompt, setDropPrompt] = useState<{ event: CalEvent; dateKey: string } | null>(null);
 
   useEffect(() => {
-    if (status !== 'signed-in') return;
+    if (signedInCount === 0) return;
     refresh(new Date(viewYear, viewMonth, 1), new Date(viewYear, viewMonth + 1, 1));
-  }, [status, viewYear, viewMonth, refresh]);
+  }, [signedInCount, viewYear, viewMonth, refresh]);
 
   const prevMonth = () => {
     setViewMonth((m) => {
@@ -124,15 +126,14 @@ export function CalendarPage() {
                 Google Calendar not configured
               </span>
             )}
-            {status === 'error' && <span className="tag tag-outline">Google sync error</span>}
-            {(status === 'signed-out' || status === 'connecting') && (
-              <button className="btn btn-secondary" type="button" onClick={connect} disabled={status === 'connecting'}>
-                {status === 'connecting' ? 'Connecting…' : 'Connect Google Calendar'}
-              </button>
+            {status === 'ready' && signedInCount === 0 && (
+              <Link className="btn btn-secondary" to="/settings">Connect Google Calendar</Link>
             )}
-            {status === 'signed-in' && (
+            {status === 'ready' && signedInCount > 0 && (
               <>
-                <span className="tag tag-outline">{email ? `Synced with ${email}` : 'Synced with Google'}</span>
+                <span className="tag tag-outline">
+                  {signedInCount === 1 ? `Synced with ${accounts.find((a) => a.status === 'signed-in')?.email}` : `Synced with ${signedInCount} accounts`}
+                </span>
                 <button
                   className="btn btn-secondary"
                   type="button"
@@ -142,7 +143,7 @@ export function CalendarPage() {
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3" /><path d="M21 4v5h-5" /></svg>
                   {loading ? 'Syncing…' : 'Sync now'}
                 </button>
-                <button className="btn btn-ghost" type="button" onClick={disconnect}>Disconnect</button>
+                <Link className="btn btn-ghost" to="/settings">Manage</Link>
               </>
             )}
             <button className="btn btn-primary" type="button" onClick={() => setDialogDate(toISODate(realY, realM, realD))}>
@@ -171,20 +172,21 @@ export function CalendarPage() {
               className={`day-cell${c.cls ? ` ${c.cls}` : ''}${c.inMonth ? ' clickable' : ''}`}
               key={i}
               onClick={() => c.inMonth && typeof c.num === 'number' && setDialogDate(toISODate(year, month, c.num))}
-              onDragOver={(e) => { if (draggingId && dateKey) e.preventDefault(); }}
+              onDragOver={(e) => { if (draggingKey && dateKey) e.preventDefault(); }}
               onDrop={(e) => {
-                if (!draggingId || !dateKey) return;
+                if (!draggingKey || !dateKey) return;
                 e.preventDefault();
                 e.stopPropagation();
-                const dragged = events.find((ev) => ev.id === draggingId);
-                setDraggingId(null);
+                const dragged = events.find((ev) => eventKey(ev) === draggingKey);
+                setDraggingKey(null);
                 if (!dragged || dragged.locked || dragged.date === dateKey) return;
+                const source = { accountEmail: dragged.accountEmail, calendarId: dragged.calendarId };
                 if (dragged.allDay) {
                   updateEvent(dragged.id, dateKey, dragged.title, '', dragged.durationMin, {
                     description: dragged.description,
                     location: dragged.location,
                     allDay: true,
-                  });
+                  }, source);
                 } else {
                   setDropPrompt({ event: dragged, dateKey });
                 }
@@ -196,13 +198,16 @@ export function CalendarPage() {
                   {c.events.map((ev) => (
                     <span
                       className={`evt-chip${ev.cls ? ` ${ev.cls}` : ''}${ev.locked ? ' locked' : ''}`}
-                      key={ev.id}
+                      key={eventKey(ev)}
                       title={ev.locked ? 'Locked — set in stone. Click the lock to unlock.' : 'Click to edit'}
                       draggable={!ev.locked}
-                      onDragStart={(e) => { e.stopPropagation(); setDraggingId(ev.id); e.dataTransfer.effectAllowed = 'move'; }}
-                      onDragEnd={(e) => { e.stopPropagation(); setDraggingId(null); }}
+                      onDragStart={(e) => { e.stopPropagation(); setDraggingKey(eventKey(ev)); e.dataTransfer.effectAllowed = 'move'; }}
+                      onDragEnd={(e) => { e.stopPropagation(); setDraggingKey(null); }}
                       onClick={(e) => { e.stopPropagation(); setEditingEvent(ev); }}
-                      style={{ cursor: ev.locked ? 'default' : 'grab' }}
+                      style={{
+                        cursor: ev.locked ? 'default' : 'grab',
+                        ...(ev.calendarColor ? { borderLeft: `3px solid ${ev.calendarColor}` } : {}),
+                      }}
                     >
                       {ev.cls === 'google' && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="8" width="9" height="6" rx="3" /><rect x="10" y="10" width="9" height="6" rx="3" /></svg>}
                       {ev.time} {ev.title}
@@ -211,8 +216,8 @@ export function CalendarPage() {
                         role="button"
                         tabIndex={0}
                         title={ev.locked ? 'Unlock' : 'Lock in place — set in stone'}
-                        onClick={(e) => { e.stopPropagation(); toggleEventLocked(ev.id); }}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleEventLocked(ev.id); } }}
+                        onClick={(e) => { e.stopPropagation(); toggleEventLocked(ev.id, { accountEmail: ev.accountEmail, calendarId: ev.calendarId }); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleEventLocked(ev.id, { accountEmail: ev.accountEmail, calendarId: ev.calendarId }); } }}
                       >
                         {ev.locked ? (
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
@@ -244,7 +249,7 @@ export function CalendarPage() {
               description: dropPrompt.event.description,
               location: dropPrompt.event.location,
               allDay: false,
-            });
+            }, { accountEmail: dropPrompt.event.accountEmail, calendarId: dropPrompt.event.calendarId });
             setDropPrompt(null);
           }}
         />

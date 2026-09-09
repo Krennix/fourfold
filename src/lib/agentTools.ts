@@ -39,19 +39,22 @@ export async function executeWriteTool(call: AgentToolCall, deps: AgentToolDeps)
       const existing = calendar.events.find((e) => e.id === input.id);
       if (!existing) return { error: 'No such event.' };
       if (existing.locked) return { error: 'This event is locked ("set in stone") and cannot be moved. Ask the user to unlock it first.' };
+      const source = { accountEmail: existing.accountEmail, calendarId: existing.calendarId };
       const updated = await calendar.updateEvent(
         String(input.id),
         String(input.date),
         existing.title,
         String(input.time),
         existing.durationMin,
+        undefined,
+        source,
       );
       return updated ?? { error: 'Could not move the event.' };
     }
     case 'remove_event': {
       const existing = calendar.events.find((e) => e.id === input.id);
       if (existing?.locked) return { error: 'This event is locked ("set in stone") and cannot be deleted. Ask the user to unlock it first.' };
-      calendar.removeEvent(String(input.id));
+      calendar.removeEvent(String(input.id), existing ? { accountEmail: existing.accountEmail, calendarId: existing.calendarId } : undefined);
       return { ok: true };
     }
     case 'create_task': {
