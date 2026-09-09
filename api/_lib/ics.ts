@@ -43,6 +43,69 @@ function unescapeText(value: string): string {
   return value.replace(/\\n/gi, '\n').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\');
 }
 
+export interface IcsCalendarEvent {
+  uid: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  startISO: string;
+  endISO: string;
+  allDay: boolean;
+}
+
+/** Parses VEVENT blocks out of an ICS feed into full start/end calendar events (unlike
+ * `parseIcsEvents`, which only tracks a single due date for assignment-style feeds). Used for
+ * read-only Google Calendar "secret address" subscriptions. */
+export function parseIcsCalendarEvents(text: string): IcsCalendarEvent[] {
+  const lines = unfold(text);
+  const events: IcsCalendarEvent[] = [];
+  let current: Record<string, { value: string; params: Record<string, string> }> | null = null;
+
+  for (const line of lines) {
+    if (line === 'BEGIN:VEVENT') {
+      current = {};
+      continue;
+    }
+    if (line === 'END:VEVENT') {
+      if (current) {
+        const startRaw = current.DTSTART;
+        const start = startRaw ? parseDate(startRaw.value, startRaw.params) : null;
+        if (start) {
+          const endRaw = current.DTEND;
+          const end = endRaw ? parseDate(endRaw.value, endRaw.params) : null;
+          const uid = current.UID?.value ?? `${current.SUMMARY?.value ?? 'event'}-${start.iso}`;
+          events.push({
+            uid,
+            title: current.SUMMARY ? unescapeText(current.SUMMARY.value) : '(no title)',
+            description: current.DESCRIPTION ? unescapeText(current.DESCRIPTION.value) : null,
+            location: current.LOCATION ? unescapeText(current.LOCATION.value) : null,
+            startISO: start.iso,
+            endISO: end?.iso ?? start.iso,
+            allDay: start.allDay,
+          });
+        }
+      }
+      current = null;
+      continue;
+    }
+    if (!current) continue;
+
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
+    const rawKey = line.slice(0, colonIdx);
+    const value = line.slice(colonIdx + 1);
+    const [name, ...paramParts] = rawKey.split(';');
+    const params: Record<string, string> = {};
+    for (const part of paramParts) {
+      const [pk, pv] = part.split('=');
+      if (pk && pv) params[pk] = pv;
+    }
+    current[name.toUpperCase()] = { value, params };
+  }
+
+  return events;
+}
+
 /** Parses VEVENT blocks out of an ICS feed. Assignments without a start/due date are skipped. */
 export function parseIcsEvents(text: string): IcsEvent[] {
   const lines = unfold(text);

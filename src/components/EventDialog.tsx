@@ -34,7 +34,11 @@ export function EventDialog({
   const { classes } = useSchool();
   const { events, googleDestinations, addEvent, addRecurringEvent, updateEvent, removeEvent } = useCalendarEvents();
 
-  const [targetKeyValue, setTargetKeyValue] = useState(LOCAL_TARGET);
+  // Default new events to the first linked Google calendar (if any) rather than local-only —
+  // otherwise events silently never leave the device, which reads as "sync is broken".
+  const [targetKeyValue, setTargetKeyValue] = useState(() =>
+    googleDestinations.length > 0 ? `${googleDestinations[0].accountEmail}:${googleDestinations[0].calendarId}` : LOCAL_TARGET,
+  );
   const target: EventTarget = useMemo(() => {
     if (targetKeyValue === LOCAL_TARGET) return 'local';
     const dest = googleDestinations.find((d) => `${d.accountEmail}:${d.calendarId}` === targetKeyValue);
@@ -95,6 +99,11 @@ export function EventDialog({
     <div className="dialog-backdrop" onClick={onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
         <div className="dialog-title">{editing ? 'Edit event' : 'Add event'}</div>
+        {editing?.source === 'ics' && (
+          <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+            This event comes from a read-only calendar feed — edit or delete it in Google Calendar instead.
+          </p>
+        )}
 
         <div className="event-dialog-timing">
           <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-end' }}>
@@ -184,8 +193,8 @@ export function EventDialog({
             <button
               className="btn btn-danger"
               type="button"
-              disabled={!!editing.locked}
-              title={editing.locked ? 'Locked — unlock it first to delete' : undefined}
+              disabled={!!editing.locked || editing.source === 'ics'}
+              title={editing.source === 'ics' ? 'Read-only feed event' : editing.locked ? 'Locked — unlock it first to delete' : undefined}
               onClick={handleDelete}
               style={{ marginRight: 'auto' }}
             >
@@ -193,7 +202,7 @@ export function EventDialog({
             </button>
           )}
           <button className="btn btn-secondary" type="button" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" type="button" disabled={!canSave} onClick={handleSave}>Save</button>
+          <button className="btn btn-primary" type="button" disabled={!canSave || editing?.source === 'ics'} onClick={handleSave}>Save</button>
         </div>
       </div>
     </div>

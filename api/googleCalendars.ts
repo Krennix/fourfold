@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
 import { verifySession } from './_lib/session.js';
+import { revokeGoogleToken } from './_lib/googleOAuth.js';
+import { deleteRefreshToken } from './_lib/googleTokens.js';
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL ?? '',
@@ -63,6 +65,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(400).json({ error: 'Malformed linked-calendars payload.' });
       return;
     }
+    await redis.set(key, { accounts });
+    res.status(200).json({ accounts });
+    return;
+  }
+
+  if (req.method === 'DELETE') {
+    const googleEmail = typeof req.query.email === 'string' ? req.query.email : null;
+    if (!googleEmail) {
+      res.status(400).json({ error: 'Missing email' });
+      return;
+    }
+    const refreshToken = await deleteRefreshToken(email, googleEmail);
+    if (refreshToken) await revokeGoogleToken(refreshToken);
+    const stored = (await redis.get<{ accounts: LinkedGoogleAccount[] }>(key)) ?? null;
+    const accounts = (stored?.accounts ?? []).filter((a) => a.email !== googleEmail);
     await redis.set(key, { accounts });
     res.status(200).json({ accounts });
     return;
