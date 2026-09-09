@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listCalendarList } from '../lib/googleCalendar';
 import type { LinkedCalendar } from '../state/GoogleAuthContext';
+import './GoogleCalendarPicker.css';
 
 /**
  * Modal for choosing which of a Google account's calendars to sync. Rendered right after an
@@ -54,24 +55,27 @@ export function GoogleCalendarPicker({
 
   return (
     <div className="dialog-backdrop" onClick={onCancel}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="dialog-title">Choose calendars for {accountEmail}</div>
-        {loading && <p className="text-muted" style={{ fontSize: 12.5 }}>Loading calendars…</p>}
-        {error && <p className="text-muted" style={{ fontSize: 12.5, color: 'var(--danger, #c0392b)' }}>{error}</p>}
+      <div className="dialog gcal-dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="gcal-header">
+          <div className="gcal-icon" aria-hidden="true">📅</div>
+          <div className="gcal-heading">
+            <div className="dialog-title">Choose calendars to sync</div>
+            <span className="gcal-subtitle">{accountEmail}</span>
+          </div>
+        </div>
+
+        {loading && <p className="gcal-status">Loading calendars…</p>}
+        {error && <p className="gcal-status" style={{ color: 'var(--danger, #c0392b)' }}>{error}</p>}
         {!loading && !error && (
-          <div className="class-list">
+          <div className="gcal-list">
             {calendars.map((c) => (
-              <label className="class-row" key={c.id} style={{ cursor: 'pointer' }}>
-                <div className="class-row-main" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input type="checkbox" checked={c.selected} onChange={() => toggle(c.id)} />
-                  <span className="class-row-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: c.color, display: 'inline-block' }} />
-                    {c.summary}
-                  </span>
-                </div>
+              <label className="gcal-row" key={c.id}>
+                <input type="checkbox" checked={c.selected} onChange={() => toggle(c.id)} />
+                <span className="gcal-dot" style={{ background: c.color }} />
+                <span className="gcal-name">{c.summary}</span>
               </label>
             ))}
-            {calendars.length === 0 && <div className="empty-msg">No calendars found on this account.</div>}
+            {calendars.length === 0 && <div className="gcal-status">No calendars found on this account.</div>}
           </div>
         )}
         <div className="dialog-actions">
