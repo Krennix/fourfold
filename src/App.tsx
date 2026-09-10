@@ -8,6 +8,7 @@ import { SchoologyProvider } from './state/SchoologyContext';
 import { HabitsProvider } from './state/HabitsContext';
 import { MatrixProvider } from './state/MatrixContext';
 import { GoogleAuthProvider } from './state/GoogleAuthContext';
+import { SpotifyAuthProvider } from './state/SpotifyAuthContext';
 import { GoogleIcsProvider } from './state/GoogleIcsContext';
 import { CalendarProvider } from './state/CalendarContext';
 import { CountdownsProvider } from './state/CountdownsContext';
@@ -36,6 +37,7 @@ function App() {
           <CalendarProvider>
             <CountdownsProvider>
             <PomodoroProvider>
+            <SpotifyAuthProvider>
             <AgentProvider>
               <BrowserRouter>
                 <Sidebar />
@@ -54,6 +56,7 @@ function App() {
                 </main>
               </BrowserRouter>
             </AgentProvider>
+            </SpotifyAuthProvider>
             </PomodoroProvider>
             </CountdownsProvider>
           </CalendarProvider>

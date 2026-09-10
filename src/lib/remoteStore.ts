@@ -69,8 +69,9 @@ export function useRemoteState<T>(
   initial: T,
   onExpired: () => void,
   legacyKey?: string,
-): [T, (updater: T | ((prev: T) => T)) => void] {
+): [T, (updater: T | ((prev: T) => T)) => void, boolean] {
   const [value, setValueState] = useState<T>(initial);
+  const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -79,6 +80,7 @@ export function useRemoteState<T>(
       if (cancelled) return;
       if (remote !== null) {
         setValueState(remote);
+        setLoaded(true);
         return;
       }
       const legacy = legacyKey ? readLegacyLocalValue<T>(legacyKey) : null;
@@ -86,6 +88,7 @@ export function useRemoteState<T>(
         setValueState(legacy);
         void saveRemote(namespace, legacy, onExpired);
       }
+      setLoaded(true);
     });
     return () => {
       cancelled = true;
@@ -107,5 +110,5 @@ export function useRemoteState<T>(
     [namespace, onExpired],
   );
 
-  return [value, setValue];
+  return [value, setValue, loaded];
 }

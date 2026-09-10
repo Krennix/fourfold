@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Widget } from '../components/Widget';
+import { SpotifyWidget } from '../components/SpotifyWidget';
 import { usePomodoro, POMODORO_MODES as MODES, POMODORO_MODE_LABELS as MODE_LABELS, type PomodoroMode as Mode } from '../state/PomodoroContext';
 import './Pomodoro.css';
 
@@ -313,6 +314,8 @@ export function PomodoroPage() {
           </div>
         )}
       </Widget>
+
+      <SpotifyWidget />
     </div>
   );
 }
