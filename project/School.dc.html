@@ -32,6 +32,10 @@
 .pill-med{background:var(--color-accent-300);color:var(--color-accent-800)}
 .pill-low{background:var(--color-neutral-200);color:var(--color-neutral-800)}
 .empty-msg{font-size:12px;color:color-mix(in srgb, var(--color-text) 40%, transparent);text-align:center;padding:var(--space-4) 0}
+.time-col{position:relative;grid-column:1/2;display:flex;flex-direction:column}
+.now-time{position:absolute;right:6px;width:50px;text-align:right;transform:translateY(-50%);font-size:10px;font-weight:700;color:var(--now-color, #f04949);white-space:nowrap}
+.now-dot{position:absolute;right:-4px;width:7px;height:7px;border-radius:50%;background:var(--now-color, #f04949);transform:translate(50%,-50%);z-index:6}
+.now-line{position:absolute;left:0;right:0;height:2px;background:var(--now-color, #f04949);transform:translateY(-50%);z-index:6}
 </style>
 </helmet>
 <div style="display:flex;min-height:100vh;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
@@ -50,8 +54,12 @@
     <div class="week-grid">
       <div></div>
       <sc-for list="{{ dayLabels }}" as="d" hint-placeholder-count="5"><div class="week-head">{{ d }}</div></sc-for>
-      <div style="grid-column:1/2;display:flex;flex-direction:column">
+      <div class="time-col">
         <sc-for list="{{ hourLabels }}" as="h" hint-placeholder-count="10"><div class="time-label" style="height:56px">{{ h }}</div></sc-for>
+        <sc-if value="{{ showNowLine }}" hint-placeholder-val="{{ false }}">
+          <span class="now-time" style="top:{{ nowTopPct }}%">{{ nowLabel }}</span>
+          <span class="now-dot" style="top:{{ nowTopPct }}%"></span>
+        </sc-if>
       </div>
       <sc-for list="{{ dayColumns }}" as="col" hint-placeholder-count="5">
         <div class="day-col">
@@ -62,6 +70,9 @@
               <sc-if value="{{ c.hasHomework }}" hint-placeholder-val="{{ false }}"><span class="cb-hw"></span></sc-if>
             </div>
           </sc-for>
+          <sc-if value="{{ col.showNow }}" hint-placeholder-val="{{ false }}">
+            <div class="now-line" style="top:{{ nowTopPct }}%"></div>
+          </sc-if>
         </div>
       </sc-for>
     </div>
@@ -177,6 +188,14 @@ class Component extends DCLogic {
     };
 
     const totalHours = END_HOUR - START_HOUR;
+
+    const now = new Date();
+    const nowHour = now.getHours() + now.getMinutes() / 60;
+    const todayName = DAYS[now.getDay() - 1];
+    const showNowLine = !!todayName && nowHour >= START_HOUR && nowHour <= END_HOUR;
+    const nowTopPct = showNowLine ? ((nowHour - START_HOUR) / totalHours) * 100 : 0;
+    const nowLabel = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
     const dayColumns = DAYS.map(day => {
       const classes = this.state.classes.filter(c => c.days.includes(day)).map(c => {
         const topPct = ((c.start - START_HOUR) / totalHours) * 100;
@@ -191,7 +210,7 @@ class Component extends DCLogic {
           open: () => this.openClass(c.id),
         };
       });
-      return { day, classes };
+      return { day, classes, showNow: showNowLine && day === todayName };
     });
 
     const openClassId = this.state.openClassId;
@@ -204,6 +223,7 @@ class Component extends DCLogic {
 
     return {
       dayLabels: DAYS, hourLabels, dayColumns,
+      showNowLine, nowTopPct, nowLabel,
       panelClass, panelHomework, noHomework: cls ? panelHomework.length === 0 : false,
       closePanel: () => this.closePanel(), stop: (e) => this.stop(e), addHomework: () => this.addHomework(),
       titleRef, dueRef, priorityRef,
