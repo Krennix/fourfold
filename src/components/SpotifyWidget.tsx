@@ -32,8 +32,10 @@ export function SpotifyWidget() {
   const [error, setError] = useState<string | null>(null);
   const [inTabPlayer, setInTabPlayer] = useState<BrowserPlayerHandle | null>(null);
   const [switchingDevice, setSwitchingDevice] = useState(false);
+  const [controlBusy, setControlBusy] = useState(false);
   const playerRef = useRef<BrowserPlayerHandle | null>(null);
   const syncRef = useRef<{ progressMs: number; atMs: number } | null>(null);
+  const suppressPollUntilRef = useRef(0);
 
   const withRetry = useCallback(
     async <T,>(fn: (accessToken: string) => Promise<T>): Promise<T | null> => {
@@ -60,6 +62,9 @@ export function SpotifyWidget() {
     }
     let cancelled = false;
     const poll = async () => {
+      // Right after a control action, Spotify's own state takes a moment to catch up —
+      // skip this tick rather than briefly showing (or erroring on) stale data.
+      if (Date.now() < suppressPollUntilRef.current) return;
       try {
         const next = await withRetry((token) => getPlaybackState(token));
         if (!cancelled) {
@@ -141,21 +146,39 @@ export function SpotifyWidget() {
   };
 
   const handleTogglePlay = async () => {
+    if (controlBusy) return;
+    setControlBusy(true);
+    // Hold off the background poll for a second so it doesn't stomp on the optimistic
+    // state below with Spotify's not-yet-updated playback state.
+    suppressPollUntilRef.current = Date.now() + 1000;
     try {
       if (state?.isPlaying) await withRetry((token) => pause(token));
       else await withRetry((token) => play(token));
       setState((prev) => (prev ? { ...prev, isPlaying: !prev.isPlaying } : prev));
+      setError(null);
     } catch (err) {
       setError(err instanceof SpotifyPlaybackError ? 'No active Spotify device — open Spotify somewhere or play in this tab.' : 'Could not control playback.');
+    } finally {
+      setControlBusy(false);
     }
   };
 
   const handleSkip = async (dir: 'next' | 'prev') => {
+    if (controlBusy) return;
+    setControlBusy(true);
+    suppressPollUntilRef.current = Date.now() + 1000;
     try {
       await withRetry((token) => (dir === 'next' ? skipNext(token) : skipPrevious(token)));
+      setError(null);
     } catch {
       setError('Could not skip track.');
+    } finally {
+      setControlBusy(false);
     }
+  };
+
+  const openLibrary = () => {
+    window.open('https://open.spotify.com/collection/tracks', '_blank', 'noopener');
   };
 
   if (!connected) {
@@ -228,18 +251,21 @@ export function SpotifyWidget() {
       )}
 
       <div className="spotify-controls">
-        <button className="btn btn-secondary btn-icon spotify-skip-btn" type="button" onClick={() => handleSkip('prev')} aria-label="Previous track">
+        <button className="btn btn-secondary btn-icon spotify-skip-btn" type="button" onClick={() => handleSkip('prev')} disabled={controlBusy} aria-label="Previous track">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 20 9 12l10-8v16Z" /><path d="M5 19V5" /></svg>
         </button>
-        <button className="spotify-play-btn" type="button" onClick={handleTogglePlay} aria-label={state?.isPlaying ? 'Pause' : 'Play'}>
+        <button className="spotify-play-btn" type="button" onClick={handleTogglePlay} disabled={controlBusy} aria-label={state?.isPlaying ? 'Pause' : 'Play'}>
           {state?.isPlaying ? (
             <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
           ) : (
             <svg viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 2 }}><path d="m7 4 13 8-13 8z" /></svg>
           )}
         </button>
-        <button className="btn btn-secondary btn-icon spotify-skip-btn" type="button" onClick={() => handleSkip('next')} aria-label="Next track">
+        <button className="btn btn-secondary btn-icon spotify-skip-btn" type="button" onClick={() => handleSkip('next')} disabled={controlBusy} aria-label="Next track">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4l10 8-10 8V4Z" /><path d="M19 5v14" /></svg>
+        </button>
+        <button className="btn btn-secondary btn-icon spotify-skip-btn" type="button" onClick={openLibrary} aria-label="Open your Spotify library">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
         </button>
       </div>
 
