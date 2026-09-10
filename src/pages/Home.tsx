@@ -266,9 +266,14 @@ export function HomePage() {
               {habits.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No habits yet.</div>}
               {habits.map((h) => (
                 <div className="habit-row" key={h.id}>
-                  <div className={`habit-check${h.done ? ' done' : ''}`} onClick={() => toggleHabit(h.id)}>
-                    {h.done && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-                  </div>
+                  <button
+                    type="button"
+                    className={`habit-done-btn${h.done ? ' done' : ''}`}
+                    onClick={() => toggleHabit(h.id)}
+                  >
+                    {h.done && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+                    {h.done ? 'Done' : 'Mark done'}
+                  </button>
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
                     <span style={{ fontSize: 14 }}>{h.name}</span>
                     {h.quote && <span className="habit-quote">"{h.quote}"</span>}
