@@ -56,6 +56,12 @@ export function SchoolPage() {
   const [menuDate, setMenuDate] = useState<string | null>(null);
   const [bellSchedules, setBellSchedules] = useState<Record<string, BellSchedule | null>>({});
   const [nextMeetingDate, setNextMeetingDate] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const titleRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -205,17 +211,26 @@ export function SchoolPage() {
       blocks = [];
     }
 
+    const nowHour = now.getHours() + now.getMinutes() / 60;
+    const isToday = isSameDate(date, now);
+
     const positioned = [...blocks]
       .sort((a, b) => a.start - b.start)
       .map((b) => {
         const topPct = ((b.start - START_HOUR) / totalHours) * 100;
         const heightPct = ((b.end - b.start) / totalHours) * 100;
         const openItems = (mergedByClass[b.classId] || []).filter((h) => !h.done);
+        const inProgress = isToday && nowHour >= b.start && nowHour < b.end;
+        const nowLinePct = inProgress ? ((nowHour - b.start) / (b.end - b.start)) * 100 : 0;
+        const minutesLeft = inProgress ? Math.max(0, Math.round((b.end - nowHour) * 60)) : 0;
         return {
           ...b,
           time: `${fmtHour(b.start)}–${fmtHour(b.end)}`,
           posStyle: { top: `${topPct}%`, height: `${heightPct}%` },
           badge: classBadge(openItems),
+          inProgress,
+          nowLinePct,
+          minutesLeft,
         };
       });
 
@@ -334,10 +349,16 @@ export function SchoolPage() {
                 </div>
               ))}
               {col.classes.map((c) => (
-                <div className="class-block" style={c.posStyle} onClick={() => setOpenClassId(c.classId)} key={`${col.key}-${c.classId}-${c.start}`}>
+                <div className={`class-block${c.inProgress ? ' in-progress' : ''}`} style={c.posStyle} onClick={() => setOpenClassId(c.classId)} key={`${col.key}-${c.classId}-${c.start}`}>
                   <span className="cb-name">{c.name}</span>
                   <span className="cb-meta">{c.time} &middot; {c.room}</span>
                   {c.badge && <span className={`cb-hw cb-hw-${c.badge.color}`}>{c.badge.count}</span>}
+                  {c.inProgress && (
+                    <div className="now-indicator" style={{ top: `${c.nowLinePct}%` }}>
+                      <span className="now-dot" />
+                      <span className="now-label">{c.minutesLeft} min left</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

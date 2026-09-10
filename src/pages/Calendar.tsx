@@ -104,9 +104,22 @@ function DayAgenda({
 }) {
   const { eventsByDate } = useCalendarEvents();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
   const dayEvents = eventsByDate(dayKey);
   const allDayEvents = dayEvents.filter((e) => e.allDay);
-  const timedEvents = dayEvents.filter((e) => !e.allDay);
+  const isToday = parseKey(dayKey).toDateString() === now.toDateString();
+  const nowHour = now.getHours() + now.getMinutes() / 60;
+  const timedEvents = dayEvents.filter((e) => !e.allDay).map((ev) => {
+    if (!isToday || !ev.durationMin) return { ...ev, inProgress: false, minutesLeft: 0 };
+    const start = (() => { const [h, m] = to24h(ev.time).split(':').map(Number); return h + m / 60; })();
+    const end = start + ev.durationMin / 60;
+    const inProgress = nowHour >= start && nowHour < end;
+    return { ...ev, inProgress, minutesLeft: inProgress ? Math.max(0, Math.round((end - nowHour) * 60)) : 0 };
+  });
   const label = parseKey(dayKey).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
   const menuItems: ContextMenuItem[] = [
@@ -175,7 +188,7 @@ function DayAgenda({
         <div className="day-view-list">
           {timedEvents.map((ev) => (
             <div
-              className={`day-view-event${ev.locked ? ' locked' : ''}`}
+              className={`day-view-event${ev.locked ? ' locked' : ''}${ev.inProgress ? ' in-progress' : ''}`}
               key={eventKey(ev)}
               onClick={() => onEditEvent(ev)}
               style={chipColorStyle(ev)}
@@ -184,6 +197,7 @@ function DayAgenda({
               <span className="day-view-event-time">{ev.time}</span>
               <span className="day-view-event-title">{ev.title}</span>
               {ev.location && <span className="day-view-event-loc">{ev.location}</span>}
+              {ev.inProgress && <span className="now-chip"><span className="now-dot" />{ev.minutesLeft} min left</span>}
               <span
                 className="evt-lock"
                 role="button"
