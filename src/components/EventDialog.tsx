@@ -18,6 +18,12 @@ function addMinutesToTime(time: string, minutes: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
+/** Fixed palette for event color-tagging — independent of source (local, Google, ICS). */
+export const EVENT_COLORS = [
+  '#e0575b', '#e2984a', '#dbb349', '#6fae63',
+  '#4a9d8f', '#5980a6', '#7c6ecb', '#c25fa8',
+];
+
 /**
  * Create/edit dialog for a calendar event. `initialDate` (YYYY-MM-DD) pre-fills the date, e.g.
  * when opened by clicking a day cell rather than the generic "Add event" button.
@@ -56,6 +62,7 @@ export function EventDialog({
       ? addMinutesToTime(to24h(editing.time), editing.durationMin)
       : '10:00',
   );
+  const [color, setColor] = useState(editing?.color ?? '');
   const [repeat, setRepeat] = useState<'none' | RepeatFreq>('none');
   const [repeatUntil, setRepeatUntil] = useState(initialDate);
 
@@ -71,7 +78,7 @@ export function EventDialog({
     if (!canSave) return;
     const [y, m, d] = date.split('-').map(Number);
     const dateKey = `${y}-${m - 1}-${d}`;
-    const extras: EventExtras = { description: description.trim(), location: location.trim(), allDay };
+    const extras: EventExtras = { description: description.trim(), location: location.trim(), allDay, color };
     const durationMin = allDay ? undefined : toDurationMin(startTime, endTime);
     const time = allDay ? '' : startTime;
     if (editing) {
@@ -187,6 +194,28 @@ export function EventDialog({
           <datalist id="event-location-options">
             {locationSuggestions.map((loc) => <option value={loc} key={loc} />)}
           </datalist>
+        </div>
+
+        <div className="field">
+          <label>Color</label>
+          <div className="color-swatches">
+            <button
+              type="button"
+              className={`color-swatch color-swatch-none${color === '' ? ' selected' : ''}`}
+              title="Default"
+              onClick={() => setColor('')}
+            />
+            {EVENT_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={`color-swatch${color === c ? ' selected' : ''}`}
+                style={{ background: c }}
+                title={c}
+                onClick={() => setColor(c)}
+              />
+            ))}
+          </div>
         </div>
 
         <div className="dialog-actions">
