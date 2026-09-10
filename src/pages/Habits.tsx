@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { StreakFire } from '../components/StreakFire';
-import { StreakCelebration } from '../components/StreakCelebration';
 import { CountdownIcon, COUNTDOWN_TYPE_LABELS } from '../components/CountdownIcon';
 import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
 import { CountdownDialog } from '../components/CountdownDialog';
@@ -40,20 +39,6 @@ function daysLabel(days: number) {
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function overallStreak(habits: { history: string[] }[]) {
-  if (habits.length === 0) return 0;
-  let streak = 0;
-  for (let i = 0; i < 3650; i++) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i);
-    const key = dateKey(d);
-    const doneThatDay = habits.filter((h) => (h.history || []).includes(key)).length;
-    if (doneThatDay / habits.length >= 0.8) streak++;
-    else break;
-  }
-  return streak;
-}
 
 export function HabitsPage() {
   const { habits, addHabit, removeHabit, toggleHabit, updateHabit } = useHabits();
@@ -135,17 +120,6 @@ export function HabitsPage() {
   });
 
   const doneCount = habits.filter((h) => h.done).length;
-
-  const lastStreakRef = useRef<number | null>(null);
-  const [celebrationStreak, setCelebrationStreak] = useState<number | null>(null);
-  useEffect(() => {
-    const current = overallStreak(habits);
-    if (lastStreakRef.current !== null && current > lastStreakRef.current) {
-      setCelebrationStreak(current);
-    }
-    lastStreakRef.current = current;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [habits]);
 
   const selected = habits.find((h) => h.id === selectedHabitId) || habits[0];
   const totalDays = 364;
@@ -340,10 +314,6 @@ export function HabitsPage() {
           </div>
         )}
       </Widget>
-
-      {celebrationStreak !== null && (
-        <StreakCelebration streak={celebrationStreak} onClose={() => setCelebrationStreak(null)} />
-      )}
 
       {cdMenu && <ContextMenu x={cdMenu.x} y={cdMenu.y} items={cdMenuItems} onClose={() => setCdMenu(null)} />}
 
