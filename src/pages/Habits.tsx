@@ -207,9 +207,14 @@ export function HabitsPage() {
           {habits.length === 0 && <div className="empty-msg">No habits yet — add one to start tracking.</div>}
           {habits.map((h) => (
             <div className="habit-row" key={h.id}>
-              <div className={`habit-check${h.done ? ' done' : ''}`} onClick={() => toggleHabit(h.id)}>
+              <button
+                type="button"
+                className={`habit-done-btn${h.done ? ' done' : ''}`}
+                onClick={() => toggleHabit(h.id)}
+              >
                 {h.done && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-              </div>
+                {h.done ? 'Done' : 'Mark done'}
+              </button>
               <div
                 style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1, cursor: 'pointer' }}
                 onClick={() => openEditDialog(h.id)}

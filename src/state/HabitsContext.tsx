@@ -12,9 +12,25 @@ export interface Habit {
   history: string[];
 }
 
-function todayKey() {
-  const d = new Date();
+function dateKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function todayKey() {
+  return dateKey(new Date());
+}
+
+function computeStreak(history: string[]): number {
+  const set = new Set(history);
+  const today = new Date();
+  let streak = 0;
+  for (let i = 0; i < 3650; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    if (!set.has(dateKey(d))) break;
+    streak++;
+  }
+  return streak;
 }
 
 interface HabitsContextValue {
@@ -29,7 +45,15 @@ const HabitsContext = createContext<HabitsContextValue | null>(null);
 
 export function HabitsProvider({ children }: { children: ReactNode }) {
   const { handleSessionExpired } = useAuth();
-  const [habits, setHabits] = useRemoteState<Habit[]>('habits', [], handleSessionExpired, 'fourfold.habits.v1');
+  const [rawHabits, setHabits] = useRemoteState<Habit[]>('habits', [], handleSessionExpired, 'fourfold.habits.v1');
+
+  // `done` and `streak` are derived from `history` on every read instead of being
+  // trusted from storage, since a persisted `done` flag would never reset when a
+  // new day starts and would silently desync the streak count.
+  const habits = rawHabits.map((h) => {
+    const history = h.history || [];
+    return { ...h, done: history.includes(todayKey()), streak: computeStreak(history) };
+  });
 
   const addHabit: HabitsContextValue['addHabit'] = (name, time, quote) => {
     setHabits((prev) => [...prev, { id: `habit-${Date.now()}`, name, time, quote, streak: 0, done: false, history: [] }]);
@@ -45,10 +69,10 @@ export function HabitsProvider({ children }: { children: ReactNode }) {
     setHabits((prev) =>
       prev.map((h) => {
         if (h.id !== id) return h;
-        const done = !h.done;
         const prevHistory = h.history || [];
-        const history = done ? [...prevHistory, key] : prevHistory.filter((d) => d !== key);
-        return { ...h, done, history, streak: done ? h.streak + 1 : Math.max(0, h.streak - 1) };
+        const doneToday = prevHistory.includes(key);
+        const history = doneToday ? prevHistory.filter((d) => d !== key) : [...prevHistory, key];
+        return { ...h, history };
       }),
     );
   };

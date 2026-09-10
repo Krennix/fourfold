@@ -69,13 +69,16 @@
 .event-time { font-family: var(--font-heading); font-size: 12px; color: color-mix(in srgb, var(--color-text) 60%, transparent); }
 
 .habit-row { display: flex; align-items: center; gap: var(--space-2); padding: 6px 0; }
-.habit-check {
-  width: 20px; height: 20px; flex: none;
-  border: 1.5px solid var(--color-divider); border-radius: var(--radius-sm);
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
+.habit-done-btn {
+  flex: none; display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px; font-size: 12px; font-weight: 500;
+  border: 1.5px solid var(--color-divider); border-radius: var(--radius-full, 999px);
+  background: transparent; color: var(--color-text); cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
-.habit-check.done { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
-.habit-check svg { width: 13px; height: 13px; }
+.habit-done-btn:hover { border-color: var(--color-accent); }
+.habit-done-btn.done { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
+.habit-done-btn svg { width: 13px; height: 13px; }
 .streak { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--color-accent-700); white-space: nowrap; }
 .streak svg { width: 12px; height: 12px; }
 .habit-quote {
