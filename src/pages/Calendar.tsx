@@ -38,6 +38,13 @@ function chipColorStyle(ev: CalEvent): CSSProperties {
   return { borderLeft: `3px solid ${c}`, background: `color-mix(in srgb, ${c} 16%, var(--color-surface))` };
 }
 
+/** Same idea as chipColorStyle, tinted for the all-day chip/banner background instead. */
+function allDayChipStyle(ev: CalEvent): CSSProperties {
+  const c = ev.color || ev.calendarColor;
+  if (!c) return {};
+  return { background: `color-mix(in srgb, ${c} 30%, var(--color-allday))`, borderLeft: `3px solid ${c}` };
+}
+
 function parseKey(key: string): Date {
   const [y, m, d] = key.split('-').map(Number);
   return new Date(y, m, d);
@@ -137,7 +144,7 @@ function DayAgenda({
                 className={`evt-chip allday${ev.locked ? ' locked' : ''}`}
                 key={eventKey(ev)}
                 onClick={() => onEditEvent(ev)}
-                style={ev.color ? { background: `color-mix(in srgb, ${ev.color} 30%, var(--color-allday))`, borderLeft: `3px solid ${ev.color}` } : {}}
+                style={allDayChipStyle(ev)}
                 title="Click to edit"
               >
                 {ev.title}
@@ -383,7 +390,7 @@ export function CalendarPage() {
                           key={eventKey(ev)}
                           title={ev.locked ? 'Locked — set in stone.' : `${ev.title} (all day) — click to edit`}
                           onClick={(e) => { e.stopPropagation(); setEditingEvent(ev); }}
-                          style={ev.color ? { background: `color-mix(in srgb, ${ev.color} 30%, var(--color-allday))`, borderLeft: `3px solid ${ev.color}` } : {}}
+                          style={allDayChipStyle(ev)}
                         >
                           {ev.title}
                         </span>

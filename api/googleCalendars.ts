@@ -20,6 +20,7 @@ interface LinkedCalendar {
   summary: string;
   color: string;
   selected: boolean;
+  colorOverride?: string;
 }
 
 interface LinkedGoogleAccount {
@@ -34,7 +35,8 @@ function isLinkedCalendar(value: unknown): value is LinkedCalendar {
     typeof c.id === 'string' &&
     typeof c.summary === 'string' &&
     typeof c.color === 'string' &&
-    typeof c.selected === 'boolean'
+    typeof c.selected === 'boolean' &&
+    (c.colorOverride === undefined || typeof c.colorOverride === 'string')
   );
 }
 

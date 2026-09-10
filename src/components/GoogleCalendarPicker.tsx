@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listCalendarList } from '../lib/googleCalendar';
 import type { LinkedCalendar } from '../state/GoogleAuthContext';
+import { ColorSwatchPicker } from './ColorSwatches';
 import './GoogleCalendarPicker.css';
 
 /**
@@ -31,13 +32,14 @@ export function GoogleCalendarPicker({
     listCalendarList(accessToken)
       .then((items) => {
         if (cancelled) return;
-        const known = new Map(initialSelection.map((c) => [c.id, c.selected]));
+        const known = new Map(initialSelection.map((c) => [c.id, { selected: c.selected, colorOverride: c.colorOverride }]));
         setCalendars(
           items.map((item) => ({
             id: item.id,
             summary: item.summary,
             color: item.backgroundColor,
-            selected: known.get(item.id) ?? item.primary === true,
+            selected: known.get(item.id)?.selected ?? item.primary === true,
+            colorOverride: known.get(item.id)?.colorOverride,
           })),
         );
       })
@@ -51,6 +53,10 @@ export function GoogleCalendarPicker({
 
   const toggle = (id: string) => {
     setCalendars((prev) => prev.map((c) => (c.id === id ? { ...c, selected: !c.selected } : c)));
+  };
+
+  const setColorOverride = (id: string, color: string) => {
+    setCalendars((prev) => prev.map((c) => (c.id === id ? { ...c, colorOverride: color || undefined } : c)));
   };
 
   return (
@@ -69,11 +75,14 @@ export function GoogleCalendarPicker({
         {!loading && !error && (
           <div className="gcal-list">
             {calendars.map((c) => (
-              <label className="gcal-row" key={c.id}>
-                <input type="checkbox" checked={c.selected} onChange={() => toggle(c.id)} />
-                <span className="gcal-dot" style={{ background: c.color }} />
-                <span className="gcal-name">{c.summary}</span>
-              </label>
+              <div className="gcal-row" key={c.id}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={c.selected} onChange={() => toggle(c.id)} />
+                  <span className="gcal-dot" style={{ background: c.colorOverride || c.color }} />
+                  <span className="gcal-name">{c.summary}</span>
+                </label>
+                <ColorSwatchPicker value={c.colorOverride ?? ''} onChange={(color) => setColorOverride(c.id, color)} />
+              </div>
             ))}
             {calendars.length === 0 && <div className="gcal-status">No calendars found on this account.</div>}
           </div>

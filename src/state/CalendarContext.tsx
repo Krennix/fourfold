@@ -204,7 +204,7 @@ function googleEventToCalEvent(
  * `eventKey`/`matchesSource` disambiguate same-uid events across multiple feeds for free, and so
  * overrides/hides can be looked up by that same composite key. */
 function icsEventToCalEvent(
-  ev: GoogleIcsEvent & { feedId: string; feedLabel: string },
+  ev: GoogleIcsEvent & { feedId: string; feedLabel: string; feedColor?: string },
   overrides: Record<string, IcsOverride>,
 ): CalEvent | null {
   const start = new Date(ev.startISO);
@@ -221,6 +221,7 @@ function icsEventToCalEvent(
     allDay: ev.allDay,
     accountEmail: 'ics',
     calendarId: ev.feedId,
+    calendarColor: ev.feedColor,
   };
   const override = overrides[eventKey(base)];
   if (override?.hidden) return null;
@@ -233,7 +234,7 @@ function googleDestinationsFor(accounts: LinkedAccount[]): GoogleDestination[] {
     .flatMap((a) =>
       a.calendars
         .filter((c) => c.selected)
-        .map((c) => ({ accountEmail: a.email, calendarId: c.id, summary: c.summary, color: c.color })),
+        .map((c) => ({ accountEmail: a.email, calendarId: c.id, summary: c.summary, color: c.colorOverride || c.color })),
     );
 }
 

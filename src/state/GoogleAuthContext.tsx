@@ -11,6 +11,8 @@ export interface LinkedCalendar {
   summary: string;
   color: string;
   selected: boolean;
+  /** User-chosen color override for this calendar, independent of Google's own `color`. */
+  colorOverride?: string;
 }
 
 export interface LinkedAccount {

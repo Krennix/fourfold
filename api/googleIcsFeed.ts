@@ -52,12 +52,18 @@ interface StoredFeed {
   id: string;
   label: string;
   url: string;
+  color?: string;
 }
 
 function isStoredFeed(value: unknown): value is StoredFeed {
   if (!value || typeof value !== 'object') return false;
   const f = value as Record<string, unknown>;
-  return typeof f.id === 'string' && typeof f.label === 'string' && typeof f.url === 'string';
+  return (
+    typeof f.id === 'string' &&
+    typeof f.label === 'string' &&
+    typeof f.url === 'string' &&
+    (f.color === undefined || typeof f.color === 'string')
+  );
 }
 
 /** Old single-feed shape (`{ icsUrl }`), from before multiple feeds were supported — migrated
@@ -129,7 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(400).json({ error: `"${invalidUrl.label || invalidUrl.url}" does not have a valid URL.` });
       return;
     }
-    const feeds: StoredFeed[] = rawFeeds.map((f) => ({ id: f.id, label: f.label, url: normalizeIcsUrl(f.url) }));
+    const feeds: StoredFeed[] = rawFeeds.map((f) => ({ id: f.id, label: f.label, url: normalizeIcsUrl(f.url), color: f.color }));
     await redis.set(key, { feeds });
     res.status(200).json({ feeds: await fetchAll(feeds) });
     return;

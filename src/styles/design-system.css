@@ -420,6 +420,14 @@ textarea.input { min-height: 90px; resize: vertical; }
   background: repeating-conic-gradient(var(--color-neutral-300) 0% 25%, var(--color-neutral-100) 0% 50%) 0 0 / 10px 10px;
 }
 .color-swatch.selected { border-color: var(--color-text); }
+.color-swatch-custom {
+  display: grid; place-items: center; overflow: hidden;
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+}
+.color-swatch-custom-input {
+  width: 200%; height: 200%; padding: 0; border: none; cursor: pointer; opacity: 0;
+}
+.color-hex-input { width: 88px; height: 24px; padding: 0 8px; font-size: 12px; }
 
 .card, .dialog { border: 1px solid var(--color-divider); }
 .btn-secondary { border: 1px solid var(--color-divider); }

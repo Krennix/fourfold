@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useSchool } from '../state/SchoolContext';
 import { useCalendarEvents, type CalEvent, type EventExtras, type EventTarget, type RepeatFreq } from '../state/CalendarContext';
 import { MentionField } from './MentionField';
+import { ColorSwatchPicker } from './ColorSwatches';
 
 const LOCAL_TARGET = 'local';
 
@@ -17,12 +18,6 @@ function addMinutesToTime(time: string, minutes: number): string {
   const total = (h * 60 + m + minutes + 24 * 60) % (24 * 60);
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
-
-/** Fixed palette for event color-tagging — independent of source (local, Google, ICS). */
-export const EVENT_COLORS = [
-  '#e0575b', '#e2984a', '#dbb349', '#6fae63',
-  '#4a9d8f', '#5980a6', '#7c6ecb', '#c25fa8',
-];
 
 /**
  * Create/edit dialog for a calendar event. `initialDate` (YYYY-MM-DD) pre-fills the date, e.g.
@@ -198,24 +193,7 @@ export function EventDialog({
 
         <div className="field">
           <label>Color</label>
-          <div className="color-swatches">
-            <button
-              type="button"
-              className={`color-swatch color-swatch-none${color === '' ? ' selected' : ''}`}
-              title="Default"
-              onClick={() => setColor('')}
-            />
-            {EVENT_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                className={`color-swatch${color === c ? ' selected' : ''}`}
-                style={{ background: c }}
-                title={c}
-                onClick={() => setColor(c)}
-              />
-            ))}
-          </div>
+          <ColorSwatchPicker value={color} onChange={setColor} />
         </div>
 
         <div className="dialog-actions">
