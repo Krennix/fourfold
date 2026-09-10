@@ -17,6 +17,8 @@ export interface GoogleIcsFeed {
   url: string;
   events: GoogleIcsEvent[];
   error?: string;
+  /** User-chosen color applied to every event from this feed, unless overridden per-event. */
+  color?: string;
 }
 
 export type GoogleIcsStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -25,10 +27,11 @@ interface GoogleIcsContextValue {
   status: GoogleIcsStatus;
   feeds: GoogleIcsFeed[];
   /** All events across every feed, each tagged with which feed it came from. */
-  events: (GoogleIcsEvent & { feedId: string; feedLabel: string })[];
+  events: (GoogleIcsEvent & { feedId: string; feedLabel: string; feedColor?: string })[];
   error: string | null;
-  addFeed: (label: string, url: string) => Promise<void>;
+  addFeed: (label: string, url: string, color?: string) => Promise<void>;
   removeFeed: (id: string) => Promise<void>;
+  updateFeedColor: (id: string, color: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -77,7 +80,7 @@ export function GoogleIcsProvider({ children }: { children: ReactNode }) {
   }, [handleSessionExpired]);
 
   const saveFeeds = useCallback(
-    async (next: { id: string; label: string; url: string }[]) => {
+    async (next: { id: string; label: string; url: string; color?: string }[]) => {
       setStatus('loading');
       setError(null);
       try {
@@ -104,16 +107,30 @@ export function GoogleIcsProvider({ children }: { children: ReactNode }) {
   );
 
   const addFeed = useCallback(
-    async (label: string, url: string) => {
+    async (label: string, url: string, color?: string) => {
       const id = crypto.randomUUID();
-      await saveFeeds([...feeds.map((f) => ({ id: f.id, label: f.label, url: f.url })), { id, label, url }]);
+      await saveFeeds([
+        ...feeds.map((f) => ({ id: f.id, label: f.label, url: f.url, color: f.color })),
+        { id, label, url, color },
+      ]);
     },
     [feeds, saveFeeds],
   );
 
   const removeFeed = useCallback(
     async (id: string) => {
-      await saveFeeds(feeds.filter((f) => f.id !== id).map((f) => ({ id: f.id, label: f.label, url: f.url })));
+      await saveFeeds(
+        feeds.filter((f) => f.id !== id).map((f) => ({ id: f.id, label: f.label, url: f.url, color: f.color })),
+      );
+    },
+    [feeds, saveFeeds],
+  );
+
+  const updateFeedColor = useCallback(
+    async (id: string, color: string) => {
+      await saveFeeds(
+        feeds.map((f) => ({ id: f.id, label: f.label, url: f.url, color: f.id === id ? color : f.color })),
+      );
     },
     [feeds, saveFeeds],
   );
@@ -123,10 +140,10 @@ export function GoogleIcsProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const events = feeds.flatMap((f) => f.events.map((e) => ({ ...e, feedId: f.id, feedLabel: f.label })));
+  const events = feeds.flatMap((f) => f.events.map((e) => ({ ...e, feedId: f.id, feedLabel: f.label, feedColor: f.color })));
 
   return (
-    <GoogleIcsContext.Provider value={{ status, feeds, events, error, addFeed, removeFeed, refresh }}>
+    <GoogleIcsContext.Provider value={{ status, feeds, events, error, addFeed, removeFeed, updateFeedColor, refresh }}>
       {children}
     </GoogleIcsContext.Provider>
   );

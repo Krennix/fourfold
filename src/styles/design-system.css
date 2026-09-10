@@ -47,6 +47,9 @@
 
   --color-logo: #0c2b67;
 
+  --color-allday: #6a5acd;
+  --color-allday-text: #f4f2ff;
+
   --font-heading: "Barlow Condensed", system-ui, sans-serif;
   --font-heading-weight: 600;
   --font-body: "Barlow", system-ui, sans-serif;
@@ -118,6 +121,9 @@
 
     --color-logo: #a7c1f5;
 
+    --color-allday: #8879e0;
+    --color-allday-text: #f4f2ff;
+
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
     --shadow-md: 0 3px 10px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
@@ -167,6 +173,9 @@
   --urgency-red: #e05d4e;
   --urgency-yellow: #d6a437;
   --urgency-blue: #6ba3d6;
+
+  --color-allday: #8879e0;
+  --color-allday-text: #f4f2ff;
 
   --color-logo: #eef1fb;
 
@@ -401,6 +410,24 @@ textarea.input { min-height: 90px; resize: vertical; }
 }
 .dialog-body { font-size: 14px; opacity: 0.85; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
+
+.color-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.color-swatch {
+  width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent;
+  padding: 0; cursor: pointer; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text) 15%, transparent);
+}
+.color-swatch-none {
+  background: repeating-conic-gradient(var(--color-neutral-300) 0% 25%, var(--color-neutral-100) 0% 50%) 0 0 / 10px 10px;
+}
+.color-swatch.selected { border-color: var(--color-text); }
+.color-swatch-custom {
+  display: grid; place-items: center; overflow: hidden;
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+}
+.color-swatch-custom-input {
+  width: 200%; height: 200%; padding: 0; border: none; cursor: pointer; opacity: 0;
+}
+.color-hex-input { width: 88px; height: 24px; padding: 0 8px; font-size: 12px; }
 
 .card, .dialog { border: 1px solid var(--color-divider); }
 .btn-secondary { border: 1px solid var(--color-divider); }

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useSchool } from '../state/SchoolContext';
 import { useCalendarEvents, type CalEvent, type EventExtras, type EventTarget, type RepeatFreq } from '../state/CalendarContext';
 import { MentionField } from './MentionField';
+import { ColorSwatchPicker } from './ColorSwatches';
 
 const LOCAL_TARGET = 'local';
 
@@ -56,6 +57,7 @@ export function EventDialog({
       ? addMinutesToTime(to24h(editing.time), editing.durationMin)
       : '10:00',
   );
+  const [color, setColor] = useState(editing?.color ?? '');
   const [repeat, setRepeat] = useState<'none' | RepeatFreq>('none');
   const [repeatUntil, setRepeatUntil] = useState(initialDate);
 
@@ -71,7 +73,7 @@ export function EventDialog({
     if (!canSave) return;
     const [y, m, d] = date.split('-').map(Number);
     const dateKey = `${y}-${m - 1}-${d}`;
-    const extras: EventExtras = { description: description.trim(), location: location.trim(), allDay };
+    const extras: EventExtras = { description: description.trim(), location: location.trim(), allDay, color };
     const durationMin = allDay ? undefined : toDurationMin(startTime, endTime);
     const time = allDay ? '' : startTime;
     if (editing) {
@@ -187,6 +189,11 @@ export function EventDialog({
           <datalist id="event-location-options">
             {locationSuggestions.map((loc) => <option value={loc} key={loc} />)}
           </datalist>
+        </div>
+
+        <div className="field">
+          <label>Color</label>
+          <ColorSwatchPicker value={color} onChange={setColor} />
         </div>
 
         <div className="dialog-actions">

@@ -7,6 +7,7 @@ import { useSchoology } from '../state/SchoologyContext';
 import { useGoogleIcs } from '../state/GoogleIcsContext';
 import { useAuth } from '../state/AuthContext';
 import { allCategories, matchCategoryToClass } from '../lib/homeworkMerge';
+import { ColorSwatchPicker } from '../components/ColorSwatches';
 import './Settings.css';
 
 function AccessSettings() {
@@ -134,15 +135,17 @@ function GoogleCalendarSettings() {
 }
 
 function GoogleIcsSettings() {
-  const { status, feeds, error, addFeed, removeFeed, refresh } = useGoogleIcs();
+  const { status, feeds, error, addFeed, removeFeed, updateFeedColor, refresh } = useGoogleIcs();
   const [labelDraft, setLabelDraft] = useState('');
   const [urlDraft, setUrlDraft] = useState('');
+  const [colorDraft, setColorDraft] = useState('');
 
   const handleAdd = () => {
     if (!urlDraft.trim()) return;
-    void addFeed(labelDraft.trim() || 'Google Calendar', urlDraft.trim());
+    void addFeed(labelDraft.trim() || 'Google Calendar', urlDraft.trim(), colorDraft || undefined);
     setLabelDraft('');
     setUrlDraft('');
+    setColorDraft('');
   };
 
   return (
@@ -174,6 +177,7 @@ function GoogleIcsSettings() {
                   {f.error ? f.error : `${f.events.length} event${f.events.length === 1 ? '' : 's'}`}
                 </span>
               </div>
+              <ColorSwatchPicker value={f.color ?? ''} onChange={(color) => void updateFeedColor(f.id, color)} />
               <div className="class-row-actions">
                 <button className="btn btn-ghost" type="button" onClick={() => void removeFeed(f.id)}>Remove</button>
               </div>
@@ -199,6 +203,7 @@ function GoogleIcsSettings() {
           value={urlDraft}
           onChange={(e) => setUrlDraft(e.target.value)}
         />
+        <ColorSwatchPicker value={colorDraft} onChange={setColorDraft} />
         <button className="btn btn-primary" type="button" onClick={handleAdd} disabled={status === 'loading' || !urlDraft.trim()}>
           Add feed
         </button>

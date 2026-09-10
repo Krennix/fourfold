@@ -15,6 +15,9 @@ const LOCKED_STORAGE_KEY = 'fourfold.calendar.locked.v1';
  * there's no write API for a plain ICS subscription, so tweaks live here instead, keyed by
  * `eventKey` and overlaid onto the freshly-fetched feed event on every read. */
 const ICS_OVERRIDES_STORAGE_KEY = 'fourfold.calendar.icsOverrides.v1';
+/** User-chosen event colors, overlaid onto events the same way `locked` is (see LOCKED_STORAGE_KEY)
+ * — this works uniformly across local/Google/ICS events without needing a Google colorId round-trip. */
+const COLORS_STORAGE_KEY = 'fourfold.calendar.colors.v1';
 
 type IcsOverride = Partial<Pick<CalEvent, 'date' | 'time' | 'title' | 'durationMin' | 'description' | 'location' | 'allDay'>> & {
   hidden?: boolean;
@@ -41,12 +44,16 @@ export interface CalEvent {
   accountEmail?: string;
   calendarId?: string;
   calendarColor?: string;
+  /** User-chosen color override (hex), independent of source — see COLORS_STORAGE_KEY. */
+  color?: string;
 }
 
 export interface EventExtras {
   description?: string;
   location?: string;
   allDay?: boolean;
+  /** Pass a hex color to tag the event with it, or '' to clear a previously-set color. */
+  color?: string;
 }
 
 /** Where a new/edited event should be written. Omitted or 'local' keeps it device-only. */
@@ -117,6 +124,7 @@ export interface CalendarContextValue {
   updateEvent: (id: string, date: string, title: string, time: string, durationMin?: number, extras?: EventExtras, source?: EventSource) => Promise<CalEvent | null>;
   removeEvent: (id: string, source?: EventSource) => void;
   toggleEventLocked: (id: string, source?: EventSource) => void;
+  setEventColor: (id: string, color: string, source?: EventSource) => void;
   eventsByDate: (date: string) => CalEvent[];
 }
 
@@ -140,6 +148,16 @@ function loadLockedKeys(): Set<string> {
     // ignore malformed storage
   }
   return new Set();
+}
+
+function loadEventColors(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(COLORS_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore malformed storage
+  }
+  return {};
 }
 
 function loadIcsOverrides(): Record<string, IcsOverride> {
@@ -186,7 +204,7 @@ function googleEventToCalEvent(
  * `eventKey`/`matchesSource` disambiguate same-uid events across multiple feeds for free, and so
  * overrides/hides can be looked up by that same composite key. */
 function icsEventToCalEvent(
-  ev: GoogleIcsEvent & { feedId: string; feedLabel: string },
+  ev: GoogleIcsEvent & { feedId: string; feedLabel: string; feedColor?: string },
   overrides: Record<string, IcsOverride>,
 ): CalEvent | null {
   const start = new Date(ev.startISO);
@@ -203,6 +221,7 @@ function icsEventToCalEvent(
     allDay: ev.allDay,
     accountEmail: 'ics',
     calendarId: ev.feedId,
+    calendarColor: ev.feedColor,
   };
   const override = overrides[eventKey(base)];
   if (override?.hidden) return null;
@@ -215,7 +234,7 @@ function googleDestinationsFor(accounts: LinkedAccount[]): GoogleDestination[] {
     .flatMap((a) =>
       a.calendars
         .filter((c) => c.selected)
-        .map((c) => ({ accountEmail: a.email, calendarId: c.id, summary: c.summary, color: c.color })),
+        .map((c) => ({ accountEmail: a.email, calendarId: c.id, summary: c.summary, color: c.colorOverride || c.color })),
     );
 }
 
@@ -225,6 +244,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
   const [localEvents, setLocalEvents] = useState<CalEvent[]>(loadLocalEvents);
   const [googleEvents, setGoogleEvents] = useState<CalEvent[]>([]);
   const [lockedKeys, setLockedKeys] = useState<Set<string>>(loadLockedKeys);
+  const [eventColors, setEventColors] = useState<Record<string, string>>(loadEventColors);
   const [icsOverrides, setIcsOverrides] = useState<Record<string, IcsOverride>>(loadIcsOverrides);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -258,6 +278,29 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       // storage unavailable — state still works for this session
     }
   }, [icsOverrides]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLORS_STORAGE_KEY, JSON.stringify(eventColors));
+    } catch {
+      // storage unavailable — state still works for this session
+    }
+  }, [eventColors]);
+
+  const setEventColor = useCallback((id: string, color: string, source?: EventSource) => {
+    const event = [...googleEvents, ...localEvents, ...mappedIcsEvents].find((e) => matchesSource(e, id, source));
+    if (!event) return;
+    const key = eventKey(event);
+    setEventColors((prev) => {
+      if (!color) {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: color };
+    });
+  }, [googleEvents, localEvents, mappedIcsEvents]);
 
   const toggleEventLocked = useCallback((id: string, source?: EventSource) => {
     const event = [...googleEvents, ...localEvents, ...mappedIcsEvents].find((e) => matchesSource(e, id, source));
@@ -342,9 +385,21 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     return { startISO: start.toISOString(), endISO: end.toISOString() };
   }
 
+  const applyColorOverlay = useCallback((key: string, color?: string) => {
+    setEventColors((prev) => {
+      if (!color) {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: color };
+    });
+  }, []);
+
   // `date` is "Y-M-D" with a 0-based month, matching the key used for eventsByDate/day-cell lookups.
   const addEvent: CalendarContextValue['addEvent'] = async (date, title, time, durationMin = 60, extras = {}, target = 'local') => {
-    const { description, location, allDay } = extras;
+    const { description, location, allDay, color } = extras;
     if (target !== 'local') {
       const destination = googleDestinations.find((d) => d.accountEmail === target.accountEmail && d.calendarId === target.calendarId);
       if (!destination) {
@@ -359,7 +414,10 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
           insertEvent(accessToken, target.calendarId, { summary: title, description, location, ...timing }),
         );
         const mapped = googleEventToCalEvent(ev, { accountEmail: target.accountEmail, calendarId: target.calendarId, calendarColor: destination.color });
-        if (mapped) setGoogleEvents((prev) => [...prev, mapped]);
+        if (mapped) {
+          setGoogleEvents((prev) => [...prev, mapped]);
+          if (color) applyColorOverlay(eventKey(mapped), color);
+        }
         return mapped;
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -380,6 +438,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       allDay,
     };
     setLocalEvents((prev) => [...prev, created]);
+    if (color) applyColorOverlay(eventKey(created), color);
     return created;
   };
 
@@ -414,9 +473,10 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
         setError('That event is locked — unlock it before moving it.');
         return null;
       }
-      const { description, location, allDay } = extras;
+      const { description, location, allDay, color } = extras;
       const updated: CalEvent = { ...icsEvent, date, title, time: allDay ? 'All day' : time, durationMin, description, location, allDay };
       setIcsOverrides((prev) => ({ ...prev, [eventKey(icsEvent)]: { date, title, time: updated.time, durationMin, description, location, allDay } }));
+      if (color !== undefined) applyColorOverlay(eventKey(icsEvent), color);
       return updated;
     }
     const googleEvent = googleEvents.find((e) => matchesSource(e, id, source));
@@ -425,7 +485,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       setError('That event is locked — unlock it before moving it.');
       return null;
     }
-    const { description, location, allDay } = extras;
+    const { description, location, allDay, color } = extras;
     if (googleEvent?.accountEmail && googleEvent.calendarId) {
       const accountEmail = googleEvent.accountEmail;
       const calendarId = googleEvent.calendarId;
@@ -445,6 +505,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
           setGoogleEvents((prev) =>
             prev.map((e) => (e.id === id && e.accountEmail === accountEmail && e.calendarId === calendarId ? mapped : e)),
           );
+          if (color !== undefined) applyColorOverlay(eventKey(mapped), color);
         }
         return mapped;
       } catch (err) {
@@ -466,6 +527,7 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
       allDay,
     };
     setLocalEvents((prev) => prev.map((e) => (e.id === id ? updated : e)));
+    if (color !== undefined) applyColorOverlay(eventKey(updated), color);
     return updated;
   };
 
@@ -498,14 +560,29 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     setLocalEvents((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const events = [...googleEvents, ...localEvents, ...mappedIcsEvents].map((e) =>
-    isLocked(e, lockedKeys) ? { ...e, locked: true } : e,
-  );
+  const events = [...googleEvents, ...localEvents, ...mappedIcsEvents].map((e) => {
+    const withLock = isLocked(e, lockedKeys) ? { ...e, locked: true } : e;
+    const color = eventColors[eventKey(e)];
+    return color ? { ...withLock, color } : withLock;
+  });
   const eventsByDate = (date: string) => events.filter((e) => e.date === date).sort((a, b) => a.time.localeCompare(b.time));
 
   return (
     <CalendarContext.Provider
-      value={{ events, loading, error, googleDestinations, refresh, addEvent, addRecurringEvent, updateEvent, removeEvent, toggleEventLocked, eventsByDate }}
+      value={{
+        events,
+        loading,
+        error,
+        googleDestinations,
+        refresh,
+        addEvent,
+        addRecurringEvent,
+        updateEvent,
+        removeEvent,
+        toggleEventLocked,
+        setEventColor,
+        eventsByDate,
+      }}
     >
       {children}
     </CalendarContext.Provider>
