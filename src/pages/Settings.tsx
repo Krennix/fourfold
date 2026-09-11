@@ -7,6 +7,7 @@ import { useSchoology } from '../state/SchoologyContext';
 import { useGoogleIcs } from '../state/GoogleIcsContext';
 import { useAuth } from '../state/AuthContext';
 import { useTheme } from '../state/ThemeContext';
+import { useNotifications } from '../state/NotificationsContext';
 import { allCategories, matchCategoryToClass } from '../lib/homeworkMerge';
 import { ColorSwatchPicker } from '../components/ColorSwatches';
 import { exportAllData, downloadJson, isValidExport, importAllData, type FourFoldExport } from '../lib/exportImport';
@@ -131,6 +132,40 @@ function ExportImportSettings() {
             </div>
           </div>
         </div>
+      )}
+    </Widget>
+  );
+}
+
+function NotificationSettings() {
+  const { permission, requestPermission, enabled, setEnabled } = useNotifications();
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Notifications</h4>
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Get a browser notification for habit reminders (using each habit's linked time), when a Pomodoro session
+        ends, and for matrix/homework tasks due within a day. Only fires while FourFold is open in a tab.
+      </p>
+      {permission === 'unsupported' && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>Notifications aren't supported in this browser.</p>
+      )}
+      {permission !== 'unsupported' && permission !== 'granted' && (
+        <button className="btn btn-primary" type="button" onClick={() => void requestPermission()}>
+          Enable notifications
+        </button>
+      )}
+      {permission === 'granted' && (
+        <label className="toggle-row">
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+          <span>Notify me for habits, Pomodoro, and upcoming deadlines</span>
+        </label>
+      )}
+      {permission === 'denied' && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+          Notifications are blocked for this site — enable them in your browser's site settings.
+        </p>
       )}
     </Widget>
   );
@@ -612,6 +647,7 @@ export function SettingsPage() {
       <PageHeader kicker="Preferences" title="Settings" />
 
       <ThemeSettings />
+      <NotificationSettings />
       <InstallPwaSettings />
       <ExportImportSettings />
       <AccessSettings />
