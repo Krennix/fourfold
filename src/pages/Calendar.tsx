@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { Widget, PageHeader } from '../components/Widget';
 import { useCalendarEvents, eventKey, type CalEvent } from '../state/CalendarContext';
@@ -85,6 +85,15 @@ function DropTimeDialog({
   );
 }
 
+const DAY_HOUR_PX = 56;
+
+function fmtDayHour(h: number) {
+  const hour24 = ((h % 24) + 24) % 24;
+  if (hour24 === 0) return '12 AM';
+  if (hour24 === 12) return '12 PM';
+  return hour24 > 12 ? `${hour24 - 12} PM` : `${hour24} AM`;
+}
+
 function DayAgenda({
   dayKey,
   onBack,
@@ -105,6 +114,7 @@ function DayAgenda({
   const { eventsByDate } = useCalendarEvents();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(id);
@@ -116,13 +126,27 @@ function DayAgenda({
   const timedEvents = dayEvents.filter((e) => !e.allDay).map((ev) => {
     const [h, m] = to24h(ev.time).split(':').map(Number);
     const start = h + m / 60;
-    const end = ev.durationMin ? start + ev.durationMin / 60 : start;
-    const inProgress = isToday && !!ev.durationMin && nowHour >= start && nowHour < end;
-    return { ...ev, start, inProgress, minutesLeft: inProgress ? Math.max(0, Math.round((end - nowHour) * 60)) : 0 };
+    const durationHours = (ev.durationMin ?? 60) / 60;
+    const end = start + durationHours;
+    const inProgress = isToday && nowHour >= start && nowHour < end;
+    return {
+      ...ev,
+      start,
+      inProgress,
+      minutesLeft: inProgress ? Math.max(0, Math.round((end - nowHour) * 60)) : 0,
+      posStyle: { top: `${(start / 24) * 100}%`, height: `${(durationHours / 24) * 100}%` },
+    };
   }).sort((a, b) => a.start - b.start);
-  const nowInsertIdx = isToday ? timedEvents.findIndex((ev) => ev.start > nowHour) : -1;
   const nowLabel = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const label = parseKey(dayKey).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const hourRows = Array.from({ length: 24 }, (_, h) => h);
+
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    const scrollToHour = isToday ? Math.max(0, nowHour - 1) : 7;
+    scrollRef.current.scrollTop = scrollToHour * DAY_HOUR_PX;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKey]);
 
   const menuItems: ContextMenuItem[] = [
     {
@@ -187,44 +211,57 @@ function DayAgenda({
           </p>
         )}
 
-        <div className="day-view-list">
-          {isToday && nowInsertIdx === 0 && (
-            <div className="day-view-now"><span className="now-dot" />{nowLabel}</div>
-          )}
-          {timedEvents.map((ev, i) => (
-            <Fragment key={eventKey(ev)}>
-            <div
-              className={`day-view-event${ev.locked ? ' locked' : ''}${ev.inProgress ? ' in-progress' : ''}`}
-              onClick={() => onEditEvent(ev)}
-              style={chipColorStyle(ev)}
-            >
-              {ev.cls === 'google' && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="8" width="9" height="6" rx="3" /><rect x="10" y="10" width="9" height="6" rx="3" /></svg>}
-              <span className="day-view-event-time">{ev.time}</span>
-              <span className="day-view-event-title">{ev.title}</span>
-              {ev.location && <span className="day-view-event-loc">{ev.location}</span>}
-              {ev.inProgress && <span className="now-chip"><span className="now-dot" />{ev.minutesLeft} min left</span>}
-              <span
-                className="evt-lock"
-                role="button"
-                tabIndex={0}
-                title={ev.locked ? 'Unlock' : 'Lock in place'}
-                onClick={(e) => { e.stopPropagation(); onToggleLocked(ev); }}
-              >
-                {ev.locked ? (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
-                ) : (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 7.5-2" /></svg>
-                )}
-              </span>
+        <div className="day-time-grid-scroll" ref={scrollRef}>
+          <div className="day-time-grid" style={{ height: 24 * DAY_HOUR_PX }}>
+            <div className="day-time-col">
+              {hourRows.map((h) => (
+                <div className="hour-line" style={{ top: `${(h / 24) * 100}%` }} key={h}>
+                  <span className="hour-label">{fmtDayHour(h)}</span>
+                </div>
+              ))}
             </div>
-            {isToday && nowInsertIdx === i + 1 && (
-              <div className="day-view-now"><span className="now-dot" />{nowLabel}</div>
-            )}
-            </Fragment>
-          ))}
-          {isToday && nowInsertIdx === -1 && (
-            <div className="day-view-now"><span className="now-dot" />{nowLabel}</div>
-          )}
+            <div className="day-events-col">
+              {hourRows.map((h) => (
+                <div className="hour-gridline" style={{ top: `${(h / 24) * 100}%` }} key={h} />
+              ))}
+              {isToday && (
+                <div className="cal-now-line" style={{ top: `${(nowHour / 24) * 100}%` }}>
+                  <span className="cal-now-dot" />
+                  <span className="cal-now-label">{nowLabel}</span>
+                </div>
+              )}
+              {timedEvents.map((ev) => (
+                <div
+                  className={`day-event-block${ev.locked ? ' locked' : ''}${ev.inProgress ? ' in-progress' : ''}`}
+                  key={eventKey(ev)}
+                  onClick={() => onEditEvent(ev)}
+                  style={{ ...ev.posStyle, ...chipColorStyle(ev) }}
+                >
+                  <span className="de-title">
+                    {ev.cls === 'google' && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="8" width="9" height="6" rx="3" /><rect x="10" y="10" width="9" height="6" rx="3" /></svg>}
+                    {ev.title}
+                    <span
+                      className="evt-lock"
+                      role="button"
+                      tabIndex={0}
+                      title={ev.locked ? 'Unlock' : 'Lock in place'}
+                      onClick={(e) => { e.stopPropagation(); onToggleLocked(ev); }}
+                    >
+                      {ev.locked ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 7.5-2" /></svg>
+                      )}
+                    </span>
+                  </span>
+                  <span className="de-time">
+                    {ev.time}{ev.location ? ` · ${ev.location}` : ''}
+                    {ev.inProgress && <span className="now-chip"><span className="now-dot" />{ev.minutesLeft} min left</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

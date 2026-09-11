@@ -58,32 +58,57 @@
 .day-view { display: flex; flex-direction: column; gap: var(--space-3); min-height: 200px; }
 .day-view-allday { display: flex; flex-direction: column; gap: 4px; }
 .day-view-allday .evt-chip.allday { padding: 5px 10px; font-size: 12.5px; cursor: pointer; }
-.day-view-list { display: flex; flex-direction: column; gap: 4px; }
-.day-view-event {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border-radius: var(--radius-sm);
-  background: var(--color-accent-100); color: var(--color-accent-800);
-  cursor: pointer;
-}
-.day-view-event.locked { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent-800) 40%, transparent); }
-.day-view-event svg { width: 13px; height: 13px; flex: none; }
-.day-view-event-time { font-family: var(--font-heading); font-weight: 600; font-size: 12.5px; min-width: 64px; }
-.day-view-event-title { flex: 1; font-size: 13.5px; }
-.day-view-event-loc { font-size: 11.5px; opacity: 0.65; }
-.day-view-event .evt-lock { opacity: 0.45; }
-.day-view-event.locked .evt-lock { opacity: 0.9; }
-.day-view-event:hover .evt-lock { opacity: 1; }
-.day-view-event.in-progress { box-shadow: inset 0 0 0 1.5px var(--now-color, #e0393f); }
+
 .now-chip {
-  display: flex; align-items: center; gap: 4px; flex: none;
+  display: flex; align-items: center; gap: 4px; flex: none; margin-left: 8px;
   font-size: 10px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase;
   color: var(--now-color, #e0393f);
 }
 .now-chip .now-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--now-color, #e0393f); flex: none; }
 
-.day-view-now {
-  display: flex; align-items: center; gap: 6px; margin: 2px 0;
-  font-size: 10.5px; font-weight: 700; color: var(--now-color, #e0393f);
+/* — day time grid, Google Calendar style — */
+.day-time-grid-scroll { max-height: 560px; overflow-y: auto; }
+.day-time-grid { display: grid; grid-template-columns: 56px minmax(0, 1fr); position: relative; }
+.day-time-col { position: relative; grid-column: 1/2; }
+.hour-line {
+  position: absolute; left: 0; right: 0; transform: translateY(-50%);
+  padding-right: 8px; text-align: right;
 }
-.day-view-now::after { content: ''; flex: 1; height: 2px; background: var(--now-color, #e0393f); }
-.day-view-now .now-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--now-color, #e0393f); flex: none; }
+.hour-label {
+  font-size: 10.5px; color: color-mix(in srgb, var(--color-text) 45%, transparent);
+}
+.day-events-col { position: relative; grid-column: 2/3; border-left: 1px solid var(--color-divider); }
+.hour-gridline {
+  position: absolute; left: 0; right: 0; height: 1px;
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+.day-event-block {
+  position: absolute; left: 4px; right: 4px; overflow: hidden;
+  border: 1px solid var(--color-accent); background: var(--color-accent-100); color: var(--color-accent-800);
+  border-radius: var(--radius-sm); padding: 4px 8px; cursor: pointer;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.day-event-block.locked { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent-800) 40%, transparent); }
+.day-event-block.in-progress { border-color: var(--now-color, #e0393f); }
+.day-event-block .de-title {
+  font-family: var(--font-heading); font-weight: 600; font-size: 13px; line-height: 1.15;
+  display: flex; align-items: center; gap: 4px;
+}
+.day-event-block .de-title svg { width: 11px; height: 11px; flex: none; }
+.day-event-block .de-title .evt-lock { margin-left: auto; opacity: 0.45; }
+.day-event-block.locked .de-title .evt-lock { opacity: 0.9; }
+.day-event-block:hover .de-title .evt-lock { opacity: 1; }
+.day-event-block .de-time { font-size: 10.5px; opacity: 0.8; display: flex; align-items: center; }
+
+.cal-now-line {
+  position: absolute; left: 0; right: 0; height: 2px; transform: translateY(-50%);
+  background: var(--now-color, #e0393f); z-index: 5; pointer-events: none;
+}
+.cal-now-dot {
+  position: absolute; left: -1px; top: 0; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--now-color, #e0393f); transform: translate(-50%, -50%);
+}
+.cal-now-label {
+  position: absolute; right: calc(100% + 4px); top: 0; transform: translateY(-50%);
+  font-size: 10px; font-weight: 700; color: var(--now-color, #e0393f); white-space: nowrap;
+}
