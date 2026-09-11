@@ -6,12 +6,9 @@ import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
 import { CountdownDialog } from '../components/CountdownDialog';
 import { useHabits } from '../state/HabitsContext';
 import { useCountdowns, type Countdown } from '../state/CountdownsContext';
+import { dateKey, computeLongestStreak, computeCompletionRate } from '../lib/habitStats';
 import './Habits.css';
 import './Countdowns.css';
-
-function dateKey(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 const now = new Date();
 const todayLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
@@ -122,6 +119,9 @@ export function HabitsPage() {
   const doneCount = habits.filter((h) => h.done).length;
 
   const selected = habits.find((h) => h.id === selectedHabitId) || habits[0];
+  const longestStreak = selected ? computeLongestStreak(selected.history || []) : 0;
+  const completionRate30 = selected ? computeCompletionRate(selected.history || [], 30) : 0;
+  const completionRate90 = selected ? computeCompletionRate(selected.history || [], 90) : 0;
   const totalDays = 364;
   const heatmapWeeks: { cls: string }[][] = [];
   if (selected) {
@@ -235,6 +235,25 @@ export function HabitsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </Widget>
+      )}
+
+      {habitsTab === 'stats' && selected && (
+        <Widget>
+          <div className="widget-head"><h4>{selected.name} — stats</h4></div>
+          <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+            {([
+              ['Current streak', `${selected.streak}d`],
+              ['Longest streak', `${longestStreak}d`],
+              ['Last 30 days', `${completionRate30}%`],
+              ['Last 90 days', `${completionRate90}%`],
+            ] as const).map(([label, value]) => (
+              <div key={label}>
+                <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22 }}>{value}</div>
+                <div className="text-muted" style={{ fontSize: 11 }}>{label}</div>
+              </div>
+            ))}
           </div>
         </Widget>
       )}
