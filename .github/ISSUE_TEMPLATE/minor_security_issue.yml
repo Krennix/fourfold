@@ -1,0 +1,46 @@
+name: Minor security issue
+description: A low-severity security concern that's safe to discuss in public (not an active exploit or data-exposure risk).
+title: "[Security-minor]: "
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Use this template only for minor/low-severity issues** — things
+        like a missing security header, an outdated dependency with no known
+        exploit path against this app, a hardening suggestion, or similar.
+
+        **Stop — if this is a critical or high-severity vulnerability**
+        (anything that could expose another user's data or tokens, bypass
+        authentication, or otherwise be actively exploited), **do not file a
+        public issue.** Instead follow
+        [SECURITY.md](https://github.com/Krennix/fourfold/blob/main/SECURITY.md):
+        email **tog.ironridge@gmail.com** or DM **@director_krennic_** on
+        Discord.
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: This is a minor issue with no plausible way to exploit it against real user data or accounts — I have not filed this via email/Discord instead.
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What's the issue?
+      description: Describe the concern and why you consider it minor/low-severity.
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Affected file / endpoint (if known)
+      placeholder: e.g. api/_lib/session.ts, vercel.json headers, a specific dependency
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix (optional)

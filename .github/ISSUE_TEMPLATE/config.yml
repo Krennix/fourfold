@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a critical/high-severity security vulnerability
+    url: https://github.com/Krennix/fourfold/blob/main/SECURITY.md
+    about: Do not open a public issue for this — email tog.ironridge@gmail.com or DM @director_krennic_ on Discord instead.
