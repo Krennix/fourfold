@@ -23,6 +23,12 @@ html, body, #root {
   padding: var(--space-8);
   display: flex;
   justify-content: center;
+  margin-left: var(--sidebar-w);
+  transition: margin-left 0.15s ease;
+}
+
+body.sidebar-collapsed .content {
+  margin-left: var(--sidebar-w-collapsed);
 }
 
 @media (max-width: 768px) {
@@ -32,5 +38,6 @@ html, body, #root {
 
   .content {
     padding: var(--space-4);
+    margin-left: 0;
   }
 }

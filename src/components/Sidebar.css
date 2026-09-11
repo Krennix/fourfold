@@ -1,30 +1,41 @@
+:root {
+  --sidebar-w: 220px;
+  --sidebar-w-collapsed: 68px;
+}
+
 .sidebar {
-  width: 220px;
+  width: var(--sidebar-w);
   flex: none;
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
   padding: var(--space-4);
   border-right: 1px solid var(--color-divider);
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  z-index: 40;
   height: 100svh;
   overflow-y: auto;
   overflow-x: hidden;
+  background: var(--color-bg);
   transition: width 0.15s ease;
 }
 
 .sidebar.collapsed {
-  width: 68px;
+  width: var(--sidebar-w-collapsed);
 }
 
 .nav-brand {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   padding: 0 var(--space-2);
   font-family: var(--font-heading);
   font-weight: var(--font-heading-weight);
+  font-size: 19px;
+  color: inherit;
+  text-decoration: none;
   white-space: nowrap;
 }
 
