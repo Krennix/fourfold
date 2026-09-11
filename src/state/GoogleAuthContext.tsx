@@ -3,7 +3,7 @@ import { getStoredSession } from './AuthContext';
 
 const LINKED_EMAILS_KEY = 'fourfold.google.linkedEmails.v1';
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
-/** Popup message payload from api/googleOAuthCallback.ts — kept in sync with that file. */
+/** Popup message payload from api/google.ts's oauthCallback action — kept in sync with that file. */
 const OAUTH_MESSAGE_TYPE = 'fourfold-google-oauth';
 
 export interface LinkedCalendar {

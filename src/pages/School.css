@@ -49,6 +49,7 @@
 }
 .bell-badge-off { background: var(--color-accent-100); color: var(--color-accent-800); }
 .time-label { font-size: 10.5px; color: color-mix(in srgb, var(--color-text) 45%, transparent); text-align: right; padding-right: 6px; padding-top: 2px; }
+.time-label.now-time-label { color: var(--now-color, #e0393f); font-weight: 700; transform: translateY(-50%); padding-top: 0; }
 .day-col { position: relative; border-left: 1px solid var(--color-divider); }
 .bell-block {
   position: absolute; left: 2px; right: 2px;
@@ -88,6 +89,23 @@
 .class-block .cb-hw-red { background: var(--urgency-red); }
 .class-block .cb-hw-yellow { background: var(--urgency-yellow); }
 .class-block .cb-hw-blue { background: var(--urgency-blue); }
+
+.class-block.in-progress { border-color: var(--now-color, #e0393f); }
+.class-block .now-label {
+  align-self: center; margin-top: auto;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase;
+  color: var(--now-color, #e0393f);
+}
+
+/* — current-time line spanning the whole day column — */
+.day-now-line {
+  position: absolute; left: 0; right: 0; height: 2px; transform: translateY(-50%);
+  background: var(--now-color, #e0393f); z-index: 5; pointer-events: none;
+}
+.day-now-line .day-now-dot {
+  position: absolute; left: -1px; top: 0; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--now-color, #e0393f); transform: translate(-50%, -50%);
+}
 
 .hw-row { display: flex; align-items: center; gap: var(--space-2); padding: 7px 0; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent); }
 .hw-row:last-child { border-bottom: none; }

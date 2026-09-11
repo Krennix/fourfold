@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { getStoredSession } from './AuthContext';
 
-/** Popup message payload from api/spotifyOAuthCallback.ts — kept in sync with that file. */
+/** Popup message payload from api/spotify.ts's oauthCallback action — kept in sync with that file. */
 const OAUTH_MESSAGE_TYPE = 'fourfold-spotify-oauth';
 
 export type SpotifyProduct = 'premium' | 'free' | 'open' | null;

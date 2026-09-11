@@ -1,3 +1,14 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/googleOAuthStart", "destination": "/api/google?action=oauthStart" },
+    { "source": "/api/googleOAuthCallback", "destination": "/api/google?action=oauthCallback" },
+    { "source": "/api/googleAccessToken", "destination": "/api/google?action=accessToken" },
+    { "source": "/api/googleCalendars", "destination": "/api/google?action=calendars" },
+    { "source": "/api/googleIcsFeed", "destination": "/api/google?action=icsFeed" },
+    { "source": "/api/spotifyOAuthStart", "destination": "/api/spotify?action=oauthStart" },
+    { "source": "/api/spotifyOAuthCallback", "destination": "/api/spotify?action=oauthCallback" },
+    { "source": "/api/spotifyAccessToken", "destination": "/api/spotify?action=accessToken" },
+    { "source": "/api/spotifyAccount", "destination": "/api/spotify?action=account" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

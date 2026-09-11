@@ -56,6 +56,12 @@ export function SchoolPage() {
   const [menuDate, setMenuDate] = useState<string | null>(null);
   const [bellSchedules, setBellSchedules] = useState<Record<string, BellSchedule | null>>({});
   const [nextMeetingDate, setNextMeetingDate] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const titleRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -205,17 +211,24 @@ export function SchoolPage() {
       blocks = [];
     }
 
+    const nowHour = now.getHours() + now.getMinutes() / 60;
+    const isToday = isSameDate(date, now);
+
     const positioned = [...blocks]
       .sort((a, b) => a.start - b.start)
       .map((b) => {
         const topPct = ((b.start - START_HOUR) / totalHours) * 100;
         const heightPct = ((b.end - b.start) / totalHours) * 100;
         const openItems = (mergedByClass[b.classId] || []).filter((h) => !h.done);
+        const inProgress = isToday && nowHour >= b.start && nowHour < b.end;
+        const minutesLeft = inProgress ? Math.max(0, Math.round((b.end - nowHour) * 60)) : 0;
         return {
           ...b,
           time: `${fmtHour(b.start)}–${fmtHour(b.end)}`,
           posStyle: { top: `${topPct}%`, height: `${heightPct}%` },
           badge: classBadge(openItems),
+          inProgress,
+          minutesLeft,
         };
       });
 
@@ -238,6 +251,9 @@ export function SchoolPage() {
         })
       : [];
 
+    const showDayNowLine = isToday && nowHour >= START_HOUR && nowHour <= END_HOUR;
+    const dayNowLinePct = showDayNowLine ? ((nowHour - START_HOUR) / totalHours) * 100 : 0;
+
     return {
       day, date, key,
       isOverridden: !!override,
@@ -246,6 +262,8 @@ export function SchoolPage() {
       bell,
       bellNoSchool,
       bellPeriods,
+      showDayNowLine,
+      dayNowLinePct,
     };
   });
 
@@ -325,19 +343,33 @@ export function SchoolPage() {
             {hourLabels.map(({ h, label }) => (
               <div className="time-label" style={{ position: 'absolute', top: `${((h - START_HOUR) / totalHours) * 100}%`, right: 0, left: 0 }} key={h}>{label}</div>
             ))}
+            {dayColumns.some((col) => col.showDayNowLine) && (
+              <div
+                className="time-label now-time-label"
+                style={{ position: 'absolute', top: `${((now.getHours() + now.getMinutes() / 60 - START_HOUR) / totalHours) * 100}%`, right: 0, left: 0 }}
+              >
+                {fmtHour(now.getHours() + now.getMinutes() / 60)}
+              </div>
+            )}
           </div>
           {dayColumns.map((col) => (
             <div className="day-col" style={{ height: totalHours * 56 }} key={col.key}>
+              {col.showDayNowLine && (
+                <div className="day-now-line" style={{ top: `${col.dayNowLinePct}%` }}>
+                  <span className="day-now-dot" />
+                </div>
+              )}
               {col.bellPeriods.map((p) => (
                 <div className={`bell-block bell-block-${p.variant}`} style={p.posStyle} key={p.key}>
                   <span className="bb-name">{p.label}</span>
                 </div>
               ))}
               {col.classes.map((c) => (
-                <div className="class-block" style={c.posStyle} onClick={() => setOpenClassId(c.classId)} key={`${col.key}-${c.classId}-${c.start}`}>
+                <div className={`class-block${c.inProgress ? ' in-progress' : ''}`} style={c.posStyle} onClick={() => setOpenClassId(c.classId)} key={`${col.key}-${c.classId}-${c.start}`}>
                   <span className="cb-name">{c.name}</span>
                   <span className="cb-meta">{c.time} &middot; {c.room}</span>
                   {c.badge && <span className={`cb-hw cb-hw-${c.badge.color}`}>{c.badge.count}</span>}
+                  {c.inProgress && <span className="now-label">{c.minutesLeft} min left</span>}
                 </div>
               ))}
             </div>
