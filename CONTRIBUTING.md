@@ -79,3 +79,7 @@ PRs with unsigned commits will need to be amended before merging.
 Open a [GitHub issue](https://github.com/Krennix/fourfold/issues) with as
 much detail as you can — steps to reproduce for bugs, or the use case for
 feature requests.
+
+For general questions, ideas that aren't a concrete proposal yet, or just
+wanting to chat about the project, use
+[GitHub Discussions](https://github.com/Krennix/fourfold/discussions) instead.

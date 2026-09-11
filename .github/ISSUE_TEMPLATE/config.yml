@@ -3,3 +3,6 @@ contact_links:
   - name: Report a critical/high-severity security vulnerability
     url: https://github.com/Krennix/fourfold/blob/main/SECURITY.md
     about: Do not open a public issue for this — email tog.ironridge@gmail.com or DM @director_krennic_ on Discord instead.
+  - name: Ask a question / start a discussion
+    url: https://github.com/Krennix/fourfold/discussions
+    about: Have a question, idea, or something to discuss that isn't a bug or a concrete feature request? Use Discussions instead of an issue.
