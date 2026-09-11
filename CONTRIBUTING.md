@@ -22,6 +22,24 @@ configuring environment variables, and running the app locally.
    errors too.)
 4. Open a pull request against `main` describing what changed and why.
 
+You don't need any special permission to open a pull request — forking and
+opening a PR as above works for anyone.
+
+## Getting contributor (write) access
+
+If you'd like write access to the repo itself (e.g. to push branches
+directly instead of working from a fork), DM the maintainer on Discord
+(**@director_krennic_**) with:
+
+- Your GitHub username
+- A little about your coding experience
+- A rough estimate of your age, using these bands (round down to the
+  nearest band at or below your actual age):
+  - If you're an adult: `Major 25+`, `Major 50+`, `Major 75+`, etc. — e.g.
+    someone who is 34 says `Major 25+`, someone who is 55 says `Major 50+`.
+  - If you're a minor: `Minor 15+`, `Minor 10+`, etc. — e.g. someone who is
+    16 says `Minor 15+`.
+
 ## Code style
 
 - Match the existing style in the file you're editing (this project doesn't
