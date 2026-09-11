@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { Fragment, useEffect, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { Widget, PageHeader } from '../components/Widget';
 import { useCalendarEvents, eventKey, type CalEvent } from '../state/CalendarContext';
@@ -114,12 +114,14 @@ function DayAgenda({
   const isToday = parseKey(dayKey).toDateString() === now.toDateString();
   const nowHour = now.getHours() + now.getMinutes() / 60;
   const timedEvents = dayEvents.filter((e) => !e.allDay).map((ev) => {
-    if (!isToday || !ev.durationMin) return { ...ev, inProgress: false, minutesLeft: 0 };
-    const start = (() => { const [h, m] = to24h(ev.time).split(':').map(Number); return h + m / 60; })();
-    const end = start + ev.durationMin / 60;
-    const inProgress = nowHour >= start && nowHour < end;
-    return { ...ev, inProgress, minutesLeft: inProgress ? Math.max(0, Math.round((end - nowHour) * 60)) : 0 };
-  });
+    const [h, m] = to24h(ev.time).split(':').map(Number);
+    const start = h + m / 60;
+    const end = ev.durationMin ? start + ev.durationMin / 60 : start;
+    const inProgress = isToday && !!ev.durationMin && nowHour >= start && nowHour < end;
+    return { ...ev, start, inProgress, minutesLeft: inProgress ? Math.max(0, Math.round((end - nowHour) * 60)) : 0 };
+  }).sort((a, b) => a.start - b.start);
+  const nowInsertIdx = isToday ? timedEvents.findIndex((ev) => ev.start > nowHour) : -1;
+  const nowLabel = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const label = parseKey(dayKey).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
   const menuItems: ContextMenuItem[] = [
@@ -186,10 +188,13 @@ function DayAgenda({
         )}
 
         <div className="day-view-list">
-          {timedEvents.map((ev) => (
+          {isToday && nowInsertIdx === 0 && (
+            <div className="day-view-now"><span className="now-dot" />{nowLabel}</div>
+          )}
+          {timedEvents.map((ev, i) => (
+            <Fragment key={eventKey(ev)}>
             <div
               className={`day-view-event${ev.locked ? ' locked' : ''}${ev.inProgress ? ' in-progress' : ''}`}
-              key={eventKey(ev)}
               onClick={() => onEditEvent(ev)}
               style={chipColorStyle(ev)}
             >
@@ -212,7 +217,14 @@ function DayAgenda({
                 )}
               </span>
             </div>
+            {isToday && nowInsertIdx === i + 1 && (
+              <div className="day-view-now"><span className="now-dot" />{nowLabel}</div>
+            )}
+            </Fragment>
           ))}
+          {isToday && nowInsertIdx === -1 && (
+            <div className="day-view-now"><span className="now-dot" />{nowLabel}</div>
+          )}
         </div>
       </div>
 

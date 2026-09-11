@@ -80,3 +80,10 @@
   color: var(--now-color, #e0393f);
 }
 .now-chip .now-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--now-color, #e0393f); flex: none; }
+
+.day-view-now {
+  display: flex; align-items: center; gap: 6px; margin: 2px 0;
+  font-size: 10.5px; font-weight: 700; color: var(--now-color, #e0393f);
+}
+.day-view-now::after { content: ''; flex: 1; height: 2px; background: var(--now-color, #e0393f); }
+.day-view-now .now-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--now-color, #e0393f); flex: none; }
