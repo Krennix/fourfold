@@ -28,7 +28,7 @@ expose other users' data or tokens, or bypass authentication entirely),
 please reach out directly instead of waiting on the above:
 
 - Email: **tog.ironridge@gmail.com**
-- Discord: **@Director_Krennic** (DM)
+- Discord: **@director_krennic_** (DM)
 
 Please include, where relevant:
 
