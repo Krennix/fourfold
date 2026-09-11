@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, type SchoolClass, type Preset } from '../state/SchoolContext';
 import { useGoogleAuth, type LinkedAccount } from '../state/GoogleAuthContext';
@@ -600,8 +600,81 @@ function presetToForm(p: Preset, classIds: string[]): PresetFormState {
   return form;
 }
 
+type SettingsCategory = 'general' | 'account' | 'calendar' | 'school';
+
+const SETTINGS_CATEGORY_TABS: { id: SettingsCategory; label: string; description: string; color: string; icon: ReactNode }[] = [
+  {
+    id: 'general',
+    label: 'General',
+    description: 'Appearance, notifications, and installing the app.',
+    color: '#5980a6',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+      </svg>
+    ),
+  },
+  {
+    id: 'account',
+    label: 'Account & Data',
+    description: "Who's signed in, and exporting or importing your data.",
+    color: '#8759a6',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+      </svg>
+    ),
+  },
+  {
+    id: 'calendar',
+    label: 'Calendar',
+    description: 'Connect Google Calendar accounts and backup feeds.',
+    color: '#3f9968',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <path d="M16 2v4M8 2v4M3 10h18" />
+      </svg>
+    ),
+  },
+  {
+    id: 'school',
+    label: 'School',
+    description: 'Schoology sync, classes, bell schedule, and presets.',
+    color: '#c07a35',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m22 10-10-5L2 10l10 5 10-5Z" />
+        <path d="M6 12v5c0 1.1 2.7 2 6 2s6-.9 6-2v-5" />
+      </svg>
+    ),
+  },
+];
+
+const SETTINGS_TAB_KEY = 'fourfold.settings.tab';
+
 export function SettingsPage() {
   const { classes, addClass, updateClass, removeClass, presets, addPreset, updatePreset, removePreset, showBreaks, setShowBreaks } = useSchool();
+
+  const [activeTab, setActiveTab] = useState<SettingsCategory>(() => {
+    try {
+      const stored = localStorage.getItem(SETTINGS_TAB_KEY);
+      return SETTINGS_CATEGORY_TABS.some((t) => t.id === stored) ? (stored as SettingsCategory) : 'general';
+    } catch {
+      return 'general';
+    }
+  });
+  const selectTab = (id: SettingsCategory) => {
+    setActiveTab(id);
+    try {
+      localStorage.setItem(SETTINGS_TAB_KEY, id);
+    } catch {
+      // ignore storage errors (private browsing, etc.)
+    }
+  };
+  const activeCategory = SETTINGS_CATEGORY_TABS.find((t) => t.id === activeTab)!;
 
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [classForm, setClassForm] = useState<ClassFormState>(emptyClassForm());
@@ -646,13 +719,54 @@ export function SettingsPage() {
     <div className="page">
       <PageHeader kicker="Preferences" title="Settings" />
 
-      <ThemeSettings />
-      <NotificationSettings />
-      <InstallPwaSettings />
-      <ExportImportSettings />
-      <AccessSettings />
-      <GoogleCalendarSettings />
-      <GoogleIcsSettings />
+      <div className="settings-shell">
+        <nav className="settings-nav">
+          {SETTINGS_CATEGORY_TABS.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              className={`settings-nav-item${activeTab === cat.id ? ' active' : ''}`}
+              onClick={() => selectTab(cat.id)}
+            >
+              <span className="settings-nav-icon" style={{ background: cat.color }}>{cat.icon}</span>
+              <span className="settings-nav-label">{cat.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="settings-panel">
+          <div className="settings-panel-head">
+            <span className="settings-panel-icon" style={{ background: activeCategory.color }}>{activeCategory.icon}</span>
+            <div className="settings-panel-title">
+              <h2>{activeCategory.label}</h2>
+              <p className="text-muted">{activeCategory.description}</p>
+            </div>
+          </div>
+
+      {activeTab === 'general' && (
+        <>
+          <ThemeSettings />
+          <NotificationSettings />
+          <InstallPwaSettings />
+        </>
+      )}
+
+      {activeTab === 'account' && (
+        <>
+          <AccessSettings />
+          <ExportImportSettings />
+        </>
+      )}
+
+      {activeTab === 'calendar' && (
+        <>
+          <GoogleCalendarSettings />
+          <GoogleIcsSettings />
+        </>
+      )}
+
+      {activeTab === 'school' && (
+        <>
       <SchoologySettings />
       <SchoologyClassMappingSettings />
 
@@ -795,6 +909,10 @@ export function SettingsPage() {
           </div>
         )}
       </Widget>
+        </>
+      )}
+        </div>
+      </div>
     </div>
   );
 }
