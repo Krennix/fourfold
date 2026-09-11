@@ -165,6 +165,10 @@ The app is designed to deploy on [Vercel](https://vercel.com/), which serves
 `src/` as a static SPA and `api/*.ts` as serverless functions. Set the
 environment variables above in your Vercel project settings.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 [MIT](LICENSE)
