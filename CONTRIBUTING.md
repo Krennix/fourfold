@@ -41,6 +41,11 @@ directly instead of working from a fork), DM the maintainer on Discord
     16 says `Minor 15+`.
 - The **Minimum Age** to work on this project is **14**.
 
+Once you have write access, work out of a branch named
+`your-github-username-dev` (e.g. `octocat-dev`) instead of pushing directly
+to `main`. Open a pull request from that branch when your change is ready,
+same as the fork workflow above.
+
 ## Code style
 
 - Match the existing style in the file you're editing (this project doesn't
