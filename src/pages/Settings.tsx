@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, type SchoolClass, type Preset } from '../state/SchoolContext';
 import { useGoogleAuth, type LinkedAccount } from '../state/GoogleAuthContext';
@@ -9,6 +9,7 @@ import { useAuth } from '../state/AuthContext';
 import { useTheme } from '../state/ThemeContext';
 import { allCategories, matchCategoryToClass } from '../lib/homeworkMerge';
 import { ColorSwatchPicker } from '../components/ColorSwatches';
+import { exportAllData, downloadJson, isValidExport, importAllData, type FourFoldExport } from '../lib/exportImport';
 import './Settings.css';
 
 function ThemeSettings() {
@@ -30,6 +31,107 @@ function ThemeSettings() {
         "System" follows your device's light/dark setting automatically. The quick toggle in the sidebar
         switches straight between light and dark.
       </p>
+    </Widget>
+  );
+}
+
+function ExportImportSettings() {
+  const { email } = useAuth();
+  const [includeLocal, setIncludeLocal] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<FourFoldExport | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = async () => {
+    if (!email) return;
+    setBusy(true);
+    try {
+      downloadJson(`fourfold-export-${new Date().toISOString().slice(0, 10)}.json`, await exportAllData(email, includeLocal));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleFileChosen = async (file: File) => {
+    setMessage(null);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      setMessage('That file is not valid JSON.');
+      return;
+    }
+    if (!isValidExport(parsed)) {
+      setMessage('That file is not a recognized FourFold export.');
+      return;
+    }
+    setPending(parsed);
+  };
+
+  const confirmImport = async () => {
+    if (!pending) return;
+    setBusy(true);
+    try {
+      await importAllData(pending);
+      window.location.reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Export &amp; import data</h4>
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Export downloads a JSON backup of your habits, matrix tasks, countdowns, school data, and assistant history.
+        It never includes your sign-in session or your Google/Schoology feed links.
+      </p>
+      <label className="toggle-row">
+        <input type="checkbox" checked={includeLocal} onChange={(e) => setIncludeLocal(e.target.checked)} />
+        <span>Also include this device's local (unsynced) calendar events</span>
+      </label>
+      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <button className="btn btn-primary" type="button" onClick={() => void handleExport()} disabled={busy}>
+          Export JSON
+        </button>
+        <button className="btn btn-secondary" type="button" onClick={() => fileRef.current?.click()} disabled={busy}>
+          Import JSON…
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleFileChosen(f);
+            e.target.value = '';
+          }}
+        />
+      </div>
+      {message && <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>{message}</p>}
+      {pending && (
+        <div className="dialog-backdrop" onClick={() => setPending(null)}>
+          <div className="dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-title">Overwrite your data?</div>
+            <p className="text-muted" style={{ fontSize: 13 }}>
+              This file was exported {new Date(pending.exportedAt).toLocaleString()}
+              {pending.email && pending.email !== email ? ` from ${pending.email}` : ''}. Importing replaces your
+              current habits, matrix, countdowns, school, and assistant data with what's in this file. This can't be
+              undone.
+            </p>
+            <div className="dialog-actions">
+              <button className="btn btn-secondary" type="button" onClick={() => setPending(null)}>Cancel</button>
+              <button className="btn btn-primary" type="button" onClick={() => void confirmImport()} disabled={busy}>
+                {busy ? 'Importing…' : 'Overwrite & reload'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Widget>
   );
 }
@@ -460,6 +562,7 @@ export function SettingsPage() {
       <PageHeader kicker="Preferences" title="Settings" />
 
       <ThemeSettings />
+      <ExportImportSettings />
       <AccessSettings />
       <GoogleCalendarSettings />
       <GoogleIcsSettings />
