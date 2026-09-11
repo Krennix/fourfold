@@ -23,6 +23,13 @@ until it's resolved.
 If that's not available for some reason, open a normal issue asking the
 maintainer to get in touch privately, without including exploit details.
 
+**For critical/high-severity vulnerabilities** (e.g. anything that could
+expose other users' data or tokens, or bypass authentication entirely),
+please reach out directly instead of waiting on the above:
+
+- Email: **tog.ironridge@gmail.com**
+- Discord: **@Director_Krennic** (DM)
+
 Please include, where relevant:
 
 - A description of the vulnerability and its impact
