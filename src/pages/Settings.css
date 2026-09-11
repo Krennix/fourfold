@@ -1,3 +1,105 @@
+.settings-shell {
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+  width: 100%;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2);
+  position: sticky;
+  top: var(--space-6);
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.settings-nav-item:hover {
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+
+.settings-nav-item.active {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+  border-color: var(--color-accent-200);
+}
+
+.settings-nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  flex: none;
+  color: #fff;
+}
+
+.settings-nav-icon svg { width: 17px; height: 17px; }
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.settings-panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-panel-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  flex: none;
+  color: #fff;
+}
+
+.settings-panel-icon svg { width: 21px; height: 21px; }
+
+.settings-panel-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.settings-panel-title h2 { margin: 0; font-size: 21px; }
+.settings-panel-title p { margin: 0; font-size: 12.5px; }
+
+@media (max-width: 768px) {
+  .settings-shell { grid-template-columns: 1fr; }
+
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-nav-item { flex: none; }
+}
+
 .class-list { display: flex; flex-direction: column; }
 .class-row {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
