@@ -169,6 +169,12 @@ environment variables above in your Vercel project settings.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Community
+
+- **Bugs and feature requests** → [GitHub Issues](https://github.com/Krennix/fourfold/issues)
+- **Questions, ideas, and general discussion** → [GitHub Discussions](https://github.com/Krennix/fourfold/discussions)
+- **Security vulnerabilities** → see [SECURITY.md](SECURITY.md)
+
 ## License
 
 [MIT](LICENSE)
