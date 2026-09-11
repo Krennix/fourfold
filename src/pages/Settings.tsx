@@ -6,9 +6,33 @@ import { GoogleCalendarPicker } from '../components/GoogleCalendarPicker';
 import { useSchoology } from '../state/SchoologyContext';
 import { useGoogleIcs } from '../state/GoogleIcsContext';
 import { useAuth } from '../state/AuthContext';
+import { useTheme } from '../state/ThemeContext';
 import { allCategories, matchCategoryToClass } from '../lib/homeworkMerge';
 import { ColorSwatchPicker } from '../components/ColorSwatches';
 import './Settings.css';
+
+function ThemeSettings() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Appearance</h4>
+      </div>
+      <div className="seg" style={{ alignSelf: 'flex-start' }}>
+        {(['light', 'dark', 'system'] as const).map((t) => (
+          <label className="seg-opt" key={t}>
+            <input type="radio" name="theme" checked={theme === t} onChange={() => setTheme(t)} />
+            {t === 'light' ? 'Light' : t === 'dark' ? 'Dark' : 'System'}
+          </label>
+        ))}
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        "System" follows your device's light/dark setting automatically. The quick toggle in the sidebar
+        switches straight between light and dark.
+      </p>
+    </Widget>
+  );
+}
 
 function AccessSettings() {
   const { email, logout } = useAuth();
@@ -435,6 +459,7 @@ export function SettingsPage() {
     <div className="page">
       <PageHeader kicker="Preferences" title="Settings" />
 
+      <ThemeSettings />
       <AccessSettings />
       <GoogleCalendarSettings />
       <GoogleIcsSettings />
