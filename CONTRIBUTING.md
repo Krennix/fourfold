@@ -37,8 +37,9 @@ directly instead of working from a fork), DM the maintainer on Discord
   nearest band at or below your actual age):
   - If you're an adult: `Major 25+`, `Major 50+`, `Major 75+`, etc. — e.g.
     someone who is 34 says `Major 25+`, someone who is 55 says `Major 50+`.
-  - If you're a minor: `Minor 15+`, `Minor 10+`, etc. — e.g. someone who is
+  - If you're a minor: `Minor 15+`, `Minor 13+`, etc. — e.g. someone who is
     16 says `Minor 15+`.
+- The **Minimum Age** to work on this project is **14**.
 
 ## Code style
 
