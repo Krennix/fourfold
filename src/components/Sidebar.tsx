@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { useTheme } from '../state/ThemeContext';
 import { Logo } from './Logo';
 import './Sidebar.css';
@@ -130,6 +130,8 @@ export function Sidebar() {
     } catch {
       // ignore storage errors (private browsing, etc.)
     }
+    document.body.classList.toggle('sidebar-collapsed', collapsed);
+    return () => document.body.classList.remove('sidebar-collapsed');
   }, [collapsed]);
 
   useEffect(() => {
@@ -162,17 +164,17 @@ export function Sidebar() {
             {mobileOpen ? <path d="M18 6 6 18M6 6l12 12" /> : <path d="M3 6h18M3 12h18M3 18h18" />}
           </svg>
         </button>
-        <div className="nav-brand">
-          <Logo size={20} />
+        <Link to="/" className="nav-brand" onClick={() => setMobileOpen(false)}>
+          <Logo size={24} />
           Fourfold
-        </div>
+        </Link>
       </div>
       {mobileOpen && <div className="sidebar-backdrop" onClick={() => setMobileOpen(false)} />}
       <aside className={`sidebar${effectiveCollapsed ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
-        <div className="nav-brand">
-          <Logo size={20} />
+        <Link to="/" className="nav-brand" title="Fourfold — go to Home" onClick={() => setMobileOpen(false)}>
+          <Logo size={28} />
           {!effectiveCollapsed && 'Fourfold'}
-        </div>
+        </Link>
         <nav className="sidebar-nav">
           {navItems.map((item) => (
             <NavLink
