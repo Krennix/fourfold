@@ -14,6 +14,7 @@ import { CalendarProvider } from './state/CalendarContext';
 import { CountdownsProvider } from './state/CountdownsContext';
 import { PomodoroProvider } from './state/PomodoroContext';
 import { AgentProvider } from './state/AgentContext';
+import { NotificationsProvider } from './state/NotificationsContext';
 import { HomePage } from './pages/Home';
 import { MatrixPage } from './pages/Matrix';
 import { HabitsPage } from './pages/Habits';
@@ -40,6 +41,7 @@ function App() {
             <PomodoroProvider>
             <SpotifyAuthProvider>
             <AgentProvider>
+            <NotificationsProvider>
               <BrowserRouter>
                 <Sidebar />
                 <main className="content">
@@ -57,6 +59,7 @@ function App() {
                   </Routes>
                 </main>
               </BrowserRouter>
+            </NotificationsProvider>
             </AgentProvider>
             </SpotifyAuthProvider>
             </PomodoroProvider>
