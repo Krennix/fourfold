@@ -1,0 +1,60 @@
+name: Feature request / enhancement
+description: Suggest an improvement or a new feature for FourFold.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! This is a small personal project
+        maintained in spare time, so please keep in mind not everything can
+        be built — but all ideas are welcome.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area does this relate to?
+      options:
+        - Home dashboard
+        - Eisenhower Matrix
+        - Habit Tracker
+        - Calendar (Google sync)
+        - Pomodoro Timer
+        - Spotify integration
+        - School / homework tracking
+        - Scheduling agent
+        - Sign-in / auth
+        - Settings
+        - Something new / cross-cutting
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do that's currently awkward or not possible?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen? Mockups/sketches welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds you're currently using, or other approaches you thought about.
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd be willing to open a PR for this myself (see CONTRIBUTING.md)
+          required: false
