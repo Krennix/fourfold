@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Widget, PageHeader } from '../components/Widget';
 import { useCalendarEvents, eventKey, type CalEvent } from '../state/CalendarContext';
 import { useGoogleAuth } from '../state/GoogleAuthContext';
 import { EventDialog } from '../components/EventDialog';
 import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
+import { WeeklyReviewTab } from './WeeklyReview';
 import './Calendar.css';
 
 const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -274,6 +275,12 @@ export function CalendarPage() {
   const { events, loading, error, refresh, updateEvent, toggleEventLocked } = useCalendarEvents();
   const { status, accounts } = useGoogleAuth();
   const signedInCount = accounts.filter((a) => a.status === 'signed-in').length;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<'calendar' | 'weekly'>(searchParams.get('tab') === 'weekly' ? 'weekly' : 'calendar');
+  const setCalTab = (t: 'calendar' | 'weekly') => {
+    setTab(t);
+    setSearchParams(t === 'weekly' ? { tab: 'weekly' } : {}, { replace: true });
+  };
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
@@ -388,7 +395,20 @@ export function CalendarPage() {
 
       {error && <div className="empty-msg" style={{ color: 'var(--danger, #c0392b)' }}>{error}</div>}
 
-      {view === 'day' && dayKey ? (
+      <div className="seg" style={{ alignSelf: 'flex-end' }}>
+        <label className="seg-opt">
+          <input type="radio" name="calendar-tab" checked={tab === 'calendar'} onChange={() => setCalTab('calendar')} />
+          Calendar
+        </label>
+        <label className="seg-opt">
+          <input type="radio" name="calendar-tab" checked={tab === 'weekly'} onChange={() => setCalTab('weekly')} />
+          Weekly Review
+        </label>
+      </div>
+
+      {tab === 'weekly' ? (
+        <WeeklyReviewTab />
+      ) : view === 'day' && dayKey ? (
         <DayAgenda
           dayKey={dayKey}
           onBack={() => setView('month')}
