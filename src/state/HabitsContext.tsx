@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useRemoteState } from '../lib/remoteStore';
 import { useAuth } from './AuthContext';
 import { StreakCelebration } from '../components/StreakCelebration';
+import { dateKey, computeStreak } from '../lib/habitStats';
 
 export interface Habit {
   id: string;
@@ -13,25 +14,8 @@ export interface Habit {
   history: string[];
 }
 
-function dateKey(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 function todayKey() {
   return dateKey(new Date());
-}
-
-function computeStreak(history: string[]): number {
-  const set = new Set(history);
-  const today = new Date();
-  let streak = 0;
-  for (let i = 0; i < 3650; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    if (!set.has(dateKey(d))) break;
-    streak++;
-  }
-  return streak;
 }
 
 function overallStreak(habits: { history: string[] }[]): number {
