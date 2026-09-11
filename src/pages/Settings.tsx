@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, type SchoolClass, type Preset } from '../state/SchoolContext';
 import { useGoogleAuth, type LinkedAccount } from '../state/GoogleAuthContext';
@@ -132,6 +132,56 @@ function ExportImportSettings() {
           </div>
         </div>
       )}
+    </Widget>
+  );
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+function InstallPwaSettings() {
+  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(() => window.matchMedia('(display-mode: standalone)').matches);
+
+  useEffect(() => {
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferred(e as BeforeInstallPromptEvent);
+    };
+    const onInstalled = () => setInstalled(true);
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  if (installed) return null;
+
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Install FourFold</h4>
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Install FourFold as an app on this device for quicker access and offline loading of the app shell.
+      </p>
+      <button
+        className="btn btn-primary"
+        type="button"
+        disabled={!deferred}
+        onClick={async () => {
+          if (!deferred) return;
+          await deferred.prompt();
+          await deferred.userChoice;
+          setDeferred(null);
+        }}
+      >
+        {deferred ? 'Install' : 'Not available in this browser yet'}
+      </button>
     </Widget>
   );
 }
@@ -562,6 +612,7 @@ export function SettingsPage() {
       <PageHeader kicker="Preferences" title="Settings" />
 
       <ThemeSettings />
+      <InstallPwaSettings />
       <ExportImportSettings />
       <AccessSettings />
       <GoogleCalendarSettings />
