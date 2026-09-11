@@ -1,12 +1,13 @@
 import { useEffect, useMemo } from 'react';
-import { Widget, PageHeader } from '../components/Widget';
+import { Widget } from '../components/Widget';
 import { useMatrix } from '../state/MatrixContext';
 import { useCalendarEvents } from '../state/CalendarContext';
 import { useQuadrantHomework } from '../lib/useQuadrantHomework';
 import { getWeekRange, isWithinDays, calendarDateKey } from '../lib/dateRange';
 import './WeeklyReview.css';
 
-export function WeeklyReviewPage() {
+/** Weekly review content, embedded as a tab on the Calendar page. */
+export function WeeklyReviewTab() {
   const { start, end } = useMemo(() => getWeekRange(), []);
   const { tasks } = useMatrix();
   const homeworkRows = useQuadrantHomework();
@@ -37,8 +38,10 @@ export function WeeklyReviewPage() {
   );
 
   return (
-    <div className="page">
-      <PageHeader kicker={`${days[0].label} – ${days[6].label}`} title="Weekly Review" />
+    <>
+      <p className="text-muted" style={{ fontSize: 13, margin: '0 0 var(--space-3)' }}>
+        {days[0].label} – {days[6].label}
+      </p>
       <div className="weekly-grid">
         {days.map((day) => {
           const dayEvents = events.filter((e) => e.date === day.key);
@@ -71,6 +74,6 @@ export function WeeklyReviewPage() {
           );
         })}
       </div>
-    </div>
+    </>
   );
 }

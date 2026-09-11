@@ -23,7 +23,6 @@ import { PomodoroPage } from './pages/Pomodoro';
 import { AgentPage } from './pages/Agent';
 import { SchoolPage } from './pages/School';
 import { SettingsPage } from './pages/Settings';
-import { WeeklyReviewPage } from './pages/WeeklyReview';
 
 function App() {
   return (
@@ -50,7 +49,7 @@ function App() {
                     <Route path="/matrix" element={<MatrixPage />} />
                     <Route path="/habits" element={<HabitsPage />} />
                     <Route path="/calendar" element={<CalendarPage />} />
-                    <Route path="/weekly-review" element={<WeeklyReviewPage />} />
+                    <Route path="/weekly-review" element={<Navigate to="/calendar?tab=weekly" replace />} />
                     <Route path="/countdowns" element={<Navigate to="/habits" replace />} />
                     <Route path="/pomodoro" element={<PomodoroPage />} />
                     <Route path="/agent" element={<AgentPage />} />

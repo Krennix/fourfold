@@ -191,6 +191,10 @@ export function HomePage() {
           <Widget>
             <div className="widget-head">
               <h4>Today's Calendar</h4>
+              <Link className="btn btn-ghost" style={{ fontSize: 12 }} to="/calendar?tab=weekly">
+                Weekly review
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+              </Link>
             </div>
             <div>
               {todaysEvents.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No events today.</div>}
