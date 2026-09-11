@@ -1,25 +1,79 @@
-# CODING AGENTS: READ THIS FIRST
+# FourFold
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+A personal productivity dashboard combining an Eisenhower matrix, habit
+tracker, calendar, Pomodoro timer, and school/homework tracking in one app —
+built with React, TypeScript, and Vite, backed by Vercel serverless functions.
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+## Features
 
-## What you should do — IMPORTANT
+- **Home dashboard** — an overview combining widgets from every module.
+- **Eisenhower Matrix** — prioritize tasks by urgency/importance, and link
+  them to calendar events or times.
+- **Habit Tracker** — daily checklists, streaks, and yearly grids.
+- **Calendar** — two-way sync with Google Calendar, plus a read-only ICS
+  "secret address" fallback.
+- **Pomodoro Timer** — with ambient background sound and optional Spotify
+  now-playing/playback control.
+- **School** — homework tracking that can merge in assignments from a
+  Schoology ICS feed, and (optionally) a school bell-schedule integration
+  (`src/lib/harkerBell.ts` talks to a public Harker Middle School API — swap
+  this out or remove it if your school doesn't have an equivalent).
+- **Scheduling agent** — an Anthropic-powered assistant (`api/agent.ts`) that
+  can help auto-schedule tasks/habits into free calendar time.
 
-**Read the chat transcripts first.** There are 1 chat transcript(s) in `chats/`. The transcripts show the full back-and-forth between the user and the design assistant — they tell you **what the user actually wants** and **where they landed** after iterating. Don't skip them. The final HTML files are the output, but the chat is where the intent lives.
+## Tech stack
 
-**Read `project/School.dc.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+- [Vite](https://vitejs.dev/) + [React](https://react.dev/) + TypeScript
+- [React Router](https://reactrouter.com/)
+- [Vercel](https://vercel.com/) serverless functions (`api/`)
+- [Upstash Redis](https://upstash.com/) for server-side storage
+- [Anthropic SDK](https://docs.anthropic.com/) for the scheduling agent
+- Google OAuth (sign-in + Calendar sync) and Spotify OAuth (playback)
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+## Getting started
 
-## About the design files
+This project uses [Bun](https://bun.sh/).
 
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
+```bash
+bun install
+cp .env.example .env   # then fill in the values (see below)
+bun dev
+```
 
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
+The app runs as a Vite dev server; the `api/` serverless functions require
+`vercel dev` (or a Vercel deployment) to execute, since Vite alone doesn't run
+them. See `vercel.json` for routing.
 
-## Bundle contents
+### Environment variables
 
-- `README.md` — this file
-- `chats/` — conversation transcripts (read these!)
-- `project/` — the `FourFold` project files (HTML prototypes, assets, components)
+Copy `.env.example` to `.env` and fill in the values you need. At minimum:
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google sign-in and Calendar sync |
+| `ALLOWED_EMAILS` | Comma-separated allowlist of Google accounts permitted to sign in |
+| `SESSION_SECRET` | Signs app session tokens — generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Upstash Redis (set automatically if you connect the Vercel integration) |
+| `ANTHROPIC_API_KEY` | Powers the scheduling agent |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Spotify now-playing/playback (optional) |
+
+**Note:** sign-in is gated by `ALLOWED_EMAILS` — by default nobody can sign
+in until you add your own email(s). This is a personal-use app, not a
+multi-tenant product.
+
+## Scripts
+
+- `bun dev` — start the Vite dev server
+- `bun run build` — typecheck and build for production
+- `bun run lint` — run oxlint
+- `bun run preview` — preview the production build locally
+
+## Deployment
+
+The app is designed to deploy on [Vercel](https://vercel.com/), which serves
+`src/` as a static SPA and `api/*.ts` as serverless functions. Set the
+environment variables above in your Vercel project settings.
+
+## License
+
+[MIT](LICENSE)
