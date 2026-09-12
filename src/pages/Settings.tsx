@@ -440,10 +440,22 @@ function SchoologySettings() {
     void saveIcsUrl(draft.trim());
   };
 
+  const handleDisconnectFeed = () => {
+    setDraft('');
+    setDirty(false);
+    void saveIcsUrl('');
+  };
+
   const handleSaveApi = () => {
     void saveApiCredentials(apiKeyDraft.trim(), apiSecretDraft.trim());
     setApiKeyDraft('');
     setApiSecretDraft('');
+  };
+
+  const handleDisconnectApi = () => {
+    setApiKeyDraft('');
+    setApiSecretDraft('');
+    void saveApiCredentials('', '');
   };
 
   return (
@@ -473,6 +485,11 @@ function SchoologySettings() {
         <button className="btn btn-primary" type="button" onClick={handleSave} disabled={status === 'loading' || !draft.trim()}>
           Save
         </button>
+        {icsUrl && (
+          <button className="btn btn-ghost" type="button" onClick={handleDisconnectFeed} disabled={status === 'loading'}>
+            Disconnect
+          </button>
+        )}
       </div>
 
       <p className="text-muted" style={{ fontSize: 12.5, margin: 0, marginTop: 'var(--space-2)' }}>
@@ -505,6 +522,11 @@ function SchoologySettings() {
         >
           Save
         </button>
+        {hasApiKey && (
+          <button className="btn btn-ghost" type="button" onClick={handleDisconnectApi} disabled={status === 'loading'}>
+            Disconnect
+          </button>
+        )}
       </div>
 
       {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
@@ -528,8 +550,17 @@ function CanvasSettings() {
 
   const handleSave = () => {
     setDirty(false);
-    void saveCredentials(urlDraft.trim(), tokenDraft.trim());
+    // Omit the token entirely when left blank so an existing one isn't wiped just by re-saving
+    // the URL — the backend only changes fields it actually receives.
+    void saveCredentials(urlDraft.trim(), tokenDraft.trim() || undefined);
     setTokenDraft('');
+  };
+
+  const handleDisconnect = () => {
+    setUrlDraft('');
+    setDirty(false);
+    setTokenDraft('');
+    void saveCredentials('', '');
   };
 
   return (
@@ -571,6 +602,11 @@ function CanvasSettings() {
         >
           Save
         </button>
+        {hasToken && (
+          <button className="btn btn-ghost" type="button" onClick={handleDisconnect} disabled={status === 'loading'}>
+            Disconnect
+          </button>
+        )}
       </div>
       {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
       {hasToken && !error && (

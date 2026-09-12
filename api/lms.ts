@@ -139,27 +139,36 @@ async function handleCanvas(req: VercelRequest, res: VercelResponse, email: stri
 
   if (req.method === 'PUT') {
     const stored = (await redis.get<StoredCanvas>(key)) ?? {};
-    const baseUrl = typeof req.body?.baseUrl === 'string' ? req.body.baseUrl.trim().replace(/\/+$/, '') : (stored.baseUrl ?? '');
-    const token = typeof req.body?.token === 'string' && req.body.token.trim() ? req.body.token.trim() : (stored.token ?? '');
+    const next: StoredCanvas = { ...stored };
 
-    if (!baseUrl && !token) {
+    // A field only changes when the request explicitly includes it — an omitted field (as
+    // opposed to one sent as "") keeps whatever was already stored, e.g. saving a new base URL
+    // without retyping the token. Sending a field as "" is how the client asks to clear it.
+    if (typeof req.body?.baseUrl === 'string') {
+      next.baseUrl = req.body.baseUrl.trim().replace(/\/+$/, '') || undefined;
+    }
+    if (typeof req.body?.token === 'string') {
+      next.token = req.body.token.trim() || undefined;
+    }
+
+    if (!next.baseUrl && !next.token) {
       await redis.set(key, {});
       res.status(200).json({ baseUrl: null, hasToken: false, assignments: [] });
       return;
     }
-    if (!isHttpUrl(baseUrl)) {
+    if (!next.baseUrl || !isHttpUrl(next.baseUrl)) {
       res.status(400).json({ error: 'That does not look like a valid Canvas URL (e.g. https://yourschool.instructure.com).' });
       return;
     }
-    if (!token) {
+    if (!next.token) {
       res.status(400).json({ error: 'A personal access token is required.' });
       return;
     }
 
     try {
-      const assignments = await fetchCanvasAssignments(baseUrl, token);
-      await redis.set(key, { baseUrl, token });
-      res.status(200).json({ baseUrl, hasToken: true, assignments });
+      const assignments = await fetchCanvasAssignments(next.baseUrl, next.token);
+      await redis.set(key, next);
+      res.status(200).json({ baseUrl: next.baseUrl, hasToken: true, assignments });
     } catch {
       res.status(400).json({ error: 'Could not reach Canvas with that URL/token. Double-check both.' });
     }

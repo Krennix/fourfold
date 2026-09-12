@@ -10,7 +10,9 @@ interface CanvasContextValue {
   hasToken: boolean;
   assignments: LmsAssignment[];
   error: string | null;
-  saveCredentials: (baseUrl: string, token: string) => Promise<void>;
+  /** `token` omitted keeps whatever token is already saved (e.g. changing just the base URL);
+   * pass '' explicitly for both to disconnect. */
+  saveCredentials: (baseUrl: string, token?: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -59,13 +61,17 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
   }, [handleSessionExpired]);
 
   const saveCredentials = useCallback(
-    async (nextBaseUrl: string, token: string) => {
+    async (nextBaseUrl: string, token?: string) => {
       setStatus('loading');
       setError(null);
       try {
         const res = await authedFetch(
           ENDPOINT,
-          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseUrl: nextBaseUrl, token }) },
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ baseUrl: nextBaseUrl, ...(token !== undefined ? { token } : {}) }),
+          },
           handleSessionExpired,
         );
         if (!res) return;
