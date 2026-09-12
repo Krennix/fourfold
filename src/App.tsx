@@ -5,6 +5,8 @@ import { AuthProvider } from './state/AuthContext';
 import { ThemeProvider } from './state/ThemeContext';
 import { SchoolProvider } from './state/SchoolContext';
 import { SchoologyProvider } from './state/SchoologyContext';
+import { CanvasProvider } from './state/CanvasContext';
+import { ClassroomProvider } from './state/ClassroomContext';
 import { HabitsProvider } from './state/HabitsContext';
 import { MatrixProvider } from './state/MatrixContext';
 import { GoogleAuthProvider } from './state/GoogleAuthContext';
@@ -31,9 +33,11 @@ function App() {
     <LoginGate>
     <SchoolProvider>
     <SchoologyProvider>
+    <CanvasProvider>
       <HabitsProvider>
         <MatrixProvider>
           <GoogleAuthProvider>
+          <ClassroomProvider>
           <GoogleIcsProvider>
           <CalendarProvider>
             <CountdownsProvider>
@@ -65,9 +69,11 @@ function App() {
             </CountdownsProvider>
           </CalendarProvider>
           </GoogleIcsProvider>
+          </ClassroomProvider>
           </GoogleAuthProvider>
         </MatrixProvider>
       </HabitsProvider>
+    </CanvasProvider>
     </SchoologyProvider>
     </SchoolProvider>
     </LoginGate>

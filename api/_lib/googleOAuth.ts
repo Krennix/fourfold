@@ -54,7 +54,7 @@ export function buildAuthUrl(origin: string, state: string, loginHint?: string):
     client_id: CLIENT_ID,
     redirect_uri: redirectUriFor(origin),
     response_type: 'code',
-    scope: 'https://www.googleapis.com/auth/calendar',
+    scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/classroom.coursework.me.readonly',
     access_type: 'offline',
     prompt: 'consent',
     state,

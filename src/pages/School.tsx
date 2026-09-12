@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, WEEKDAYS, type Weekday, type Homework } from '../state/SchoolContext';
 import { useSchoology } from '../state/SchoologyContext';
+import { useCanvas } from '../state/CanvasContext';
+import { useClassroom } from '../state/ClassroomContext';
 import { fetchBellSchedule, findNextClassMeeting, findPeriod, isNoSchoolDay, isoToLocalHour, type BellSchedule } from '../lib/harkerBell';
 import { classBadge, mergeHomeworkForClass, type MergedHomeworkItem } from '../lib/homeworkMerge';
 import './School.css';
@@ -48,7 +50,13 @@ export function SchoolPage() {
     classes, presets, overrides, setOverride, showBreaks, homework,
     addHomework: addHomeworkToClass, updateHomework, removeHomework, toggleHomework, schoologyDone, toggleSchoologyHomeworkDone, classMappings, classKeywords,
   } = useSchool();
-  const { assignments } = useSchoology();
+  const { assignments: schoologyAssignments } = useSchoology();
+  const { assignments: canvasAssignments } = useCanvas();
+  const { assignments: classroomAssignments } = useClassroom();
+  const assignments = useMemo(
+    () => [...schoologyAssignments, ...canvasAssignments, ...classroomAssignments],
+    [schoologyAssignments, canvasAssignments, classroomAssignments],
+  );
   const [openClassId, setOpenClassId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -404,6 +412,7 @@ export function SchoolPage() {
                     <span className="text-muted" style={{ fontSize: 11 }}>Due {fmtDueDisplay(hw.due)}</span>
                     {hw.description && <span className="text-muted" style={{ fontSize: 11 }}>{hw.description}</span>}
                   </div>
+                  {hw.points != null && <span className="tag" style={{ opacity: 0.8 }}>{hw.points} pts</span>}
                   {hw.priorityLabel && <span className={`tag ${PRIORITY_CLASS[hw.priorityLabel]}`}>{PRIORITY_LABEL[hw.priorityLabel]}</span>}
                   {hw.source === 'manual' && (
                     <div style={{ display: 'flex', gap: 2 }}>
@@ -438,7 +447,8 @@ export function SchoolPage() {
                         <span className="text-muted" style={{ fontSize: 11 }}>Due {fmtDueDisplay(hw.due)}</span>
                         {hw.description && <span className="text-muted" style={{ fontSize: 11 }}>{hw.description}</span>}
                       </div>
-                      {hw.priorityLabel && <span className={`tag ${PRIORITY_CLASS[hw.priorityLabel]}`}>{PRIORITY_LABEL[hw.priorityLabel]}</span>}
+                      {hw.points != null && <span className="tag" style={{ opacity: 0.8 }}>{hw.points} pts</span>}
+                  {hw.priorityLabel && <span className={`tag ${PRIORITY_CLASS[hw.priorityLabel]}`}>{PRIORITY_LABEL[hw.priorityLabel]}</span>}
                       {hw.source === 'manual' && (
                         <div style={{ display: 'flex', gap: 2 }}>
                           <button className="hw-action-btn" type="button" title="Edit" onClick={() => startEditHomework(hw)}>

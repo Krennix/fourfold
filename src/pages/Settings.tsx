@@ -4,6 +4,8 @@ import { useSchool, type SchoolClass, type Preset } from '../state/SchoolContext
 import { useGoogleAuth, type LinkedAccount } from '../state/GoogleAuthContext';
 import { GoogleCalendarPicker } from '../components/GoogleCalendarPicker';
 import { useSchoology } from '../state/SchoologyContext';
+import { useCanvas } from '../state/CanvasContext';
+import { useClassroom } from '../state/ClassroomContext';
 import { useGoogleIcs } from '../state/GoogleIcsContext';
 import { useAuth } from '../state/AuthContext';
 import { useTheme } from '../state/ThemeContext';
@@ -425,9 +427,11 @@ function GoogleIcsSettings() {
 }
 
 function SchoologySettings() {
-  const { status, icsUrl, error, saveIcsUrl, refresh } = useSchoology();
+  const { status, icsUrl, hasApiKey, error, saveIcsUrl, saveApiCredentials, refresh } = useSchoology();
   const [draft, setDraft] = useState(icsUrl ?? '');
   const [dirty, setDirty] = useState(false);
+  const [apiKeyDraft, setApiKeyDraft] = useState('');
+  const [apiSecretDraft, setApiSecretDraft] = useState('');
 
   const shown = dirty ? draft : (icsUrl ?? draft);
 
@@ -436,11 +440,17 @@ function SchoologySettings() {
     void saveIcsUrl(draft.trim());
   };
 
+  const handleSaveApi = () => {
+    void saveApiCredentials(apiKeyDraft.trim(), apiSecretDraft.trim());
+    setApiKeyDraft('');
+    setApiSecretDraft('');
+  };
+
   return (
     <Widget>
       <div className="widget-head">
         <h4>Schoology homework</h4>
-        {icsUrl && (
+        {(icsUrl || hasApiKey) && (
           <button className="btn btn-ghost" type="button" onClick={() => void refresh()} disabled={status === 'loading'}>
             {status === 'loading' ? 'Syncing…' : 'Sync now'}
           </button>
@@ -449,7 +459,7 @@ function SchoologySettings() {
       <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
         Paste your personal Schoology calendar feed URL to pull assignment due dates onto the School tab. In Schoology,
         go to <strong>Courses → Upcoming Assignments</strong> (or your Calendar), find <strong>Export/Subscribe</strong>,
-        and copy the <code>.ics</code> link it gives you.
+        and copy the <code>.ics</code> link it gives you. This feed never includes points possible.
       </p>
       <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
         <input
@@ -464,26 +474,158 @@ function SchoologySettings() {
           Save
         </button>
       </div>
+
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0, marginTop: 'var(--space-2)' }}>
+        For points possible and full descriptions, connect Schoology's API instead: create a personal API key/secret
+        under <strong>Account Settings → API</strong> in Schoology (requires the server to have
+        <code> SCHOOLOGY_CONSUMER_KEY</code>/<code>SCHOOLOGY_CONSUMER_SECRET</code> configured).
+      </p>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          className="input"
+          type="text"
+          style={{ flex: 1, minWidth: 180 }}
+          placeholder="API key"
+          value={apiKeyDraft}
+          onChange={(e) => setApiKeyDraft(e.target.value)}
+        />
+        <input
+          className="input"
+          type="password"
+          style={{ flex: 1, minWidth: 180 }}
+          placeholder={hasApiKey ? 'API secret saved — enter both to replace' : 'API secret'}
+          value={apiSecretDraft}
+          onChange={(e) => setApiSecretDraft(e.target.value)}
+        />
+        <button
+          className="btn btn-secondary"
+          type="button"
+          onClick={handleSaveApi}
+          disabled={status === 'loading' || !apiKeyDraft.trim() || !apiSecretDraft.trim()}
+        >
+          Save
+        </button>
+      </div>
+
       {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
-      {icsUrl && !error && (
+      {hasApiKey && !error && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>Connected via API — points possible included.</p>
+      )}
+      {!hasApiKey && icsUrl && !error && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>Connected via feed. Assignments now show up on the School tab.</p>
+      )}
+    </Widget>
+  );
+}
+
+function CanvasSettings() {
+  const { status, baseUrl, hasToken, error, saveCredentials, refresh } = useCanvas();
+  const [urlDraft, setUrlDraft] = useState(baseUrl ?? '');
+  const [tokenDraft, setTokenDraft] = useState('');
+  const [dirty, setDirty] = useState(false);
+
+  const shownUrl = dirty ? urlDraft : (baseUrl ?? urlDraft);
+
+  const handleSave = () => {
+    setDirty(false);
+    void saveCredentials(urlDraft.trim(), tokenDraft.trim());
+    setTokenDraft('');
+  };
+
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Canvas homework</h4>
+        {hasToken && (
+          <button className="btn btn-ghost" type="button" onClick={() => void refresh()} disabled={status === 'loading'}>
+            {status === 'loading' ? 'Syncing…' : 'Sync now'}
+          </button>
+        )}
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Pulls assignments — including points possible and full descriptions — via Canvas's API. Generate a token
+        under <strong>Account → Settings → New Access Token</strong>, and enter your school's Canvas URL below.
+      </p>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          className="input"
+          type="url"
+          style={{ flex: 1, minWidth: 200 }}
+          placeholder="https://yourschool.instructure.com"
+          value={shownUrl}
+          onChange={(e) => { setUrlDraft(e.target.value); setDirty(true); }}
+        />
+        <input
+          className="input"
+          type="password"
+          style={{ flex: 1, minWidth: 200 }}
+          placeholder={hasToken ? 'Token saved — enter a new one to replace it' : 'Personal access token'}
+          value={tokenDraft}
+          onChange={(e) => setTokenDraft(e.target.value)}
+        />
+        <button
+          className="btn btn-primary"
+          type="button"
+          onClick={handleSave}
+          disabled={status === 'loading' || !urlDraft.trim() || (!tokenDraft.trim() && !hasToken)}
+        >
+          Save
+        </button>
+      </div>
+      {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
+      {hasToken && !error && (
         <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>Connected. Assignments now show up on the School tab.</p>
       )}
     </Widget>
   );
 }
 
+function ClassroomSettings() {
+  const { status, accountEmail, error, refresh } = useClassroom();
+  const { accounts } = useGoogleAuth();
+
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Google Classroom</h4>
+        {accountEmail && (
+          <button className="btn btn-ghost" type="button" onClick={() => void refresh()} disabled={status === 'loading'}>
+            {status === 'loading' ? 'Syncing…' : 'Sync now'}
+          </button>
+        )}
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Reuses the Google account connected under Settings → Calendar — no separate sign-in. Pulls titles,
+        descriptions, due dates, and points from every active class's coursework.
+      </p>
+      {accounts.length === 0 && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+          Not connected — connect a Google account under Settings → Calendar to enable this.
+        </p>
+      )}
+      {accounts.length > 0 && accountEmail && !error && (
+        <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>Connected as {accountEmail}. Assignments now show up on the School tab.</p>
+      )}
+      {error && <p className="text-muted" style={{ fontSize: 12.5, margin: 0, color: 'var(--danger, #c0392b)' }}>{error}</p>}
+    </Widget>
+  );
+}
+
 function SchoologyClassMappingSettings() {
-  const { assignments } = useSchoology();
+  const { assignments: schoologyAssignments } = useSchoology();
+  const { assignments: canvasAssignments } = useCanvas();
+  const { assignments: classroomAssignments } = useClassroom();
   const { classes, classMappings, setClassMapping, classKeywords, setClassKeywords } = useSchool();
-  const categories = allCategories(assignments);
+  const categories = allCategories([...schoologyAssignments, ...canvasAssignments, ...classroomAssignments]);
   const [keywordDrafts, setKeywordDrafts] = useState<Record<string, string>>({});
 
   return (
     <Widget>
-      <div className="widget-head"><h4>Schoology course mapping</h4></div>
+      <div className="widget-head"><h4>Course mapping</h4></div>
       <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-        Assignments are matched to a class by course name when the feed provides one, and by keywords you set below
-        (checked against each assignment's title/description) otherwise.
+        Assignments from Schoology, Canvas, and Google Classroom are matched to a class by course name when the
+        source provides one, and by keywords you set below (checked against each assignment's title/description)
+        otherwise.
       </p>
 
       {categories.length > 0 && (
@@ -768,6 +910,8 @@ export function SettingsPage() {
       {activeTab === 'school' && (
         <>
       <SchoologySettings />
+      <CanvasSettings />
+      <ClassroomSettings />
       <SchoologyClassMappingSettings />
 
       <Widget>

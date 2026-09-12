@@ -1,10 +1,10 @@
 import type { Homework, SchoolClass } from '../state/SchoolContext';
-import type { SchoologyAssignment } from '../state/SchoologyContext';
+import type { LmsAssignment } from '../types/lms';
 import { computeUrgency, isPastDue, urgencyRank, type Urgency } from './urgency';
 
 export interface MergedHomeworkItem {
   key: string;
-  source: 'manual' | 'schoology';
+  source: 'manual' | LmsAssignment['source'];
   title: string;
   due: string | null;
   done: boolean;
@@ -13,6 +13,7 @@ export interface MergedHomeworkItem {
   uid?: string;
   homeworkId?: number;
   description?: string;
+  points?: number | null;
 }
 
 /** Manual mapping wins; otherwise exact/fuzzy match against class names. */
@@ -40,7 +41,7 @@ export function matchCategoryToClass(
  * feeds that expose no course-identifying field at all.
  */
 export function matchAssignmentToClass(
-  assignment: Pick<SchoologyAssignment, 'categories' | 'title' | 'description'>,
+  assignment: Pick<LmsAssignment, 'categories' | 'title' | 'description'>,
   classes: SchoolClass[],
   mappings: Record<string, string>,
   classKeywords: Record<string, string[]>,
@@ -60,7 +61,7 @@ export function matchAssignmentToClass(
 export function mergeHomeworkForClass(
   classId: string,
   manual: Homework[],
-  assignments: SchoologyAssignment[],
+  assignments: LmsAssignment[],
   classes: SchoolClass[],
   mappings: Record<string, string>,
   classKeywords: Record<string, string[]>,
@@ -80,18 +81,19 @@ export function mergeHomeworkForClass(
   }));
 
   const matched = assignments.filter((a) => matchAssignmentToClass(a, classes, mappings, classKeywords) === classId);
-  const schoologyItems: MergedHomeworkItem[] = matched.map((a) => ({
-    key: `schoology-${a.uid}`,
-    source: 'schoology',
+  const lmsItems: MergedHomeworkItem[] = matched.map((a) => ({
+    key: `${a.source}-${a.uid}`,
+    source: a.source,
     title: a.title,
     due: a.due || null,
     done: schoologyDone[a.uid] ?? false,
     urgency: computeUrgency(a.due || null, a.priority, now),
     uid: a.uid,
     description: a.description ?? undefined,
+    points: a.points,
   }));
 
-  const all = [...manualItems, ...schoologyItems].filter((item) => !(item.done && isPastDue(item.due, now)));
+  const all = [...manualItems, ...lmsItems].filter((item) => !(item.done && isPastDue(item.due, now)));
 
   all.sort((a, b) => {
     if (!a.due && !b.due) return 0;
@@ -112,8 +114,8 @@ export function classBadge(openItems: MergedHomeworkItem[]): { count: number; co
   return { count: openItems.length, color };
 }
 
-/** All distinct categories seen across the feed, for the Settings mapping UI. */
-export function allCategories(assignments: SchoologyAssignment[]): string[] {
+/** All distinct categories seen across the feed(s), for the Settings mapping UI. */
+export function allCategories(assignments: LmsAssignment[]): string[] {
   const seen = new Set<string>();
   for (const a of assignments) {
     for (const cat of a.categories) {

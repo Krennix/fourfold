@@ -1,8 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { useCalendarEvents } from './CalendarContext';
 import { useMatrix } from './MatrixContext';
 import { useSchoology } from './SchoologyContext';
+import { useCanvas } from './CanvasContext';
+import { useClassroom } from './ClassroomContext';
 import { useRemoteState } from '../lib/remoteStore';
 import {
   runAgentLoop,
@@ -53,7 +55,13 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const { handleSessionExpired } = useAuth();
   const calendar = useCalendarEvents();
   const matrix = useMatrix();
-  const { assignments } = useSchoology();
+  const { assignments: schoologyAssignments } = useSchoology();
+  const { assignments: canvasAssignments } = useCanvas();
+  const { assignments: classroomAssignments } = useClassroom();
+  const assignments = useMemo(
+    () => [...schoologyAssignments, ...canvasAssignments, ...classroomAssignments],
+    [schoologyAssignments, canvasAssignments, classroomAssignments],
+  );
 
   const [chatState, setChatState] = useRemoteState<ChatState>('agentChat', EMPTY_CHAT, handleSessionExpired);
   const [isThinking, setIsThinking] = useState(false);

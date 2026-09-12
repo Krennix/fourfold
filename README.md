@@ -14,8 +14,10 @@ built with React, TypeScript, and Vite, backed by Vercel serverless functions.
   "secret address" fallback.
 - **Pomodoro Timer** — with ambient background sound and optional Spotify
   now-playing/playback control.
-- **School** — homework tracking that can merge in assignments from a
-  Schoology ICS feed, and (optionally) a school bell-schedule integration
+- **School** — homework tracking that merges in assignments from Schoology
+  (ICS feed, or its API for points possible), Canvas (personal access
+  token), and Google Classroom (reuses the Google OAuth connection from
+  Calendar sync), plus (optionally) a school bell-schedule integration
   (`src/lib/harkerBell.ts` talks to a public Harker Middle School API — swap
   this out or remove it if your school doesn't have an equivalent).
 - **Scheduling agent** — an Anthropic-powered assistant (`api/agent.ts`) that

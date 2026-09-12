@@ -1,31 +1,29 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { getStoredSession, useAuth } from './AuthContext';
+import type { LmsAssignment } from '../types/lms';
 
-export interface SchoologyAssignment {
-  uid: string;
-  title: string;
-  description: string | null;
-  /** ISO 8601 due date/time. */
-  due: string;
-  allDay: boolean;
-  /** Course/category names from the ICS CATEGORIES property, if present. */
-  categories: string[];
-  /** RFC 5545 PRIORITY (1-4 high, 5 normal, 6-9 low, 0/absent = none). */
-  priority: number | null;
-}
+/** Kept as an alias for the pre-multi-provider name — homeworkMerge.ts and agentClient.ts import
+ * this type name for what is now the shared cross-provider assignment shape. */
+export type SchoologyAssignment = LmsAssignment;
 
 export type SchoologyStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 interface SchoologyContextValue {
   status: SchoologyStatus;
   icsUrl: string | null;
+  /** Whether a personal Schoology API key/secret is saved — when set (and the server has app
+   * credentials configured), assignments come from the API and include points. */
+  hasApiKey: boolean;
   assignments: SchoologyAssignment[];
   error: string | null;
   saveIcsUrl: (url: string) => Promise<void>;
+  saveApiCredentials: (apiKey: string, apiSecret: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
 const SchoologyContext = createContext<SchoologyContextValue | null>(null);
+
+const ENDPOINT = '/api/lms?action=schoology';
 
 async function authedFetch(path: string, init: RequestInit, onExpired: () => void): Promise<Response | null> {
   const session = getStoredSession();
@@ -45,6 +43,7 @@ export function SchoologyProvider({ children }: { children: ReactNode }) {
   const { handleSessionExpired } = useAuth();
   const [status, setStatus] = useState<SchoologyStatus>('idle');
   const [icsUrl, setIcsUrl] = useState<string | null>(null);
+  const [hasApiKey, setHasApiKey] = useState(false);
   const [assignments, setAssignments] = useState<SchoologyAssignment[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,10 +51,11 @@ export function SchoologyProvider({ children }: { children: ReactNode }) {
     setStatus('loading');
     setError(null);
     try {
-      const res = await authedFetch('/api/schoology', { method: 'GET' }, handleSessionExpired);
+      const res = await authedFetch(ENDPOINT, { method: 'GET' }, handleSessionExpired);
       if (!res) return;
       const body = await res.json();
       setIcsUrl(body.icsUrl ?? null);
+      setHasApiKey(body.hasApiKey ?? false);
       setAssignments(body.assignments ?? []);
       setError(body.error ?? null);
       setStatus('ready');
@@ -71,7 +71,7 @@ export function SchoologyProvider({ children }: { children: ReactNode }) {
       setError(null);
       try {
         const res = await authedFetch(
-          '/api/schoology',
+          ENDPOINT,
           { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ icsUrl: url }) },
           handleSessionExpired,
         );
@@ -83,11 +83,41 @@ export function SchoologyProvider({ children }: { children: ReactNode }) {
           return;
         }
         setIcsUrl(body.icsUrl ?? null);
+        setHasApiKey(body.hasApiKey ?? false);
         setAssignments(body.assignments ?? []);
         setStatus('ready');
       } catch {
         setStatus('error');
         setError('Could not save that feed.');
+      }
+    },
+    [handleSessionExpired],
+  );
+
+  const saveApiCredentials = useCallback(
+    async (apiKey: string, apiSecret: string) => {
+      setStatus('loading');
+      setError(null);
+      try {
+        const res = await authedFetch(
+          ENDPOINT,
+          { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apiKey, apiSecret }) },
+          handleSessionExpired,
+        );
+        if (!res) return;
+        const body = await res.json();
+        if (!res.ok) {
+          setError(body.error ?? 'Could not save those credentials.');
+          setStatus('error');
+          return;
+        }
+        setIcsUrl(body.icsUrl ?? null);
+        setHasApiKey(body.hasApiKey ?? false);
+        setAssignments(body.assignments ?? []);
+        setStatus('ready');
+      } catch {
+        setStatus('error');
+        setError('Could not save those credentials.');
       }
     },
     [handleSessionExpired],
@@ -99,7 +129,7 @@ export function SchoologyProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <SchoologyContext.Provider value={{ status, icsUrl, assignments, error, saveIcsUrl, refresh }}>
+    <SchoologyContext.Provider value={{ status, icsUrl, hasApiKey, assignments, error, saveIcsUrl, saveApiCredentials, refresh }}>
       {children}
     </SchoologyContext.Provider>
   );
