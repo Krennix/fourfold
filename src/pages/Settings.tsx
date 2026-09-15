@@ -7,7 +7,7 @@ import { useSchoology } from '../state/SchoologyContext';
 import { useCanvas } from '../state/CanvasContext';
 import { useClassroom } from '../state/ClassroomContext';
 import { useGoogleIcs } from '../state/GoogleIcsContext';
-import { useAuth } from '../state/AuthContext';
+import { useAuth, getStoredSession } from '../state/AuthContext';
 import { useTheme } from '../state/ThemeContext';
 import { useNotifications } from '../state/NotificationsContext';
 import { allCategories, matchCategoryToClass } from '../lib/homeworkMerge';
@@ -235,6 +235,100 @@ function AccessSettings() {
         Signed in as <strong>{email}</strong>. To let someone else in, add their Google account email to{' '}
         <code>ALLOWED_EMAILS</code> and redeploy.
       </p>
+    </Widget>
+  );
+}
+
+async function apiTokenFetch(method: 'GET' | 'POST' | 'DELETE', onExpired: () => void): Promise<string | null | undefined> {
+  const session = getStoredSession();
+  if (!session) {
+    onExpired();
+    return undefined;
+  }
+  const res = await fetch('/api/lms?action=apiToken', { method, headers: { Authorization: `Bearer ${session.token}` } });
+  if (res.status === 401) {
+    onExpired();
+    return undefined;
+  }
+  const body = await res.json();
+  return body.token ?? null;
+}
+
+function ApiTokenSettings() {
+  const { handleSessionExpired } = useAuth();
+  const [token, setToken] = useState<string | null>(null);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setStatus('loading');
+    void apiTokenFetch('GET', handleSessionExpired).then((t) => {
+      if (t !== undefined) setToken(t);
+      setStatus('ready');
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const generate = async () => {
+    setStatus('loading');
+    setCopied(false);
+    const t = await apiTokenFetch('POST', handleSessionExpired);
+    if (t !== undefined) setToken(t);
+    setStatus('ready');
+  };
+
+  const revoke = async () => {
+    setStatus('loading');
+    await apiTokenFetch('DELETE', handleSessionExpired);
+    setToken(null);
+    setStatus('ready');
+  };
+
+  const homeworkUrl = `${window.location.origin}/api/lms?action=homework`;
+
+  const copy = (value: string) => {
+    void navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Personal API access</h4>
+        {token && (
+          <button className="btn btn-ghost" type="button" onClick={revoke} disabled={status === 'loading'}>
+            Revoke
+          </button>
+        )}
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        A long-lived token for reading your upcoming homework (Schoology/Canvas/Classroom, merged) from outside the
+        app — e.g. so Claude can pull it into a daily brief. Unlike your sign-in session, this doesn't expire on its
+        own; revoke it any time to cut off access immediately.
+      </p>
+      {token ? (
+        <>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input className="input" type="text" readOnly style={{ flex: 1, minWidth: 240, fontFamily: 'monospace' }} value={token} />
+            <button className="btn btn-secondary" type="button" onClick={() => copy(token)}>{copied ? 'Copied!' : 'Copy'}</button>
+            <button className="btn btn-ghost" type="button" onClick={generate} disabled={status === 'loading'}>Regenerate</button>
+          </div>
+          <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+            Give Claude both this token and the URL below (as an <code>Authorization: Bearer &lt;token&gt;</code>{' '}
+            header):
+          </p>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input className="input" type="text" readOnly style={{ flex: 1, minWidth: 240, fontFamily: 'monospace' }} value={homeworkUrl} />
+            <button className="btn btn-secondary" type="button" onClick={() => copy(homeworkUrl)}>Copy</button>
+          </div>
+        </>
+      ) : (
+        <button className="btn btn-primary" type="button" onClick={generate} disabled={status === 'loading'}>
+          {status === 'loading' ? 'Generating…' : 'Generate token'}
+        </button>
+      )}
     </Widget>
   );
 }
@@ -932,6 +1026,7 @@ export function SettingsPage() {
       {activeTab === 'account' && (
         <>
           <AccessSettings />
+          <ApiTokenSettings />
           <ExportImportSettings />
         </>
       )}

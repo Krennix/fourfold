@@ -19,7 +19,10 @@ built with React, TypeScript, and Vite, backed by Vercel serverless functions.
   token), and Google Classroom (reuses the Google OAuth connection from
   Calendar sync), plus (optionally) a school bell-schedule integration
   (`src/lib/harkerBell.ts` talks to a public Harker Middle School API — swap
-  this out or remove it if your school doesn't have an equivalent).
+  this out or remove it if your school doesn't have an equivalent). A
+  personal API token (Settings → Account & Data) exposes the same merged,
+  upcoming homework read-only to outside tools — e.g. so an AI assistant can
+  pull it into a daily briefing — via `GET /api/lms?action=homework`.
 - **Scheduling agent** — an Anthropic-powered assistant (`api/agent.ts`) that
   can help auto-schedule tasks/habits into free calendar time.
 
