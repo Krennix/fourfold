@@ -4,6 +4,10 @@ import { verifySession } from './_lib/session.js';
 import { parseIcsEvents } from './_lib/ics.js';
 import { fetchCanvasAssignments } from './_lib/canvasApi.js';
 import { fetchSchoologyAssignmentsViaApi, schoologyApiConfigured } from './_lib/schoologyApi.js';
+import { fetchClassroomAssignments } from './_lib/classroomApi.js';
+import { getRefreshToken } from './_lib/googleTokens.js';
+import { refreshAccessToken } from './_lib/googleOAuth.js';
+import { generateApiToken, getApiToken, resolveApiToken, revokeApiToken } from './_lib/apiTokens.js';
 import type { LmsAssignment } from './_lib/lmsShared.js';
 
 const redis = new Redis({
@@ -178,22 +182,111 @@ async function handleCanvas(req: VercelRequest, res: VercelResponse, email: stri
   res.status(405).json({ error: 'Method not allowed' });
 }
 
+/** First linked Google account's Classroom assignments, refreshing a server-side access token
+ * from the stored refresh token — unlike src/lib/googleClassroom.ts (called from the browser
+ * with a client-minted token), this runs with no browser at all, e.g. from an unattended
+ * personal-API-token fetch. Silently returns nothing if no Google account is linked, its refresh
+ * token was revoked, or it never granted the Classroom scope — homework should still come back
+ * from whichever other sources are configured. */
+async function fetchClassroomAssignmentsForAccount(email: string): Promise<LmsAssignment[]> {
+  const stored = (await redis.get<{ accounts?: { email: string }[] }>(`fourfold:${email}:googleCalendars`)) ?? {};
+  const googleEmail = stored.accounts?.[0]?.email;
+  if (!googleEmail) return [];
+
+  const refreshToken = await getRefreshToken(email, googleEmail);
+  if (!refreshToken) return [];
+
+  try {
+    const { accessToken } = await refreshAccessToken(refreshToken);
+    return await fetchClassroomAssignments(accessToken);
+  } catch {
+    // Revoked/expired refresh token, missing Classroom scope, or a Classroom API error — any of
+    // these just means no Classroom assignments this time, not a failure of the whole request.
+    return [];
+  }
+}
+
+async function handleHomework(req: VercelRequest, res: VercelResponse, email: string) {
+  if (req.method !== 'GET') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const [storedSchoology, storedCanvas] = await Promise.all([
+    redis.get<StoredSchoology>(`fourfold:${email}:schoology`),
+    redis.get<StoredCanvas>(`fourfold:${email}:canvas`),
+  ]);
+
+  const [schoology, canvas, classroom] = await Promise.all([
+    fetchSchoologyAssignments(storedSchoology ?? {}).catch(() => []),
+    storedCanvas?.baseUrl && storedCanvas.token ? fetchCanvasAssignments(storedCanvas.baseUrl, storedCanvas.token).catch(() => []) : [],
+    fetchClassroomAssignmentsForAccount(email),
+  ]);
+
+  const daysAhead = Number(req.query.days) || 14;
+  const windowStart = Date.now() - 24 * 60 * 60 * 1000; // include anything overdue by <1 day
+  const windowEnd = Date.now() + daysAhead * 24 * 60 * 60 * 1000;
+
+  const assignments = [...schoology, ...canvas, ...classroom]
+    .filter((a) => {
+      const t = new Date(a.due).getTime();
+      return !Number.isNaN(t) && t >= windowStart && t <= windowEnd;
+    })
+    .sort((a, b) => a.due.localeCompare(b.due))
+    .slice(0, 50);
+
+  res.status(200).json({ assignments });
+}
+
+async function handleApiToken(req: VercelRequest, res: VercelResponse, email: string) {
+  if (req.method === 'GET') {
+    res.status(200).json({ token: await getApiToken(email) });
+    return;
+  }
+  if (req.method === 'POST') {
+    res.status(200).json({ token: await generateApiToken(email) });
+    return;
+  }
+  if (req.method === 'DELETE') {
+    await revokeApiToken(email);
+    res.status(200).json({ token: null });
+    return;
+  }
+  res.status(405).json({ error: 'Method not allowed' });
+}
+
 /** Single entry point for LMS assignment sources, routed by `?action=` — Vercel's Hobby plan
- * caps Serverless Functions per deployment, so Schoology and Canvas share this file rather than
- * each getting their own (same reasoning as api/google.ts). */
+ * caps Serverless Functions per deployment, so Schoology, Canvas, the merged `homework` read, and
+ * personal API token management share this file rather than each getting their own (same
+ * reasoning as api/google.ts). */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const email = verifySession(bearerToken(req));
+  const token = bearerToken(req);
+  const action = typeof req.query.action === 'string' ? req.query.action : 'schoology';
+
+  // `homework` is the one action meant for unattended/external callers (e.g. a scheduled daily
+  // brief) rather than the signed-in browser session, so it accepts a personal API token too.
+  if (action === 'homework') {
+    const email = verifySession(token) ?? (token ? await resolveApiToken(token) : null);
+    if (!email) {
+      res.status(401).json({ error: 'Sign in required.' });
+      return;
+    }
+    return handleHomework(req, res, email);
+  }
+
+  const email = verifySession(token);
   if (!email) {
     res.status(401).json({ error: 'Sign in required.' });
     return;
   }
 
-  const action = typeof req.query.action === 'string' ? req.query.action : 'schoology';
   switch (action) {
     case 'schoology':
       return handleSchoology(req, res, email);
     case 'canvas':
       return handleCanvas(req, res, email);
+    case 'apiToken':
+      return handleApiToken(req, res, email);
     default:
       res.status(400).json({ error: 'Unknown or missing action.' });
   }
