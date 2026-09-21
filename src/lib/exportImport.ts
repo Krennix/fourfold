@@ -9,6 +9,7 @@ export const EXPORTABLE_NAMESPACES: RemoteNamespace[] = [
   'agentChat',
   'dailyPlan',
   'watchdogDismissed',
+  'friends',
 ];
 
 export interface FourFoldExport {

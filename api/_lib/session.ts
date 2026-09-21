@@ -18,6 +18,19 @@ export function getAllowedEmails(): string[] {
     .map(normalizeEmail);
 }
 
+/** Shared passcode for the email+PIN fallback sign-in (see api/pinSession.ts). Unset = disabled. */
+export function getLoginPin(): string | null {
+  const pin = process.env.LOGIN_PIN;
+  return pin && pin.length > 0 ? pin : null;
+}
+
+export function verifyPin(candidate: string, expected: string): boolean {
+  const a = Buffer.from(candidate);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 function sign(payload: string): string {
   if (!SESSION_SECRET) throw new Error('SESSION_SECRET is not configured');
   return createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useAuth } from '../state/AuthContext';
 import './LoginGate.css';
 
@@ -40,8 +40,43 @@ function GoogleButton() {
   return <div ref={buttonRef} className="login-gate-button" />;
 }
 
+function PinForm() {
+  const { status, handlePin } = useAuth();
+  const [email, setEmail] = useState('');
+  const [pin, setPin] = useState('');
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !pin.trim()) return;
+    void handlePin(email.trim(), pin.trim());
+  };
+
+  return (
+    <form className="login-gate-pin-form" onSubmit={submit}>
+      <input
+        className="input"
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        autoComplete="username"
+      />
+      <input
+        className="input"
+        type="password"
+        placeholder="PIN"
+        value={pin}
+        onChange={(e) => setPin(e.target.value)}
+        autoComplete="current-password"
+      />
+      <button className="btn btn-primary" type="submit" disabled={status === 'verifying'}>Sign in</button>
+    </form>
+  );
+}
+
 export function LoginGate({ children }: { children: ReactNode }) {
-  const { status, error } = useAuth();
+  const { status, error, clientId } = useAuth();
+  const [showPin, setShowPin] = useState(!clientId);
 
   if (status === 'unlocked') return <>{children}</>;
 
@@ -51,12 +86,19 @@ export function LoginGate({ children }: { children: ReactNode }) {
         <div className="login-gate-brand">Fourfold</div>
         <p className="login-gate-copy">Sign in with an approved Google account to continue.</p>
 
-        {status === 'unconfigured' ? (
+        {!clientId && (
           <p className="login-gate-error">
-            No Google client is configured (missing <code>VITE_GOOGLE_CLIENT_ID</code>), so sign-in is unavailable.
+            No Google client is configured (missing <code>VITE_GOOGLE_CLIENT_ID</code>), so Google sign-in is unavailable.
           </p>
-        ) : (
-          <GoogleButton />
+        )}
+
+        {clientId && !showPin && <GoogleButton />}
+        {showPin && <PinForm />}
+
+        {clientId && (
+          <button type="button" className="login-gate-link" onClick={() => setShowPin((v) => !v)}>
+            {showPin ? 'Use Google instead' : 'Use email + PIN instead'}
+          </button>
         )}
 
         {status === 'verifying' && <p className="login-gate-hint">Verifying…</p>}
