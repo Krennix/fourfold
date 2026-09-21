@@ -10,6 +10,12 @@ built with React, TypeScript, and Vite, backed by Vercel serverless functions.
 - **Eisenhower Matrix** — prioritize tasks by urgency/importance, and link
   them to calendar events or times.
 - **Habit Tracker** — daily checklists, streaks, and yearly grids.
+- **Friends** — track friends with notes, birthdays (auto-synced to a
+  Countdowns entry), addresses, phone numbers, and custom fields. The friend
+  detail dialog can also link arbitrary calendar events and countdowns to a
+  friend, via a unified search (`:cd`/`:evnt` to scope it to just countdowns
+  or events) — a linked countdown shows a small badge wherever it's
+  displayed.
 - **Calendar** — two-way sync with Google Calendar, plus a read-only ICS
   "secret address" fallback.
 - **Pomodoro Timer** — with ambient background sound and optional Spotify
@@ -33,7 +39,8 @@ built with React, TypeScript, and Vite, backed by Vercel serverless functions.
 - [Vercel](https://vercel.com/) serverless functions (`api/`)
 - [Upstash Redis](https://upstash.com/) for server-side storage
 - [Anthropic SDK](https://docs.anthropic.com/) for the scheduling agent
-- Google OAuth (sign-in + Calendar sync) and Spotify OAuth (playback)
+- Google OAuth (default sign-in + Calendar sync) — with an optional
+  email+PIN fallback sign-in — and Spotify OAuth (playback)
 
 ## Getting started
 
