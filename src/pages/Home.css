@@ -94,11 +94,18 @@
 .cd-item:last-child { border-bottom: none; }
 
 .cd-item-icon {
+  position: relative;
   width: 32px; height: 32px; flex: none;
   border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
 }
 .cd-item-icon svg { width: 18px; height: 18px; }
+
+.cd-item-icon .cd-link-badge {
+  top: -4px; right: -4px;
+  width: 14px; height: 14px;
+}
+.cd-item-icon .cd-link-badge svg { width: 8px; height: 8px; }
 
 @media (max-width: 900px) {
   .home-grid { grid-template-columns: 1fr; }

@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { StreakFire } from '../components/StreakFire';
-import { CountdownIcon, COUNTDOWN_TYPE_LABELS } from '../components/CountdownIcon';
+import { CountdownIcon, CountdownLinkBadge, COUNTDOWN_TYPE_LABELS } from '../components/CountdownIcon';
 import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
 import { CountdownDialog } from '../components/CountdownDialog';
 import { useHabits } from '../state/HabitsContext';
 import { useCountdowns, type Countdown } from '../state/CountdownsContext';
+import { useFriends } from '../state/FriendsContext';
+import { linkedFriendNames } from '../lib/friendLinks';
 import { dateKey, computeLongestStreak, computeCompletionRate } from '../lib/habitStats';
 import './Habits.css';
 import './Countdowns.css';
@@ -49,6 +51,7 @@ export function HabitsPage() {
   const quoteRef = useRef<HTMLInputElement>(null);
 
   const { countdowns, addCountdown, updateCountdown, removeCountdown } = useCountdowns();
+  const { friends } = useFriends();
   const [cdDialogState, setCdDialogState] = useState<'add' | Countdown | null>(null);
   const [cdMenu, setCdMenu] = useState<{ x: number; y: number; countdown: Countdown } | null>(null);
 
@@ -305,6 +308,7 @@ export function HabitsPage() {
           <div className="cd-grid">
             {sortedCountdowns.map((c) => {
               const days = daysUntilNext(c.month, c.day);
+              const linkedTo = linkedFriendNames(c, friends);
               return (
                 <div
                   className="cd-card"
@@ -315,6 +319,11 @@ export function HabitsPage() {
                     setCdMenu({ x: e.clientX, y: e.clientY, countdown: c });
                   }}
                 >
+                  {linkedTo.length > 0 && (
+                    <span className="cd-link-badge" title={`Linked to ${linkedTo.join(', ')}`}>
+                      <CountdownLinkBadge />
+                    </span>
+                  )}
                   <div className="cd-card-top">
                     <div className={`cd-card-icon cd-icon-${c.type}`}>
                       <CountdownIcon type={c.type} />

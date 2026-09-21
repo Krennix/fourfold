@@ -62,3 +62,21 @@ export function CountdownIcon({ type, className }: { type: CountdownType; classN
     </svg>
   );
 }
+
+/** Small double-checkmark badge indicating a countdown is linked to one or more friends. */
+export function CountdownLinkBadge({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 13l4.5 4.5L15 8" />
+      <path d="M9 13l4.5 4.5L22 8" />
+    </svg>
+  );
+}
