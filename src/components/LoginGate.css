@@ -53,3 +53,20 @@
   font-size: 12.5px;
   color: #c0392b;
 }
+
+.login-gate-pin-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.login-gate-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12.5px;
+  color: var(--color-neutral-600);
+  text-decoration: underline;
+  cursor: pointer;
+}
