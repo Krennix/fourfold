@@ -38,8 +38,33 @@
   position: relative;
   cursor: pointer;
   flex: none;
+  border-radius: 50%;
+  transition: filter 0.15s ease;
 }
-.friend-avatar-upload .friend-avatar { width: 72px; height: 72px; font-size: 26px; }
+.friend-avatar-upload:hover { filter: brightness(0.85); }
+.friend-avatar-xl { width: 84px; height: 84px; font-size: 28px; }
+.friend-avatar-badge {
+  position: absolute; right: -2px; bottom: -2px;
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--color-accent); color: var(--color-bg);
+  border: 2px solid var(--color-surface);
+}
+.friend-avatar-badge svg { width: 15px; height: 15px; }
+
+.friend-form-identity { display: flex; gap: var(--space-4); align-items: center; }
+.friend-form-identity-fields { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
+
+.friend-field-label {
+  display: flex; align-items: center; gap: 6px;
+}
+.friend-field-label svg { width: 15px; height: 15px; flex: none; opacity: 0.7; }
+
+.friend-birthday-group {
+  display: flex; align-items: center; gap: var(--space-2);
+}
+.friend-birthday-group .input { text-align: center; }
+.friend-birthday-sep { color: color-mix(in srgb, var(--color-text) 40%, transparent); font-size: 14px; }
 
 .friend-address-suggestions {
   position: absolute; z-index: 5; top: 100%; left: 0; right: 0; margin-top: 4px;
