@@ -121,7 +121,7 @@
 
     --color-logo: #a7c1f5;
 
-    --color-allday: #8879e0;
+    --color-allday: color-mix(in srgb, #6a5acd 72%, white);
     --color-allday-text: #f4f2ff;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -174,7 +174,7 @@
   --urgency-yellow: #d6a437;
   --urgency-blue: #6ba3d6;
 
-  --color-allday: #8879e0;
+  --color-allday: color-mix(in srgb, #6a5acd 72%, white);
   --color-allday-text: #f4f2ff;
 
   --color-logo: #eef1fb;
