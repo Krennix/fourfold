@@ -353,6 +353,7 @@ export function HabitsPage() {
             if (cdDialogState === 'add') addCountdown(name, month, day, type);
             else updateCountdown(cdDialogState.id, name, month, day, type);
           }}
+          onDelete={cdDialogState === 'add' ? undefined : () => removeCountdown(cdDialogState.id)}
         />
       )}
 

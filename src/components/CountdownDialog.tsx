@@ -24,10 +24,12 @@ export const HOLIDAY_PRESETS: HolidayPreset[] = [
 export function CountdownDialog({
   countdown,
   onSave,
+  onDelete,
   onClose,
 }: {
   countdown?: Countdown | null;
   onSave: (name: string, month: number, day: number, type: CountdownType) => void;
+  onDelete?: () => void;
   onClose: () => void;
 }) {
   const [type, setType] = useState<CountdownType>(countdown?.type ?? 'birthday');
@@ -96,9 +98,16 @@ export function CountdownDialog({
             <input className="input" type="number" min={1} max={31} ref={dayRef} placeholder="DD" defaultValue={countdown?.day ?? ''} />
           </div>
         </div>
-        <div className="dialog-actions">
-          <button className="btn btn-secondary" type="button" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" type="button" onClick={handleSave}>Save</button>
+        <div className="dialog-actions" style={onDelete ? { justifyContent: 'space-between' } : undefined}>
+          {onDelete && (
+            <button className="btn btn-ghost btn-danger" type="button" onClick={() => { onDelete(); onClose(); }}>
+              Delete
+            </button>
+          )}
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <button className="btn btn-secondary" type="button" onClick={onClose}>Cancel</button>
+            <button className="btn btn-primary" type="button" onClick={handleSave}>Save</button>
+          </div>
         </div>
       </div>
     </div>
