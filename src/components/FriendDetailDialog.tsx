@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useFriends, type Friend, type FriendFieldType, type FriendLinkedEvent } from '../state/FriendsContext';
 import { useCountdowns } from '../state/CountdownsContext';
 import { useCalendarEvents, eventKey, type CalEvent } from '../state/CalendarContext';
@@ -13,6 +13,69 @@ const FIELD_TYPE_LABELS: Record<FriendFieldType, string> = {
   url: 'Link',
   phone: 'Phone',
 };
+
+const ICONS = {
+  cake: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 21v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6Z" /><path d="M4 17c1.5 1 2.5 1 4 0s2.5-1 4 0 2.5 1 4 0 2.5-1 4 0" />
+      <path d="M12 13V9" /><path d="M12 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+    </svg>
+  ),
+  pin: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" />
+    </svg>
+  ),
+  phone: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.9.6 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.8.6a2 2 0 0 1 1.8 2.2Z" />
+    </svg>
+  ),
+  tag: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.6 12.3 12.7 20.2a2 2 0 0 1-2.8 0l-6.1-6.1a2 2 0 0 1 0-2.8l7.9-7.9A2 2 0 0 1 13.1 3H19a2 2 0 0 1 2 2v5.9a2 2 0 0 1-.4 1.4Z" />
+      <circle cx="15.5" cy="8.5" r="1.5" />
+    </svg>
+  ),
+  link: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 17H7a5 5 0 0 1 0-10h2" /><path d="M15 7h2a5 5 0 1 1 0 10h-2" /><path d="M8 12h8" />
+    </svg>
+  ),
+  calendar: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  ),
+  search: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
+    </svg>
+  ),
+  plus: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+  ),
+  x: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+  ),
+  sliders: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" /><path d="M1 14h6M9 8h6M17 16h6" />
+    </svg>
+  ),
+  trash: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    </svg>
+  ),
+};
+
+function fieldTypeIcon(type: FriendFieldType) {
+  if (type === 'phone') return ICONS.phone;
+  if (type === 'date') return ICONS.calendar;
+  if (type === 'url') return ICONS.link;
+  return ICONS.tag;
+}
 
 function fieldInputType(type: FriendFieldType) {
   if (type === 'date') return 'date';
@@ -43,6 +106,19 @@ function initials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function SectionIcon({ tone, children }: { tone: 'accent' | 'accent-2' | 'neutral'; children: ReactNode }) {
+  return <span className={`friend-section-icon friend-section-icon-${tone}`}>{children}</span>;
+}
+
+function EmptyState({ icon, message }: { icon: ReactNode; message: string }) {
+  return (
+    <div className="friend-empty">
+      {icon}
+      <span>{message}</span>
+    </div>
+  );
+}
+
 export function FriendDetailDialog({
   friend,
   onEdit,
@@ -65,6 +141,7 @@ export function FriendDetailDialog({
   const [eventSearch, setEventSearch] = useState('');
 
   const birthdaySynced = !friend.birthdayCountdownId || countdowns.some((c) => c.id === friend.birthdayCountdownId);
+  const hasInfo = friend.birthday || friend.address || friend.phone;
 
   const resolveSyncedBirthday = () => {
     if (!friend.birthday) return;
@@ -136,193 +213,222 @@ export function FriendDetailDialog({
   return (
     <>
     <div className="dialog-backdrop" onClick={onClose}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px,100%)' }}>
-        <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+      <div className="dialog friend-detail-dialog" onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px,100%)' }}>
+
+        <div className="friend-detail-header">
           {friend.avatarDataUrl ? (
-            <img src={friend.avatarDataUrl} alt="" className="friend-avatar friend-avatar-lg" />
+            <img src={friend.avatarDataUrl} alt="" className="friend-avatar friend-avatar-lg friend-avatar-ring" />
           ) : (
-            <span className="friend-avatar friend-avatar-lg friend-avatar-placeholder">{initials(friend.name)}</span>
+            <span className="friend-avatar friend-avatar-lg friend-avatar-placeholder friend-avatar-ring">{initials(friend.name)}</span>
           )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="dialog-title" style={{ marginBottom: 0 }}>{friend.name}</div>
-            {friend.nickname && <div className="text-muted" style={{ fontSize: 13 }}>{friend.nickname}</div>}
+          <div className="friend-detail-heading">
+            <div className="friend-detail-name">{friend.name}</div>
+            {friend.nickname && <span className="tag tag-neutral">{friend.nickname}</span>}
           </div>
           <button className="btn btn-secondary" type="button" onClick={onEdit}>Edit</button>
         </div>
 
-        {friend.notes && <p style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{friend.notes}</p>}
+        {friend.notes && <p className="friend-notes">{friend.notes}</p>}
 
-        <div className="class-list">
-          {friend.birthday && (
-            <div className="class-row">
-              <div className="class-row-main">
-                <span className="class-row-name">Birthday</span>
-                <span className="class-row-meta text-muted">
-                  {MONTH_NAMES[friend.birthday.month - 1]} {friend.birthday.day}
-                  {!birthdaySynced && ' · not synced to Countdowns'}
-                </span>
+        {hasInfo && (
+          <div className="friend-section">
+            {friend.birthday && (
+              <div className="friend-info-row">
+                <SectionIcon tone="accent">{ICONS.cake}</SectionIcon>
+                <div className="friend-info-main">
+                  <span className="friend-info-label">Birthday</span>
+                  <span className="friend-info-value">
+                    {MONTH_NAMES[friend.birthday.month - 1]} {friend.birthday.day}
+                    {!birthdaySynced && <span className="text-muted"> · not synced to Countdowns</span>}
+                  </span>
+                </div>
+                {!birthdaySynced && (
+                  <button className="btn btn-ghost" type="button" onClick={resolveSyncedBirthday}>Re-sync</button>
+                )}
               </div>
-              {!birthdaySynced && (
-                <button className="btn btn-secondary" type="button" onClick={resolveSyncedBirthday}>Re-sync</button>
-              )}
-            </div>
-          )}
-          {friend.address && (
-            <div className="class-row">
-              <div className="class-row-main">
-                <span className="class-row-name">Address</span>
-                <span className="class-row-meta text-muted">
-                  <a href={`https://maps.google.com/?q=${encodeURIComponent(friend.address)}`} target="_blank" rel="noreferrer">{friend.address}</a>
-                </span>
-              </div>
-            </div>
-          )}
-          {friend.phone && (
-            <div className="class-row">
-              <div className="class-row-main">
-                <span className="class-row-name">Phone</span>
-                <span className="class-row-meta text-muted"><a href={phoneToTelHref(friend.phone)}>{formatPhoneNumber(friend.phone)}</a></span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="widget-head" style={{ marginTop: 'var(--space-2)' }}>
-          <h4>Custom fields</h4>
-          <button className="btn btn-secondary" type="button" onClick={() => setManageFieldsOpen(true)}>Manage fields</button>
-        </div>
-        <div className="class-list">
-          {resolvedFields.map((f) => (
-            <div className="class-row" key={f.id}>
-              <div className="class-row-main">
-                <span className="class-row-name">{f.label}</span>
-                <span className="class-row-meta text-muted">{renderFieldValue(f.type, f.value)}</span>
-              </div>
-              <div className="class-row-actions">
-                <button className="btn btn-icon" type="button" title="Remove" onClick={() => removeFieldValue(f.id)}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                </button>
-              </div>
-            </div>
-          ))}
-          {resolvedFields.length === 0 && <div className="empty-msg">No custom fields yet.</div>}
-        </div>
-
-        {addMode === 'none' && (
-          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-            {unusedDefs.length > 0 && (
-              <button className="btn btn-secondary" type="button" onClick={() => setAddMode('global')}>Add existing field</button>
             )}
-            <button className="btn btn-secondary" type="button" onClick={() => setAddMode('adhoc')}>Add one-off field</button>
+            {friend.address && (
+              <div className="friend-info-row">
+                <SectionIcon tone="accent-2">{ICONS.pin}</SectionIcon>
+                <div className="friend-info-main">
+                  <span className="friend-info-label">Address</span>
+                  <span className="friend-info-value">
+                    <a href={`https://maps.google.com/?q=${encodeURIComponent(friend.address)}`} target="_blank" rel="noreferrer">{friend.address}</a>
+                  </span>
+                </div>
+              </div>
+            )}
+            {friend.phone && (
+              <div className="friend-info-row">
+                <SectionIcon tone="neutral">{ICONS.phone}</SectionIcon>
+                <div className="friend-info-main">
+                  <span className="friend-info-label">Phone</span>
+                  <span className="friend-info-value"><a href={phoneToTelHref(friend.phone)}>{formatPhoneNumber(friend.phone)}</a></span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {addMode === 'global' && (
-          <div className="entity-form">
-            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              <div className="field" style={{ flex: 1 }}>
-                <label>Field</label>
-                <select className="input" value={selectedDefId} onChange={(e) => setSelectedDefId(e.target.value)}>
-                  <option value="">Choose a field…</option>
-                  {unusedDefs.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-                </select>
+        <div className="friend-section">
+          <div className="friend-section-head">
+            <div className="friend-section-title">
+              <SectionIcon tone="accent-2">{ICONS.tag}</SectionIcon>
+              <h4>Custom fields</h4>
+            </div>
+            <button className="btn btn-ghost" type="button" onClick={() => setManageFieldsOpen(true)}>
+              {ICONS.sliders} Manage fields
+            </button>
+          </div>
+
+          {resolvedFields.length === 0 && addMode === 'none' && (
+            <EmptyState icon={ICONS.tag} message="No custom fields yet — add one below." />
+          )}
+
+          {resolvedFields.map((f) => (
+            <div className="friend-info-row" key={f.id}>
+              <SectionIcon tone="accent-2">{fieldTypeIcon(f.type)}</SectionIcon>
+              <div className="friend-info-main">
+                <span className="friend-info-label">{f.label}</span>
+                <span className="friend-info-value">{renderFieldValue(f.type, f.value)}</span>
               </div>
-              <div className="field" style={{ flex: 1 }}>
+              <button className="btn btn-icon friend-row-remove" type="button" title="Remove" onClick={() => removeFieldValue(f.id)}>
+                {ICONS.x}
+              </button>
+            </div>
+          ))}
+
+          {addMode === 'none' && (
+            <div className="friend-add-row">
+              {unusedDefs.length > 0 && (
+                <button className="btn btn-ghost" type="button" onClick={() => setAddMode('global')}>{ICONS.plus} Add existing field</button>
+              )}
+              <button className="btn btn-ghost" type="button" onClick={() => setAddMode('adhoc')}>{ICONS.plus} Add one-off field</button>
+            </div>
+          )}
+
+          {addMode === 'global' && (
+            <div className="entity-form">
+              <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                <div className="field" style={{ flex: 1 }}>
+                  <label>Field</label>
+                  <select className="input" value={selectedDefId} onChange={(e) => setSelectedDefId(e.target.value)}>
+                    <option value="">Choose a field…</option>
+                    {unusedDefs.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                  </select>
+                </div>
+                <div className="field" style={{ flex: 1 }}>
+                  <label>Value</label>
+                  <input
+                    className="input"
+                    type={fieldInputType(unusedDefs.find((d) => d.id === selectedDefId)?.type ?? 'text')}
+                    value={fieldValue}
+                    onChange={(e) => setFieldValue(
+                      unusedDefs.find((d) => d.id === selectedDefId)?.type === 'phone' ? formatPhoneNumber(e.target.value) : e.target.value,
+                    )}
+                  />
+                </div>
+              </div>
+              <div className="dialog-actions" style={{ marginTop: 0 }}>
+                <button className="btn btn-secondary" type="button" onClick={resetAddForm}>Cancel</button>
+                <button className="btn btn-primary" type="button" onClick={saveGlobalField}>Add</button>
+              </div>
+            </div>
+          )}
+
+          {addMode === 'adhoc' && (
+            <div className="entity-form">
+              <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                <div className="field" style={{ flex: 1 }}>
+                  <label>Label</label>
+                  <input className="input" type="text" value={adhocLabel} onChange={(e) => setAdhocLabel(e.target.value)} placeholder="e.g. Blood type" />
+                </div>
+                <div className="field" style={{ flex: 1 }}>
+                  <label>Type</label>
+                  <select className="input" value={adhocType} onChange={(e) => setAdhocType(e.target.value as FriendFieldType)}>
+                    {(Object.keys(FIELD_TYPE_LABELS) as FriendFieldType[]).map((t) => (
+                      <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="field">
                 <label>Value</label>
                 <input
                   className="input"
-                  type={fieldInputType(unusedDefs.find((d) => d.id === selectedDefId)?.type ?? 'text')}
+                  type={fieldInputType(adhocType)}
                   value={fieldValue}
-                  onChange={(e) => setFieldValue(
-                    unusedDefs.find((d) => d.id === selectedDefId)?.type === 'phone' ? formatPhoneNumber(e.target.value) : e.target.value,
-                  )}
+                  onChange={(e) => setFieldValue(adhocType === 'phone' ? formatPhoneNumber(e.target.value) : e.target.value)}
                 />
               </div>
-            </div>
-            <div className="dialog-actions" style={{ marginTop: 0 }}>
-              <button className="btn btn-secondary" type="button" onClick={resetAddForm}>Cancel</button>
-              <button className="btn btn-primary" type="button" onClick={saveGlobalField}>Add</button>
-            </div>
-          </div>
-        )}
-
-        {addMode === 'adhoc' && (
-          <div className="entity-form">
-            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              <div className="field" style={{ flex: 1 }}>
-                <label>Label</label>
-                <input className="input" type="text" value={adhocLabel} onChange={(e) => setAdhocLabel(e.target.value)} placeholder="e.g. Blood type" />
-              </div>
-              <div className="field" style={{ flex: 1 }}>
-                <label>Type</label>
-                <select className="input" value={adhocType} onChange={(e) => setAdhocType(e.target.value as FriendFieldType)}>
-                  {(Object.keys(FIELD_TYPE_LABELS) as FriendFieldType[]).map((t) => (
-                    <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>
-                  ))}
-                </select>
+              <div className="dialog-actions" style={{ marginTop: 0 }}>
+                <button className="btn btn-secondary" type="button" onClick={resetAddForm}>Cancel</button>
+                <button className="btn btn-primary" type="button" onClick={saveAdhocField}>Add</button>
               </div>
             </div>
-            <div className="field">
-              <label>Value</label>
-              <input
-                className="input"
-                type={fieldInputType(adhocType)}
-                value={fieldValue}
-                onChange={(e) => setFieldValue(adhocType === 'phone' ? formatPhoneNumber(e.target.value) : e.target.value)}
-              />
-            </div>
-            <div className="dialog-actions" style={{ marginTop: 0 }}>
-              <button className="btn btn-secondary" type="button" onClick={resetAddForm}>Cancel</button>
-              <button className="btn btn-primary" type="button" onClick={saveAdhocField}>Add</button>
-            </div>
-          </div>
-        )}
-
-        <div className="widget-head" style={{ marginTop: 'var(--space-2)' }}>
-          <h4>Linked events</h4>
+          )}
         </div>
-        <div className="class-list">
+
+        <div className="friend-section">
+          <div className="friend-section-head">
+            <div className="friend-section-title">
+              <SectionIcon tone="neutral">{ICONS.calendar}</SectionIcon>
+              <h4>Linked events</h4>
+            </div>
+          </div>
+
+          {linkedResolved.length === 0 && (
+            <EmptyState icon={ICONS.calendar} message="No linked events yet — search below to attach one." />
+          )}
+
           {linkedResolved.map(({ ref, event }) => (
-            <div className="class-row" key={eventKey(ref)}>
-              <div className="class-row-main">
-                <span className="class-row-name">{event ? event.title : 'Event no longer available'}</span>
+            <div className="friend-info-row" key={eventKey(ref)}>
+              <SectionIcon tone="neutral">{ICONS.calendar}</SectionIcon>
+              <div className="friend-info-main">
+                <span className="friend-info-value">{event ? event.title : 'Event no longer available'}</span>
                 {event && (
-                  <span className="class-row-meta text-muted">
+                  <span className="friend-info-label">
                     {parseEventDateKey(event.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                   </span>
                 )}
               </div>
-              <div className="class-row-actions">
-                <button className="btn btn-secondary" type="button" onClick={() => detachEvent(ref)}>Detach</button>
-              </div>
+              <button className="btn btn-icon friend-row-remove" type="button" title="Detach" onClick={() => detachEvent(ref)}>
+                {ICONS.x}
+              </button>
             </div>
           ))}
-          {linkedResolved.length === 0 && <div className="empty-msg">No linked events yet.</div>}
-        </div>
-        <div className="field">
-          <label>Link an existing event</label>
-          <input className="input" type="text" value={eventSearch} onChange={(e) => setEventSearch(e.target.value)} placeholder="Search calendar events…" />
-        </div>
-        {searchResults.length > 0 && (
-          <div className="class-list">
-            {searchResults.map((e) => (
-              <div className="class-row" key={eventKey(e)}>
-                <div className="class-row-main">
-                  <span className="class-row-name">{e.title}</span>
-                  <span className="class-row-meta text-muted">
-                    {parseEventDateKey(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
-                </div>
-                <div className="class-row-actions">
-                  <button className="btn btn-secondary" type="button" onClick={() => attachEvent(e)}>Attach</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
 
-        <div className="dialog-actions">
-          <button className="btn btn-danger" type="button" onClick={handleDelete}>Delete friend</button>
+          <div className="friend-search-field">
+            {ICONS.search}
+            <input
+              className="input"
+              type="text"
+              value={eventSearch}
+              onChange={(e) => setEventSearch(e.target.value)}
+              placeholder="Search calendar events to link…"
+            />
+          </div>
+
+          {searchResults.length > 0 && (
+            <div className="friend-search-results">
+              {searchResults.map((e) => (
+                <div className="friend-info-row" key={eventKey(e)}>
+                  <SectionIcon tone="accent">{ICONS.calendar}</SectionIcon>
+                  <div className="friend-info-main">
+                    <span className="friend-info-value">{e.title}</span>
+                    <span className="friend-info-label">
+                      {parseEventDateKey(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  </div>
+                  <button className="btn btn-ghost" type="button" onClick={() => attachEvent(e)}>Attach</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="dialog-actions friend-detail-actions">
+          <button className="btn btn-ghost friend-delete-btn" type="button" onClick={handleDelete}>{ICONS.trash} Delete friend</button>
           <button className="btn btn-secondary" type="button" onClick={onClose}>Close</button>
         </div>
       </div>
