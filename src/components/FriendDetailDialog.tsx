@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useFriends, type Friend, type FriendFieldType, type FriendLinkedEvent } from '../state/FriendsContext';
 import { useCountdowns } from '../state/CountdownsContext';
 import { useCalendarEvents, eventKey, type CalEvent } from '../state/CalendarContext';
+import { formatPhoneNumber, phoneToTelHref } from '../lib/phoneFormat';
 import { FriendFieldDefsDialog } from './FriendFieldDefsDialog';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -22,7 +23,7 @@ function fieldInputType(type: FriendFieldType) {
 
 function renderFieldValue(type: FriendFieldType, value: string) {
   if (type === 'url') return <a href={value} target="_blank" rel="noreferrer">{value}</a>;
-  if (type === 'phone') return <a href={`tel:${value}`}>{value}</a>;
+  if (type === 'phone') return <a href={phoneToTelHref(value)}>{formatPhoneNumber(value)}</a>;
   if (type === 'date') {
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -180,7 +181,7 @@ export function FriendDetailDialog({
             <div className="class-row">
               <div className="class-row-main">
                 <span className="class-row-name">Phone</span>
-                <span className="class-row-meta text-muted"><a href={`tel:${friend.phone}`}>{friend.phone}</a></span>
+                <span className="class-row-meta text-muted"><a href={phoneToTelHref(friend.phone)}>{formatPhoneNumber(friend.phone)}</a></span>
               </div>
             </div>
           )}
@@ -232,7 +233,9 @@ export function FriendDetailDialog({
                   className="input"
                   type={fieldInputType(unusedDefs.find((d) => d.id === selectedDefId)?.type ?? 'text')}
                   value={fieldValue}
-                  onChange={(e) => setFieldValue(e.target.value)}
+                  onChange={(e) => setFieldValue(
+                    unusedDefs.find((d) => d.id === selectedDefId)?.type === 'phone' ? formatPhoneNumber(e.target.value) : e.target.value,
+                  )}
                 />
               </div>
             </div>
@@ -261,7 +264,12 @@ export function FriendDetailDialog({
             </div>
             <div className="field">
               <label>Value</label>
-              <input className="input" type={fieldInputType(adhocType)} value={fieldValue} onChange={(e) => setFieldValue(e.target.value)} />
+              <input
+                className="input"
+                type={fieldInputType(adhocType)}
+                value={fieldValue}
+                onChange={(e) => setFieldValue(adhocType === 'phone' ? formatPhoneNumber(e.target.value) : e.target.value)}
+              />
             </div>
             <div className="dialog-actions" style={{ marginTop: 0 }}>
               <button className="btn btn-secondary" type="button" onClick={resetAddForm}>Cancel</button>

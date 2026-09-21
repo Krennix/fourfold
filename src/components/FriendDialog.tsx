@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { searchAddress, type AddressSuggestion } from '../lib/addressAutocomplete';
+import { formatPhoneNumber } from '../lib/phoneFormat';
 import type { Friend, FriendInput } from '../state/FriendsContext';
 
 const AVATAR_SIZE = 192;
@@ -114,13 +115,19 @@ export function FriendDialog({
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
         <div className="dialog-title">{friend ? 'Edit friend' : 'Add friend'}</div>
 
-        <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+        <div className="friend-form-identity">
           <label className="friend-avatar-upload" title="Upload photo">
             {avatarDataUrl ? (
-              <img src={avatarDataUrl} alt="" className="friend-avatar" />
+              <img src={avatarDataUrl} alt="" className="friend-avatar friend-avatar-xl" />
             ) : (
-              <span className="friend-avatar friend-avatar-placeholder">{name ? initials(name) : '?'}</span>
+              <span className="friend-avatar friend-avatar-xl friend-avatar-placeholder">{name ? initials(name) : '?'}</span>
             )}
+            <span className="friend-avatar-badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 8a2 2 0 0 1 2-2h1.2a2 2 0 0 0 1.66-.89l.28-.42A2 2 0 0 1 10.8 4h2.4a2 2 0 0 1 1.66.89l.28.42A2 2 0 0 0 16.8 6H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
+                <circle cx="12" cy="13" r="3.5" />
+              </svg>
+            </span>
             <input
               type="file"
               accept="image/*"
@@ -128,7 +135,7 @@ export function FriendDialog({
               onChange={(e) => handleAvatarFile(e.target.files?.[0])}
             />
           </label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', flex: 1 }}>
+          <div className="friend-form-identity-fields">
             <div className="field" style={{ margin: 0 }}>
               <label>Name</label>
               <input className="input" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" />
@@ -140,19 +147,25 @@ export function FriendDialog({
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Birthday month</label>
-            <input className="input" type="number" min={1} max={12} value={month} onChange={(e) => setMonth(e.target.value)} placeholder="MM" />
-          </div>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Birthday day</label>
-            <input className="input" type="number" min={1} max={31} value={day} onChange={(e) => setDay(e.target.value)} placeholder="DD" />
+        <hr className="hr" style={{ margin: 0 }} />
+
+        <div className="field">
+          <label className="friend-field-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm0 0c-1.5 0-3 .8-3 2.5V17h6v-.5c0-1.7-1.5-2.5-3-2.5Z" /></svg>
+            Birthday
+          </label>
+          <div className="friend-birthday-group">
+            <input className="input" type="number" min={1} max={12} value={month} onChange={(e) => setMonth(e.target.value)} placeholder="Month" />
+            <span className="friend-birthday-sep">/</span>
+            <input className="input" type="number" min={1} max={31} value={day} onChange={(e) => setDay(e.target.value)} placeholder="Day" />
           </div>
         </div>
 
         <div className="field" style={{ position: 'relative' }}>
-          <label>Address</label>
+          <label className="friend-field-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+            Address
+          </label>
           <input
             className="input"
             type="text"
@@ -180,12 +193,18 @@ export function FriendDialog({
         </div>
 
         <div className="field">
-          <label>Phone</label>
-          <input className="input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" />
+          <label className="friend-field-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.9.6 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.8.6a2 2 0 0 1 1.8 2.2Z" /></svg>
+            Phone
+          </label>
+          <input className="input" type="tel" value={phone} onChange={(e) => setPhone(formatPhoneNumber(e.target.value))} placeholder="(555) 123-4567" />
         </div>
 
         <div className="field">
-          <label>Notes</label>
+          <label className="friend-field-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6" /><path d="M9 13h6M9 17h6" /></svg>
+            Notes
+          </label>
           <textarea className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering" rows={3} />
         </div>
 
