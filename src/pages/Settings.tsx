@@ -9,6 +9,8 @@ import { useClassroom } from '../state/ClassroomContext';
 import { useGoogleIcs } from '../state/GoogleIcsContext';
 import { useAuth, getStoredSession } from '../state/AuthContext';
 import { useTheme } from '../state/ThemeContext';
+import { useNavVisibility } from '../state/NavVisibilityContext';
+import { navItems } from '../lib/navItems';
 import { useNotifications } from '../state/NotificationsContext';
 import { allCategories, matchCategoryToClass } from '../lib/homeworkMerge';
 import { ColorSwatchPicker } from '../components/ColorSwatches';
@@ -34,6 +36,28 @@ function ThemeSettings() {
         "System" follows your device's light/dark setting automatically. The quick toggle in the sidebar
         switches straight between light and dark.
       </p>
+    </Widget>
+  );
+}
+
+function NavVisibilitySettings() {
+  const { isVisible, setVisible } = useNavVisibility();
+  return (
+    <Widget>
+      <div className="widget-head">
+        <h4>Sidebar tabs</h4>
+      </div>
+      <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+        Choose which tabs appear in your sidebar. This only affects this device.
+      </p>
+      <div className="class-list">
+        {navItems.map((item) => (
+          <label className="toggle-row" key={item.to} style={{ padding: 'var(--space-2) 0' }}>
+            <input type="checkbox" checked={isVisible(item.to)} onChange={(e) => setVisible(item.to, e.target.checked)} />
+            <span>{item.label}</span>
+          </label>
+        ))}
+      </div>
     </Widget>
   );
 }
@@ -872,7 +896,7 @@ function presetToForm(p: Preset, classIds: string[]): PresetFormState {
   return form;
 }
 
-type SettingsCategory = 'general' | 'account' | 'calendar' | 'school';
+type SettingsCategory = 'general' | 'account' | 'calendar' | 'school' | 'navigation';
 
 const SETTINGS_CATEGORY_TABS: { id: SettingsCategory; label: string; description: string; color: string; icon: ReactNode }[] = [
   {
@@ -920,6 +944,18 @@ const SETTINGS_CATEGORY_TABS: { id: SettingsCategory; label: string; description
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="m22 10-10-5L2 10l10 5 10-5Z" />
         <path d="M6 12v5c0 1.1 2.7 2 6 2s6-.9 6-2v-5" />
+      </svg>
+    ),
+  },
+  {
+    id: 'navigation',
+    label: 'Sidebar',
+    description: 'Choose which tabs appear in your sidebar.',
+    color: '#7a8a5f',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="18" rx="1" />
+        <path d="M14 3h7v7h-7zM14 14h7v7h-7z" />
       </svg>
     ),
   },
@@ -1186,6 +1222,8 @@ export function SettingsPage() {
       </Widget>
         </>
       )}
+
+      {activeTab === 'navigation' && <NavVisibilitySettings />}
         </div>
       </div>
     </div>

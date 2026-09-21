@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { LoginGate } from './components/LoginGate';
 import { AuthProvider } from './state/AuthContext';
 import { ThemeProvider } from './state/ThemeContext';
+import { NavVisibilityProvider } from './state/NavVisibilityContext';
 import { SchoolProvider } from './state/SchoolContext';
 import { SchoologyProvider } from './state/SchoologyContext';
 import { CanvasProvider } from './state/CanvasContext';
@@ -14,6 +15,7 @@ import { SpotifyAuthProvider } from './state/SpotifyAuthContext';
 import { GoogleIcsProvider } from './state/GoogleIcsContext';
 import { CalendarProvider } from './state/CalendarContext';
 import { CountdownsProvider } from './state/CountdownsContext';
+import { FriendsProvider } from './state/FriendsContext';
 import { PomodoroProvider } from './state/PomodoroContext';
 import { AgentProvider } from './state/AgentContext';
 import { NotificationsProvider } from './state/NotificationsContext';
@@ -21,6 +23,7 @@ import { HomePage } from './pages/Home';
 import { MatrixPage } from './pages/Matrix';
 import { HabitsPage } from './pages/Habits';
 import { CalendarPage } from './pages/Calendar';
+import { FriendsPage } from './pages/Friends';
 import { PomodoroPage } from './pages/Pomodoro';
 import { AgentPage } from './pages/Agent';
 import { SchoolPage } from './pages/School';
@@ -29,6 +32,7 @@ import { SettingsPage } from './pages/Settings';
 function App() {
   return (
     <ThemeProvider>
+    <NavVisibilityProvider>
     <AuthProvider>
     <LoginGate>
     <SchoolProvider>
@@ -41,6 +45,7 @@ function App() {
           <GoogleIcsProvider>
           <CalendarProvider>
             <CountdownsProvider>
+            <FriendsProvider>
             <PomodoroProvider>
             <SpotifyAuthProvider>
             <AgentProvider>
@@ -55,6 +60,7 @@ function App() {
                     <Route path="/calendar" element={<CalendarPage />} />
                     <Route path="/weekly-review" element={<Navigate to="/calendar?tab=weekly" replace />} />
                     <Route path="/countdowns" element={<Navigate to="/habits" replace />} />
+                    <Route path="/friends" element={<FriendsPage />} />
                     <Route path="/pomodoro" element={<PomodoroPage />} />
                     <Route path="/agent" element={<AgentPage />} />
                     <Route path="/school" element={<SchoolPage />} />
@@ -66,6 +72,7 @@ function App() {
             </AgentProvider>
             </SpotifyAuthProvider>
             </PomodoroProvider>
+            </FriendsProvider>
             </CountdownsProvider>
           </CalendarProvider>
           </GoogleIcsProvider>
@@ -78,6 +85,7 @@ function App() {
     </SchoolProvider>
     </LoginGate>
     </AuthProvider>
+    </NavVisibilityProvider>
     </ThemeProvider>
   );
 }
