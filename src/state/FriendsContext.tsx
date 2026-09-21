@@ -42,6 +42,8 @@ export interface Friend {
   address?: string;
   phone?: string;
   linkedEvents: FriendLinkedEvent[];
+  /** Countdown row ids manually linked to this friend (in addition to the auto-synced birthday). */
+  linkedCountdowns: string[];
   fields: FriendFieldValue[];
 }
 
@@ -57,6 +59,7 @@ export interface FriendInput {
 
 export type FriendPatch = Partial<FriendInput> & {
   linkedEvents?: FriendLinkedEvent[];
+  linkedCountdowns?: string[];
   fields?: FriendFieldValue[];
 };
 
@@ -103,7 +106,7 @@ export function FriendsProvider({ children }: { children: ReactNode }) {
 
   const addFriend: FriendsContextValue['addFriend'] = (input) => {
     const id = `friend-${Date.now()}`;
-    const stub: Friend = { id, linkedEvents: [], fields: [], ...input };
+    const stub: Friend = { id, linkedEvents: [], linkedCountdowns: [], fields: [], ...input };
     const birthdayCountdownId = input.birthday ? syncBirthday(stub, input.name, input.birthday) : undefined;
     const friend: Friend = { ...stub, birthdayCountdownId };
     setData((prev) => ({ ...prev, friends: [...prev.friends, friend] }));

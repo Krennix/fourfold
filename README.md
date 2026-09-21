@@ -103,7 +103,20 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 
 Put the output in `.env` as `SESSION_SECRET`.
 
-### 5. Upstash Redis (server-side storage)
+### 5. Optional: email + PIN fallback sign-in
+
+If the Google popup isn't convenient on a given device, you can enable a
+fallback: an allowed email (from step 3) plus a shared passcode. Set
+
+```
+LOGIN_PIN=some-shared-passcode
+```
+
+in `.env` to turn it on; leave it unset to disable the fallback entirely.
+Google sign-in stays the default — the fallback only appears as a "Use
+email + PIN instead" link on the sign-in screen.
+
+### 6. Upstash Redis (server-side storage)
 
 Easiest path — via Vercel:
 
@@ -115,7 +128,7 @@ Easiest path — via Vercel:
    or copy the REST URL/token from the [Upstash console](https://console.upstash.com/)
    into `.env` yourself.
 
-### 6. Anthropic API key (scheduling agent)
+### 7. Anthropic API key (scheduling agent)
 
 Create a key at [console.anthropic.com](https://console.anthropic.com/settings/keys)
 and set it in `.env`:
@@ -124,7 +137,7 @@ and set it in `.env`:
 ANTHROPIC_API_KEY=<your key>
 ```
 
-### 7. Spotify (optional — now-playing/playback on the Pomodoro page)
+### 8. Spotify (optional — now-playing/playback on the Pomodoro page)
 
 1. Create an app at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
 2. Add a **Redirect URI** for each origin you use, matching the pattern
@@ -135,7 +148,7 @@ ANTHROPIC_API_KEY=<your key>
    `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`. Skip this section if you
    don't need Spotify integration — the app runs fine without it.
 
-### 8. Run it
+### 9. Run it
 
 ```bash
 vercel dev
@@ -152,6 +165,7 @@ agent — those all require the `api/` functions.
 | --- | --- |
 | `VITE_GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google sign-in and Calendar sync |
 | `ALLOWED_EMAILS` | Comma-separated allowlist of Google accounts permitted to sign in |
+| `LOGIN_PIN` | Optional shared passcode enabling the email+PIN fallback sign-in |
 | `SESSION_SECRET` | Signs app session tokens |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Upstash Redis |
 | `ANTHROPIC_API_KEY` | Powers the scheduling agent |

@@ -20,7 +20,7 @@ export function getStoredSession(): StoredSession | null {
   return null;
 }
 
-export type AuthStatus = 'unconfigured' | 'locked' | 'verifying' | 'unlocked' | 'denied';
+export type AuthStatus = 'locked' | 'verifying' | 'unlocked' | 'denied';
 
 interface AuthContextValue {
   status: AuthStatus;
@@ -28,6 +28,7 @@ interface AuthContextValue {
   error: string | null;
   clientId: string | undefined;
   handleCredential: (idToken: string) => Promise<void>;
+  handlePin: (email: string, pin: string) => Promise<void>;
   logout: () => void;
   /** Called by remote-data hooks when a request comes back 401 (session expired/revoked). */
   handleSessionExpired: () => void;
@@ -37,7 +38,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const initial = getStoredSession();
-  const [status, setStatus] = useState<AuthStatus>(initial ? 'unlocked' : CLIENT_ID ? 'locked' : 'unconfigured');
+  const [status, setStatus] = useState<AuthStatus>(initial ? 'unlocked' : 'locked');
   const [email, setEmail] = useState<string | null>(initial?.email ?? null);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +50,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const applySessionResponse = useCallback(async (res: Response) => {
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(res.status === 403 ? 'denied' : 'locked');
+      setError(body.error ?? 'Sign-in failed.');
+      return;
+    }
+    try {
+      localStorage.setItem(AUTH_KEY, JSON.stringify({ email: body.email, token: body.token }));
+    } catch {
+      // storage unavailable — they'll just need to sign in again next visit
+    }
+    setEmail(body.email);
+    setStatus('unlocked');
+  }, []);
+
   const handleCredential = useCallback(async (idToken: string) => {
     setStatus('verifying');
     setError(null);
@@ -58,38 +75,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setStatus(res.status === 403 ? 'denied' : 'locked');
-        setError(body.error ?? 'Sign-in failed.');
-        return;
-      }
-      try {
-        localStorage.setItem(AUTH_KEY, JSON.stringify({ email: body.email, token: body.token }));
-      } catch {
-        // storage unavailable — they'll just need to sign in again next visit
-      }
-      setEmail(body.email);
-      setStatus('unlocked');
+      await applySessionResponse(res);
     } catch {
       setStatus('locked');
       setError('Could not reach the sign-in server. Try again.');
     }
-  }, []);
+  }, [applySessionResponse]);
+
+  const handlePin = useCallback(async (pinEmail: string, pin: string) => {
+    setStatus('verifying');
+    setError(null);
+    try {
+      const res = await fetch('/api/pinSession', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pinEmail, pin }),
+      });
+      await applySessionResponse(res);
+    } catch {
+      setStatus('locked');
+      setError('Could not reach the sign-in server. Try again.');
+    }
+  }, [applySessionResponse]);
 
   const logout = useCallback(() => {
     clearSession();
     window.google?.accounts.id.disableAutoSelect();
     setEmail(null);
     setError(null);
-    setStatus(CLIENT_ID ? 'locked' : 'unconfigured');
+    setStatus('locked');
   }, [clearSession]);
 
   const handleSessionExpired = useCallback(() => {
     clearSession();
     setEmail(null);
     setError('Your session expired — sign in again.');
-    setStatus(CLIENT_ID ? 'locked' : 'unconfigured');
+    setStatus('locked');
   }, [clearSession]);
 
   useEffect(() => {
@@ -97,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const onStorage = (e: StorageEvent) => {
       if (e.key === AUTH_KEY && !e.newValue) {
         setEmail(null);
-        setStatus(CLIENT_ID ? 'locked' : 'unconfigured');
+        setStatus('locked');
       }
     };
     window.addEventListener('storage', onStorage);
@@ -105,8 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ status, email, error, clientId: CLIENT_ID, handleCredential, logout, handleSessionExpired }),
-    [status, email, error, handleCredential, logout, handleSessionExpired],
+    () => ({ status, email, error, clientId: CLIENT_ID, handleCredential, handlePin, logout, handleSessionExpired }),
+    [status, email, error, handleCredential, handlePin, logout, handleSessionExpired],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

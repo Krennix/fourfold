@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useFriends, type Friend, type FriendFieldType, type FriendLinkedEvent } from '../state/FriendsContext';
-import { useCountdowns } from '../state/CountdownsContext';
+import { useCountdowns, type Countdown } from '../state/CountdownsContext';
 import { useCalendarEvents, eventKey, type CalEvent } from '../state/CalendarContext';
 import { formatPhoneNumber, phoneToTelHref } from '../lib/phoneFormat';
 import { FriendFieldDefsDialog } from './FriendFieldDefsDialog';
@@ -45,6 +45,11 @@ const ICONS = {
   calendar: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  ),
+  countdown: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5" /><path d="M9 2h6" />
     </svg>
   ),
   search: (
@@ -138,7 +143,7 @@ export function FriendDetailDialog({
   const [adhocLabel, setAdhocLabel] = useState('');
   const [adhocType, setAdhocType] = useState<FriendFieldType>('text');
   const [fieldValue, setFieldValue] = useState('');
-  const [eventSearch, setEventSearch] = useState('');
+  const [linkSearch, setLinkSearch] = useState('');
 
   const birthdaySynced = !friend.birthdayCountdownId || countdowns.some((c) => c.id === friend.birthdayCountdownId);
   const hasInfo = friend.birthday || friend.address || friend.phone;
@@ -194,20 +199,49 @@ export function FriendDetailDialog({
     updateFriend(friend.id, { fields: friend.fields.filter((f) => f.id !== id) });
   };
 
+  const linkedCountdownIds = friend.linkedCountdowns ?? [];
   const eventMap = new Map(events.map((e) => [eventKey(e), e]));
-  const linkedResolved = friend.linkedEvents.map((ref) => ({ ref, event: eventMap.get(eventKey(ref)) }));
-  const searchResults = eventSearch.trim().length >= 2
+  const linkedEventsResolved = friend.linkedEvents.map((ref) => ({ ref, event: eventMap.get(eventKey(ref)) }));
+  const linkedCountdownsResolved = linkedCountdownIds.map((id) => ({ id, countdown: countdowns.find((c) => c.id === id) }));
+
+  // ":cd <query>" searches countdowns only, ":evnt <query>" searches calendar events only,
+  // anything else searches both.
+  const trimmedSearch = linkSearch.trim();
+  let searchScope: 'all' | 'event' | 'countdown' = 'all';
+  let searchQuery = trimmedSearch;
+  if (/^:cd(\s|$)/i.test(trimmedSearch)) {
+    searchScope = 'countdown';
+    searchQuery = trimmedSearch.replace(/^:cd\s*/i, '');
+  } else if (/^:evnt(\s|$)/i.test(trimmedSearch)) {
+    searchScope = 'event';
+    searchQuery = trimmedSearch.replace(/^:evnt\s*/i, '');
+  }
+  const q = searchQuery.trim().toLowerCase();
+
+  const eventResults: CalEvent[] = (searchScope === 'all' || searchScope === 'event') && q.length >= 2
     ? events
-        .filter((e) => e.title.toLowerCase().includes(eventSearch.trim().toLowerCase()) && !friend.linkedEvents.some((r) => eventKey(r) === eventKey(e)))
+        .filter((e) => e.title.toLowerCase().includes(q) && !friend.linkedEvents.some((r) => eventKey(r) === eventKey(e)))
+        .slice(0, 8)
+    : [];
+  const countdownResults: Countdown[] = (searchScope === 'all' || searchScope === 'countdown') && q.length >= 2
+    ? countdowns
+        .filter((c) => c.name.toLowerCase().includes(q) && c.id !== friend.birthdayCountdownId && !linkedCountdownIds.includes(c.id))
         .slice(0, 8)
     : [];
 
   const attachEvent = (e: CalEvent) => {
     updateFriend(friend.id, { linkedEvents: [...friend.linkedEvents, { id: e.id, accountEmail: e.accountEmail, calendarId: e.calendarId }] });
-    setEventSearch('');
+    setLinkSearch('');
   };
   const detachEvent = (ref: FriendLinkedEvent) => {
     updateFriend(friend.id, { linkedEvents: friend.linkedEvents.filter((r) => eventKey(r) !== eventKey(ref)) });
+  };
+  const attachCountdown = (c: Countdown) => {
+    updateFriend(friend.id, { linkedCountdowns: [...linkedCountdownIds, c.id] });
+    setLinkSearch('');
+  };
+  const detachCountdown = (id: string) => {
+    updateFriend(friend.id, { linkedCountdowns: linkedCountdownIds.filter((cId) => cId !== id) });
   };
 
   return (
@@ -373,15 +407,15 @@ export function FriendDetailDialog({
           <div className="friend-section-head">
             <div className="friend-section-title">
               <SectionIcon tone="neutral">{ICONS.calendar}</SectionIcon>
-              <h4>Linked events</h4>
+              <h4>Linked events &amp; countdowns</h4>
             </div>
           </div>
 
-          {linkedResolved.length === 0 && (
-            <EmptyState icon={ICONS.calendar} message="No linked events yet — search below to attach one." />
+          {linkedEventsResolved.length === 0 && linkedCountdownsResolved.length === 0 && (
+            <EmptyState icon={ICONS.calendar} message="Nothing linked yet — search below to attach an event or countdown." />
           )}
 
-          {linkedResolved.map(({ ref, event }) => (
+          {linkedEventsResolved.map(({ ref, event }) => (
             <div className="friend-info-row" key={eventKey(ref)}>
               <SectionIcon tone="neutral">{ICONS.calendar}</SectionIcon>
               <div className="friend-info-main">
@@ -398,20 +432,35 @@ export function FriendDetailDialog({
             </div>
           ))}
 
+          {linkedCountdownsResolved.map(({ id, countdown }) => (
+            <div className="friend-info-row" key={id}>
+              <SectionIcon tone="neutral">{ICONS.countdown}</SectionIcon>
+              <div className="friend-info-main">
+                <span className="friend-info-value">{countdown ? countdown.name : 'Countdown no longer available'}</span>
+                {countdown && (
+                  <span className="friend-info-label">{MONTH_NAMES[countdown.month - 1]} {countdown.day}</span>
+                )}
+              </div>
+              <button className="btn btn-icon friend-row-remove" type="button" title="Detach" onClick={() => detachCountdown(id)}>
+                {ICONS.x}
+              </button>
+            </div>
+          ))}
+
           <div className="friend-search-field">
             {ICONS.search}
             <input
               className="input"
               type="text"
-              value={eventSearch}
-              onChange={(e) => setEventSearch(e.target.value)}
-              placeholder="Search calendar events to link…"
+              value={linkSearch}
+              onChange={(e) => setLinkSearch(e.target.value)}
+              placeholder="Search to link… (:cd for countdowns, :evnt for events)"
             />
           </div>
 
-          {searchResults.length > 0 && (
+          {(eventResults.length > 0 || countdownResults.length > 0) && (
             <div className="friend-search-results">
-              {searchResults.map((e) => (
+              {eventResults.map((e) => (
                 <div className="friend-info-row" key={eventKey(e)}>
                   <SectionIcon tone="accent">{ICONS.calendar}</SectionIcon>
                   <div className="friend-info-main">
@@ -421,6 +470,16 @@ export function FriendDetailDialog({
                     </span>
                   </div>
                   <button className="btn btn-ghost" type="button" onClick={() => attachEvent(e)}>Attach</button>
+                </div>
+              ))}
+              {countdownResults.map((c) => (
+                <div className="friend-info-row" key={c.id}>
+                  <SectionIcon tone="accent">{ICONS.countdown}</SectionIcon>
+                  <div className="friend-info-main">
+                    <span className="friend-info-value">{c.name}</span>
+                    <span className="friend-info-label">{MONTH_NAMES[c.month - 1]} {c.day}</span>
+                  </div>
+                  <button className="btn btn-ghost" type="button" onClick={() => attachCountdown(c)}>Attach</button>
                 </div>
               ))}
             </div>
