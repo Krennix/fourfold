@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Widget, PageHeader } from '../components/Widget';
 import { StreakFire } from '../components/StreakFire';
-import { CountdownIcon } from '../components/CountdownIcon';
+import { CountdownIcon, CountdownLinkBadge } from '../components/CountdownIcon';
 import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
 import { CountdownDialog } from '../components/CountdownDialog';
 import { TaskDialog } from '../components/TaskDialog';
@@ -11,6 +11,8 @@ import { useHabits } from '../state/HabitsContext';
 import { useMatrix, type QuadKey } from '../state/MatrixContext';
 import { useCalendarEvents } from '../state/CalendarContext';
 import { useCountdowns, type Countdown } from '../state/CountdownsContext';
+import { useFriends } from '../state/FriendsContext';
+import { linkedFriendNames } from '../lib/friendLinks';
 import { usePomodoro, POMODORO_MODES, POMODORO_MODE_LABELS } from '../state/PomodoroContext';
 import { useAgent } from '../state/AgentContext';
 import { useQuadrantHomework } from '../lib/useQuadrantHomework';
@@ -46,6 +48,7 @@ export function HomePage() {
   const { eventsByDate } = useCalendarEvents();
   const autoSchedule = useAutoSchedule();
   const { countdowns, addCountdown, updateCountdown, removeCountdown } = useCountdowns();
+  const { friends } = useFriends();
   const { mode: pomoMode, secondsLeft: pomoSecondsLeft, isRunning: pomoRunning, start: startPomodoro, toggleRun: togglePomodoro } = usePomodoro();
   const [cdDialogState, setCdDialogState] = useState<'add' | Countdown | null>(null);
   const [cdMenu, setCdMenu] = useState<{ x: number; y: number; countdown: Countdown } | null>(null);
@@ -305,29 +308,37 @@ export function HomePage() {
             </div>
             <div>
               {upcomingCountdowns.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>No countdowns yet.</div>}
-              {upcomingCountdowns.map((c) => (
-                <div
-                  className="cd-item"
-                  key={c.id}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => setCdDialogState(c)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setCdMenu({ x: e.clientX, y: e.clientY, countdown: c });
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
-                    <div className={`cd-item-icon cd-icon-${c.type}`}>
-                      <CountdownIcon type={c.type} />
+              {upcomingCountdowns.map((c) => {
+                const linkedTo = linkedFriendNames(c, friends);
+                return (
+                  <div
+                    className="cd-item"
+                    key={c.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setCdDialogState(c)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setCdMenu({ x: e.clientX, y: e.clientY, countdown: c });
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+                      <div className={`cd-item-icon cd-icon-${c.type}`}>
+                        <CountdownIcon type={c.type} />
+                        {linkedTo.length > 0 && (
+                          <span className="cd-link-badge" title={`Linked to ${linkedTo.join(', ')}`}>
+                            <CountdownLinkBadge />
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
                     </div>
-                    <div style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+                    <div style={{ textAlign: 'right', flex: 'none' }}>
+                      <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: 'var(--color-accent-700)' }}>{daysUntilNext(c.month, c.day)}</div>
+                      <div style={{ fontSize: 11 }} className="text-muted">days</div>
+                    </div>
                   </div>
-                  <div style={{ textAlign: 'right', flex: 'none' }}>
-                    <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: 'var(--color-accent-700)' }}>{daysUntilNext(c.month, c.day)}</div>
-                    <div style={{ fontSize: 11 }} className="text-muted">days</div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </Widget>
         </div>
