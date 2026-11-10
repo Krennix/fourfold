@@ -49,3 +49,20 @@
 .task-actions .btn-icon { width: 28px; height: 28px; min-height: 28px; }
 .task-actions .btn-icon svg { width: 16px; height: 16px; }
 @media (hover: none) { .task-actions { opacity: 1; } }
+
+/* quadrant picker (task dialog) */
+.quad-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.quad-pick {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left;
+  padding: 8px 10px 8px 12px; cursor: pointer; font: inherit;
+  background: var(--color-input); border: 1px solid var(--color-divider); border-left: 3px solid var(--qc);
+  border-radius: var(--radius-md); color: var(--color-text);
+}
+.quad-pick:hover { background: var(--color-surface-2); }
+.quad-pick.selected { border-color: var(--qc); background: color-mix(in srgb, var(--qc) 10%, var(--color-input)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--qc) 22%, transparent); }
+.quad-pick-label { font-size: 13.5px; font-weight: 600; }
+.quad-pick-sub { font-size: 11.5px; color: var(--color-text-muted); }
+
+.task-main.clickable { cursor: pointer; border-radius: 6px; }
+.task-main.clickable:hover .ttitle { color: var(--color-accent-700); }
+.treason { font-size: 11.5px; color: var(--color-text-muted); font-style: italic; }

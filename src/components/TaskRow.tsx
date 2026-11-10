@@ -41,6 +41,7 @@ export function TaskRow({
   color,
   onToggle,
   onMenu,
+  onOpen,
   actions,
   extraMeta,
   draggable,
@@ -51,6 +52,8 @@ export function TaskRow({
   color?: string;
   onToggle: () => void;
   onMenu?: (x: number, y: number) => void;
+  /** Clicking the title/body opens the item (e.g. to edit it). */
+  onOpen?: () => void;
   actions?: ReactNode;
   extraMeta?: ReactNode;
   draggable?: boolean;
@@ -73,7 +76,13 @@ export function TaskRow({
       }
     >
       <Checkbox checked={task.done} onToggle={onToggle} label={task.done ? `Mark “${task.title}” not done` : `Complete “${task.title}”`} color={color} />
-      <div className="task-main">
+      <div
+        className={`task-main${onOpen ? ' clickable' : ''}`}
+        onClick={onOpen}
+        role={onOpen ? 'button' : undefined}
+        tabIndex={onOpen ? 0 : undefined}
+        onKeyDown={onOpen ? (e) => { if (e.key === 'Enter') onOpen(); } : undefined}
+      >
         <span className="ttitle" title={task.description || task.title}>
           {task.locked && <Icon name="lock" className="tlock" />}
           {task.title}

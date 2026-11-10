@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Widget, PageHeader } from '../components/Widget';
 import { TaskDialog } from '../components/TaskDialog';
 import { TaskRow } from '../components/TaskRow';
@@ -33,7 +34,8 @@ function sortRows(rows: Row[], mode: SortMode): Row[] {
 }
 
 export function MatrixPage() {
-  const { tasks, removeTask, toggleDone, scheduleTask, unscheduleTask, toggleTaskLocked, moveTask, restoreTask, addTask } = useMatrix();
+  const { tasks, removeTask, toggleDone, scheduleTask, unscheduleTask, toggleTaskLocked, moveTask, restoreTask, addTask, updateTask } = useMatrix();
+  const navigate = useNavigate();
   const { toggleHomework, toggleSchoologyHomeworkDone } = useSchool();
   const { toast } = useUI();
   const homeworkRows = useQuadrantHomework();
@@ -41,6 +43,8 @@ export function MatrixPage() {
   const [showDone, setShowDone] = useState<Record<QuadKey, boolean>>({ q1: false, q2: false, q3: false, q4: false });
   const [dialogQuad, setDialogQuad] = useState<QuadKey | null>(null);
   const [drafts, setDrafts] = useState<Record<QuadKey, string>>({ q1: '', q2: '', q3: '', q4: '' });
+  const [editing, setEditing] = useState<{ quad: QuadKey; task: Task } | null>(null);
+  const [hwMenu, setHwMenu] = useState<{ x: number; y: number; row: HomeworkTaskRow } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; quad: QuadKey; task: Task } | null>(null);
   const [dragOver, setDragOver] = useState<QuadKey | null>(null);
   const [hideHomework, setHideHomework] = useState(() => localStorage.getItem('matrix.hideHomework') === '1');
@@ -70,8 +74,9 @@ export function MatrixPage() {
       if (!t.done) toast({ message: `Completed “${t.title}”`, tone: 'success', action: { label: 'Undo', onClick: () => toggleDone(quad, t.id) } });
       return;
     }
-    if (t.hwId !== undefined) toggleHomework(t.classId, t.hwId);
+    if (t.hwId !== undefined && t.classId) toggleHomework(t.classId, t.hwId);
     else toggleSchoologyHomeworkDone(t.uid!);
+    if (!t.done) toast({ message: `Homework done: “${t.title}”`, tone: 'success', action: { label: 'Undo', onClick: () => (t.hwId !== undefined && t.classId ? toggleHomework(t.classId, t.hwId) : toggleSchoologyHomeworkDone(t.uid!)) } });
   };
 
   const deleteTask = (quad: QuadKey, t: Task) => {
@@ -91,6 +96,7 @@ export function MatrixPage() {
 
   const menuItems: ContextMenuItem[] = menu
     ? [
+        { label: 'Edit…', icon: <Icon name="edit" />, onClick: () => setEditing({ quad: menu.quad, task: menu.task }) },
         ...(!menu.task.locked
           ? QUAD_CONFIG.filter((q) => q.key !== menu.quad).map((q) => ({
               label: `Move to ${q.label}`,
@@ -128,7 +134,7 @@ export function MatrixPage() {
           <>
             {openCount} open{overdueCount > 0 && <> · <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>{overdueCount} overdue</span></>}
             {doneCount > 0 && <> · {doneCount} done</>}
-            <span className="matrix-tip"> · Drag tasks between quadrants</span>
+            <span className="matrix-tip"> · Drag tasks between quadrants · click a task to edit</span>
           </>
         }
         actions={
@@ -213,7 +219,9 @@ export function MatrixPage() {
                         e.dataTransfer.setData('application/x-fourfold-task', JSON.stringify({ from: q.key, id: t.id }));
                         e.dataTransfer.effectAllowed = 'move';
                       }}
-                      onMenu={t.source !== 'homework' ? (x, y) => setMenu({ x, y, quad: q.key, task: t }) : undefined}
+                      onMenu={t.source !== 'homework' ? (x, y) => setMenu({ x, y, quad: q.key, task: t }) : (x, y) => setHwMenu({ x, y, row: t })}
+                      onOpen={t.source !== 'homework' ? () => setEditing({ quad: q.key, task: t }) : undefined}
+                      extraMeta={t.source === 'homework' ? <span className="treason" title="Why it's in this quadrant">{t.reason}</span> : undefined}
                       actions={
                         t.source !== 'homework' && !t.locked && !t.time ? (
                           <button className="btn btn-icon" type="button" title="Find a time & schedule" aria-label={`Schedule “${t.title}”`} onClick={() => void scheduleNow(q.key, t)}>
@@ -282,6 +290,33 @@ export function MatrixPage() {
       </div>
 
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
+      {hwMenu && (
+        <ContextMenu
+          x={hwMenu.x}
+          y={hwMenu.y}
+          onClose={() => setHwMenu(null)}
+          items={[
+            { label: hwMenu.row.classId ? `Open in School (${hwMenu.row.listTag})` : 'Open homework list', icon: <Icon name="book" />, onClick: () => navigate(hwMenu.row.classId ? `/school?class=${hwMenu.row.classId}` : '/school') },
+          ]}
+        />
+      )}
+
+      {editing && (
+        <TaskDialog
+          initialQuad={editing.quad}
+          initial={editing.task}
+          onClose={() => setEditing(null)}
+          onSave={({ title, description, quad, dueDate, link, durationMin, locked }) => {
+            updateTask(editing.quad, editing.task.id, { title, description, dueDate, link, durationMin, locked });
+            if (quad !== editing.quad) {
+              // moveTask refuses locked tasks; the user explicitly picked a quadrant here, so unlock for the move.
+              if (locked) updateTask(editing.quad, editing.task.id, { locked: false });
+              moveTask(editing.quad, quad, editing.task.id);
+              if (locked) updateTask(quad, editing.task.id, { locked: true });
+            }
+          }}
+        />
+      )}
 
       {dialogQuad && (
         <TaskDialog

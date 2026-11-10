@@ -35,7 +35,11 @@ built with React, TypeScript, and Vite, backed by Vercel serverless functions.
   "secret address" fallback.
 - **Pomodoro Timer** — focus-session history (today + last 7 days), with ambient background sound and optional Spotify
   now-playing/playback control.
-- **School** — homework tracking that merges in assignments from Schoology
+- **School** — one homework list across all classes (add with
+  `Problem set 4 fri`, filter by class, check off, undo), where each item
+  shows which matrix quadrant it lands in and why: your priority decides
+  importance, and anything overdue or due within 2 days counts as urgent.
+  Homework tracking merges in assignments from Schoology
   (ICS feed, or its API for points possible), Canvas (personal access
   token), and Google Classroom (reuses the Google OAuth connection from
   Calendar sync), plus (optionally) a school bell-schedule integration

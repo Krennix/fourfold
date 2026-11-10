@@ -160,7 +160,7 @@ export function HomePage() {
     if (item.kind === 'task') {
       toggleDone(item.quad, item.task.id);
       if (!item.task.done) toast({ message: `Completed “${item.task.title}”`, tone: 'success', action: { label: 'Undo', onClick: () => toggleDone(item.quad, item.task.id) } });
-    } else if (item.task.hwId !== undefined) toggleHomework(item.task.classId, item.task.hwId);
+    } else if (item.task.hwId !== undefined && item.task.classId) toggleHomework(item.task.classId, item.task.hwId);
     else toggleSchoologyHomeworkDone(item.task.uid!);
   };
 

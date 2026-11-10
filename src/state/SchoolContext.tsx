@@ -115,13 +115,9 @@ interface SchoolContextValue extends StoredState {
 
 const SchoolContext = createContext<SchoolContextValue | null>(null);
 
-const DEFAULT_HOMEWORK: Record<string, Homework[]> = {
-  calc: [{ id: 1, title: 'Problem set 6', due: 'Sep 10', priority: 'high', done: false }],
-  cs: [
-    { id: 2, title: 'Read chapter 3', due: 'Sep 9', priority: 'low', done: true },
-    { id: 3, title: 'Lab 2 writeup', due: 'Sep 12', priority: 'med', done: false },
-  ],
-};
+/** New accounts start with no homework (sample items with fixed dates just showed up as
+ * months-overdue work on day one). */
+const DEFAULT_HOMEWORK: Record<string, Homework[]> = {};
 
 const DEFAULT_STATE: StoredState = {
   classes: DEFAULT_CLASSES,

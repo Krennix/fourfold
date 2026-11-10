@@ -49,6 +49,8 @@ export interface MatrixContextValue {
   scheduleTask: (qkey: QuadKey, id: string, time: string) => void;
   unscheduleTask: (qkey: QuadKey, id: string) => void;
   toggleTaskLocked: (qkey: QuadKey, id: string) => void;
+  /** Edits a task's details in place. */
+  updateTask: (qkey: QuadKey, id: string, patch: Partial<Pick<Task, 'title' | 'description' | 'dueDate' | 'durationMin' | 'link' | 'locked' | 'time'>>) => void;
   /** Moves a task to another quadrant (keeps it in place if locked). */
   moveTask: (from: QuadKey, to: QuadKey, id: string) => void;
   /** Puts a previously removed task back (used by Undo). */
@@ -98,6 +100,9 @@ export function MatrixProvider({ children }: { children: ReactNode }) {
     setTasks((s) => ({ ...s, [qkey]: s[qkey].map((t) => (t.id === id ? { ...t, locked: !t.locked } : t)) }));
   };
 
+  const updateTask: MatrixContextValue['updateTask'] = (qkey, id, patch) => {
+    setTasks((s) => ({ ...s, [qkey]: s[qkey].map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
+  };
   const moveTask: MatrixContextValue['moveTask'] = (from, to, id) => {
     if (from === to) return;
     setTasks((s) => {
@@ -118,7 +123,7 @@ export function MatrixProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <MatrixContext.Provider value={{ tasks: normalizedTasks, addTask, removeTask, toggleDone, scheduleTask, unscheduleTask, toggleTaskLocked, moveTask, restoreTask }}>
+    <MatrixContext.Provider value={{ tasks: normalizedTasks, addTask, removeTask, toggleDone, scheduleTask, unscheduleTask, toggleTaskLocked, updateTask, moveTask, restoreTask }}>
       {children}
     </MatrixContext.Provider>
   );

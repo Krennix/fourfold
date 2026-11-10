@@ -1,0 +1,56 @@
+@import './TaskRow.css';
+
+.hwp-add {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 6px 6px 12px; border-radius: var(--radius-md);
+  background: var(--color-surface-2); border: 1px solid var(--color-divider); color: var(--color-text-muted);
+}
+.hwp-add:focus-within { border-color: var(--color-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 16%, transparent); }
+.hwp-add > svg { width: 16px; height: 16px; flex: none; }
+.hwp-add-title { flex: 1 1 200px; min-width: 0; border: none; outline: none; background: transparent; font: inherit; font-size: 14px; color: var(--color-text); padding: 6px 0; }
+.hwp-add-title::placeholder { color: var(--color-text-muted); }
+.hwp-add .hwp-add-field { width: auto; flex: 0 0 auto; max-width: 170px; min-height: 34px; padding: 4px 8px; font-size: 13px; }
+
+.hwp-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.hwp-filter {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 500;
+  padding: 4px 10px; border-radius: var(--radius-full);
+  color: var(--color-text-muted); background: transparent; border: 1px solid var(--color-divider);
+}
+.hwp-filter:hover { color: var(--color-text); background: var(--color-hover); }
+.hwp-filter.active { color: var(--color-accent-800); background: var(--color-accent-100); border-color: var(--color-accent-200); font-weight: 600; }
+.hwp-filter span { font-size: 11px; font-weight: 700; opacity: 0.8; }
+
+.hwp-list { display: flex; flex-direction: column; }
+.hwp-row { display: flex; align-items: center; gap: 10px; padding: 8px; margin: 0 -8px; border-radius: var(--radius-md); min-height: 46px; }
+.hwp-row:hover { background: var(--color-hover); }
+.hwp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.hwp-main.clickable { cursor: pointer; }
+.hwp-title { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hwp-row.is-done .hwp-title { text-decoration: line-through; color: var(--color-text-muted); }
+.hwp-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hwp-pri-high { background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger); }
+.hwp-pri-med { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
+.hwp-quad {
+  flex: none; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: var(--radius-full); cursor: help;
+  color: var(--qc); background: color-mix(in srgb, var(--qc) 12%, transparent);
+}
+.hwp-row .btn-icon { width: 28px; height: 28px; min-height: 28px; flex: none; }
+.hwp-row .btn-icon svg { width: 15px; height: 15px; }
+.hwp-del { opacity: 0; }
+.hwp-row:hover .hwp-del, .hwp-del:focus-visible { opacity: 1; }
+@media (hover: none) { .hwp-del { opacity: 1; } }
+.hwp-done { border-top: 1px solid var(--color-divider); padding-top: 6px; }
+.hwp-done .completed-head {
+  display: flex; align-items: center; gap: 6px; cursor: pointer; background: none; border: none; padding: 4px 0;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted);
+}
+.hwp-done .completed-head svg { width: 14px; height: 14px; transition: transform 0.15s; }
+.hwp-done .completed-head svg.rot { transform: rotate(-90deg); }
+@media (max-width: 640px) {
+  .hwp-add { padding-left: 10px; }
+  .hwp-add > svg { display: none; }
+  .hwp-add-title { flex-basis: 100%; }
+  .hwp-add .hwp-add-field { flex: 1 1 30%; max-width: none; }
+  .hwp-quad { display: none; }
+}
