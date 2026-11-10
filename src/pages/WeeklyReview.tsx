@@ -1,3 +1,4 @@
+import { parseDue } from '../lib/due';
 import { useEffect, useMemo } from 'react';
 import { Widget } from '../components/Widget';
 import { useMatrix } from '../state/MatrixContext';
@@ -45,7 +46,7 @@ export function WeeklyReviewTab() {
       <div className="weekly-grid">
         {days.map((day) => {
           const dayEvents = events.filter((e) => e.date === day.key);
-          const dayHomework = homeworkThisWeek.filter((hw) => hw.dueDate && calendarDateKey(new Date(hw.dueDate)) === day.key);
+          const dayHomework = homeworkThisWeek.filter((hw) => hw.dueDate && calendarDateKey(parseDue(hw.dueDate) ?? new Date(NaN)) === day.key);
           const dayTasks = matrixThisWeek.filter((t) => t.dueDate && calendarDateKey(new Date(t.dueDate)) === day.key);
           const empty = dayEvents.length === 0 && dayHomework.length === 0 && dayTasks.length === 0;
           return (

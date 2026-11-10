@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useAuth } from '../state/AuthContext';
+import { Logo } from './Logo';
 import './LoginGate.css';
 
 function GoogleButton() {
@@ -83,8 +84,9 @@ export function LoginGate({ children }: { children: ReactNode }) {
   return (
     <div className="login-gate">
       <div className="login-gate-card">
-        <div className="login-gate-brand">Fourfold</div>
-        <p className="login-gate-copy">Sign in with an approved Google account to continue.</p>
+        <span className="login-gate-mark"><Logo size={30} /></span>
+        <div className="login-gate-brand">FourFold</div>
+        <p className="login-gate-copy">Tasks, habits, calendar and focus — in one place. Sign in with an approved account to continue.</p>
 
         {!clientId && (
           <p className="login-gate-error">

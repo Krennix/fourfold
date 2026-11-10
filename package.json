@@ -11,9 +11,11 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:api": "bun scripts/dev-api.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:api": "bun scripts/api-smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

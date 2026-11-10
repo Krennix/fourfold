@@ -4,7 +4,15 @@ import { usePomodoro, POMODORO_MODES as MODES, POMODORO_MODE_LABELS as MODE_LABE
 import './Pomodoro.css';
 
 export function PomodoroPage() {
-  const { mode, secondsLeft, isRunning, sessionsDone, toggleRun, reset, selectMode } = usePomodoro();
+  const { mode, secondsLeft, isRunning, sessionsDone, toggleRun, reset, selectMode, todaySessions, sessionHistory } = usePomodoro();
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { key, label: d.toLocaleDateString(undefined, { weekday: 'narrow' }), count: sessionHistory[key] ?? 0, today: i === 6 };
+  });
+  const weekTotal = week.reduce((n, d) => n + d.count, 0);
+  const weekMax = Math.max(4, ...week.map((d) => d.count));
 
   const total = MODES[mode];
   const frac = secondsLeft / total;
@@ -64,6 +72,27 @@ export function PomodoroPage() {
               <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m7 4 13 8-13 8z" /></svg>Start</>
             )}
           </button>
+        </div>
+      </Widget>
+
+      <Widget>
+        <div className="widget-head">
+          <h4>Focus history</h4>
+          <span className="text-muted" style={{ fontSize: 12.5 }}>Saved on this device</span>
+        </div>
+        <div className="focus-stats">
+          <div className="focus-stat"><span className="focus-stat-value">{todaySessions}</span><span className="text-muted">today · {todaySessions * 25} min</span></div>
+          <div className="focus-stat"><span className="focus-stat-value">{weekTotal}</span><span className="text-muted">last 7 days · {Math.round((weekTotal * 25) / 6) / 10} h</span></div>
+          <div className="focus-week" role="img" aria-label={`Focus sessions over the last 7 days: ${week.map((d) => d.count).join(', ')}`}>
+            {week.map((d) => (
+              <div className="focus-week-col" key={d.key} title={`${d.count} session${d.count === 1 ? '' : 's'}`}>
+                <div className="focus-week-track">
+                  <div className={`focus-week-bar${d.today ? ' today' : ''}`} style={{ height: `${(d.count / weekMax) * 100}%` }} />
+                </div>
+                <span>{d.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </Widget>
 

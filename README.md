@@ -6,9 +6,24 @@ built with React, TypeScript, and Vite, backed by Vercel serverless functions.
 
 ## Features
 
-- **Home dashboard** — an overview combining widgets from every module.
-- **Eisenhower Matrix** — prioritize tasks by urgency/importance, and link
-  them to calendar events or times.
+- **Home dashboard** — a "today" view: a one-line summary, at-a-glance stats
+  (open/overdue tasks, habit progress, focus sessions, what's next), a
+  **focus list** of overdue / due-soon / "Do first" work you can check off
+  in place, a timeline of today's events and scheduled tasks with a "now"
+  marker, plus habits, focus timer, assistant and countdowns.
+- **Quick add with natural language** — type `Essay tomorrow 3pm 45m !1` and
+  FourFold fills in the due date, books the time on your calendar (or finds a
+  free slot for a time estimate) and files it in the right quadrant.
+  Available from Home, every Matrix quadrant, the command palette (`N`) and
+  the mobile `+` button. Most actions offer **Undo**.
+- **Command palette** (`Ctrl/⌘ K` or `/`) — jump to any page, run actions
+  (start focus, plan my day, toggle theme…), search tasks, habits,
+  countdowns, friends and events, or hand a question to the assistant.
+- **Keyboard shortcuts** — `G` then `H/M/C/S/B/P/F/A` to navigate, `N` new
+  task, `F` start/pause focus, `T` theme, `?` for the full list.
+- **Eisenhower Matrix** — colour-coded quadrants, inline add per quadrant,
+  drag tasks between quadrants, sort by due date, friendly due labels with
+  overdue highlighting, and a per-task menu (move, schedule, lock, delete).
 - **Habit Tracker** — daily checklists, streaks, and yearly grids.
 - **Friends** — track friends with notes, birthdays (auto-synced to a
   Countdowns entry), addresses, phone numbers, and custom fields. The friend
@@ -18,9 +33,13 @@ built with React, TypeScript, and Vite, backed by Vercel serverless functions.
   displayed.
 - **Calendar** — two-way sync with Google Calendar, plus a read-only ICS
   "secret address" fallback.
-- **Pomodoro Timer** — with ambient background sound and optional Spotify
+- **Pomodoro Timer** — focus-session history (today + last 7 days), with ambient background sound and optional Spotify
   now-playing/playback control.
-- **School** — homework tracking that merges in assignments from Schoology
+- **School** — one homework list across all classes (add with
+  `Problem set 4 fri`, filter by class, check off, undo), where each item
+  shows which matrix quadrant it lands in and why: your priority decides
+  importance, and anything overdue or due within 2 days counts as urgent.
+  Homework tracking merges in assignments from Schoology
   (ICS feed, or its API for points possible), Canvas (personal access
   token), and Google Classroom (reuses the Google OAuth connection from
   Calendar sync), plus (optionally) a school bell-schedule integration
@@ -166,6 +185,17 @@ This serves the Vite frontend and the `api/` functions together (default
 frontend and don't need auth, Calendar/Spotify sync, or the scheduling
 agent — those all require the `api/` functions.
 
+**No Vercel / Upstash account? Run the API locally with Bun:**
+
+```bash
+bun run dev:api   # serves api/*.ts on :3001 (in-memory Redis if KV_* is unset)
+bun dev           # Vite proxies /api to it
+```
+
+`dev:api` reads `.env` like `vercel dev` does. With `ALLOWED_EMAILS` and
+`LOGIN_PIN` set you can sign in with email + PIN and use the whole app
+offline (stored data resets when the process restarts).
+
 ### Environment variable reference
 
 | Variable | Purpose |
@@ -184,6 +214,10 @@ agent — those all require the `api/` functions.
 - `bun run build` — typecheck and build for production
 - `bun run lint` — run oxlint
 - `bun run preview` — preview the production build locally
+- `bun run dev:api` — run the `api/` functions locally without `vercel dev`
+- `bun run test:api` — end-to-end smoke test of every API endpoint (auth,
+  data sync, API tokens, LMS routing, all assistant modes) against an
+  in-memory Redis and a fake Anthropic endpoint — no credentials needed
 
 ## Deployment
 

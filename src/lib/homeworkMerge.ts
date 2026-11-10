@@ -1,5 +1,6 @@
 import type { Homework, SchoolClass } from '../state/SchoolContext';
 import type { LmsAssignment } from '../types/lms';
+import { parseDue } from './due';
 import { computeUrgency, isPastDue, urgencyRank, type Urgency } from './urgency';
 
 export interface MergedHomeworkItem {
@@ -14,6 +15,10 @@ export interface MergedHomeworkItem {
   homeworkId?: number;
   description?: string;
   points?: number | null;
+  /** Link to the assignment on the LMS, when the source provides one. */
+  url?: string | null;
+  /** Raw ICS priority (LMS items only). */
+  icsPriority?: number | null;
 }
 
 /** Manual mapping wins; otherwise exact/fuzzy match against class names. */
@@ -91,6 +96,8 @@ export function mergeHomeworkForClass(
     uid: a.uid,
     description: a.description ?? undefined,
     points: a.points,
+    url: a.url,
+    icsPriority: a.priority,
   }));
 
   const all = [...manualItems, ...lmsItems].filter((item) => !(item.done && isPastDue(item.due, now)));
@@ -99,7 +106,7 @@ export function mergeHomeworkForClass(
     if (!a.due && !b.due) return 0;
     if (!a.due) return 1;
     if (!b.due) return -1;
-    return new Date(a.due).getTime() - new Date(b.due).getTime();
+    return (parseDue(a.due)?.getTime() ?? 0) - (parseDue(b.due)?.getTime() ?? 0);
   });
 
   return all;

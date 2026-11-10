@@ -1,44 +1,59 @@
 import { useState } from 'react';
 import type { QuadKey, TaskLink } from '../state/MatrixContext';
 import { MentionField } from './MentionField';
+import './TaskRow.css';
 
 const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120, 180] as const;
 
-const QUAD_OPTIONS: { key: QuadKey; numeral: string; label: string }[] = [
-  { key: 'q1', numeral: 'I', label: 'Urgent & Important' },
-  { key: 'q2', numeral: 'II', label: 'Not Urgent & Important' },
-  { key: 'q3', numeral: 'III', label: 'Urgent & Not Important' },
-  { key: 'q4', numeral: 'IV', label: 'Not Urgent & Not Important' },
+const QUAD_OPTIONS: { key: QuadKey; label: string; sub: string }[] = [
+  { key: 'q1', label: 'Do first', sub: 'Urgent & important' },
+  { key: 'q2', label: 'Schedule', sub: 'Important, not urgent' },
+  { key: 'q3', label: 'Delegate', sub: 'Urgent, not important' },
+  { key: 'q4', label: 'Eliminate', sub: 'Neither' },
 ];
+
+export interface TaskDialogInitial {
+  title: string;
+  description: string;
+  dueDate: string | null;
+  durationMin: number | null;
+  link: TaskLink | null;
+  locked: boolean;
+}
 
 export function TaskDialog({
   initialQuad,
+  initial,
   onClose,
   onSave,
 }: {
   initialQuad: QuadKey;
+  /** When set, the dialog edits this task instead of creating a new one. */
+  initial?: TaskDialogInitial;
   onClose: () => void;
-  onSave: (data: { title: string; description: string; quad: QuadKey; dueDate: string | null; link: TaskLink | null; durationMin: number | null; locked: boolean }) => void;
+  onSave: (data: { title: string; description: string; quad: QuadKey; dueDate: string | null; link: TaskLink | null; durationMin: number | null; locked: boolean }) => void | Promise<void>;
 }) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const editing = !!initial;
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
   const [quad, setQuad] = useState<QuadKey>(initialQuad);
-  const [dueDate, setDueDate] = useState('');
-  const [durationMin, setDurationMin] = useState<number>(30);
-  const [link, setLink] = useState<TaskLink | null>(null);
-  const [locked, setLocked] = useState(false);
+  const [dueDate, setDueDate] = useState(initial?.dueDate ?? '');
+  // 0 = no estimate. New tasks default to none so saving one doesn't silently book calendar time.
+  const [durationMin, setDurationMin] = useState<number>(initial?.durationMin ?? 0);
+  const [link, setLink] = useState<TaskLink | null>(initial?.link ?? null);
+  const [locked, setLocked] = useState(initial?.locked ?? false);
 
   const handleSave = () => {
     const trimmed = title.trim();
     if (!trimmed) return;
-    onSave({ title: trimmed, description: description.trim(), quad, dueDate: dueDate || null, link, durationMin, locked });
+    void onSave({ title: trimmed, description: description.trim(), quad, dueDate: dueDate || null, link, durationMin: durationMin || null, locked });
     onClose();
   };
 
   return (
     <div className="dialog-backdrop" onClick={onClose}>
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="dialog-title">New task</div>
+        <div className="dialog-title">{editing ? 'Edit task' : 'New task'}</div>
 
         <div className="field">
           <label>Title</label>
@@ -88,6 +103,7 @@ export function TaskDialog({
           <div className="field" style={{ flex: 1 }}>
             <label>Time needed</label>
             <select className="input" value={durationMin} onChange={(e) => setDurationMin(Number(e.target.value))}>
+              <option value={0}>No estimate</option>
               {DURATION_OPTIONS.map((m) => (
                 <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60} hr${m > 60 ? (m % 60 ? ` ${m % 60}m` : '') : ''}`}</option>
               ))}
@@ -95,11 +111,30 @@ export function TaskDialog({
           </div>
         </div>
 
+        {!editing && durationMin > 0 && (
+          <div className="text-muted" style={{ fontSize: 12, marginTop: -4 }}>
+            A {durationMin < 60 ? `${durationMin}-minute` : `${durationMin / 60}-hour`} slot will be booked on your calendar{dueDate ? ' before the due date' : ''}.
+          </div>
+        )}
+
         <div className="field">
-          <label>Priority</label>
-          <select className="input" value={quad} onChange={(e) => setQuad(e.target.value as QuadKey)}>
-            {QUAD_OPTIONS.map((q) => <option key={q.key} value={q.key}>{q.numeral} · {q.label}</option>)}
-          </select>
+          <label>Quadrant</label>
+          <div className="quad-picker" role="radiogroup" aria-label="Quadrant">
+            {QUAD_OPTIONS.map((q) => (
+              <button
+                key={q.key}
+                type="button"
+                role="radio"
+                aria-checked={quad === q.key}
+                className={`quad-pick${quad === q.key ? ' selected' : ''}`}
+                style={{ '--qc': `var(--${q.key})` } as React.CSSProperties}
+                onClick={() => setQuad(q.key)}
+              >
+                <span className="quad-pick-label">{q.label}</span>
+                <span className="quad-pick-sub">{q.sub}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
@@ -109,7 +144,7 @@ export function TaskDialog({
 
         <div className="dialog-actions">
           <button className="btn btn-secondary" type="button" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" type="button" onClick={handleSave}>Save</button>
+          <button className="btn btn-primary" type="button" onClick={handleSave} disabled={!title.trim()}>{editing ? 'Save changes' : 'Add task'}</button>
         </div>
       </div>
     </div>

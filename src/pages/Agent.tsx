@@ -3,6 +3,13 @@ import { Widget, PageHeader } from '../components/Widget';
 import { useAgent } from '../state/AgentContext';
 import './Agent.css';
 
+const SUGGESTIONS = [
+  "What's my day look like?",
+  'Find an hour to study for my next test',
+  'Am I overbooked this week?',
+  'Schedule my unscheduled “Do first” tasks today',
+];
+
 export function AgentPage() {
   const {
     chatMessages,
@@ -103,7 +110,18 @@ export function AgentPage() {
             <h4>Chat</h4>
           </div>
           <div className="agent-chat-list" ref={listRef}>
-            {chatMessages.length === 0 && <div className="text-muted" style={{ fontSize: 12 }}>Ask about your day, or tell it to move/add something.</div>}
+            {chatMessages.length === 0 && (
+              <div className="agent-empty">
+                <span className="text-muted">Ask about your day, or tell it to move or add something. Try:</span>
+                <div className="agent-suggestions">
+                  {SUGGESTIONS.map((s) => (
+                    <button key={s} type="button" className="agent-suggestion" disabled={isThinking} onClick={() => void sendChatMessage(s)}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {chatMessages.map((m, i) => (
               <div className={`agent-msg agent-msg-${m.role}`} key={i}>{m.text}</div>
             ))}

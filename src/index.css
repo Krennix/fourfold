@@ -20,7 +20,7 @@ html, body, #root {
 .content {
   flex: 1;
   min-width: 0;
-  padding: var(--space-8);
+  padding: var(--space-8) clamp(var(--space-6), 3vw, 48px);
   display: flex;
   justify-content: center;
   margin-left: var(--sidebar-w);
@@ -37,7 +37,7 @@ body.sidebar-collapsed .content {
   }
 
   .content {
-    padding: var(--space-4);
+    padding: var(--space-4) var(--space-4) calc(88px + env(safe-area-inset-bottom));
     margin-left: 0;
   }
 }

@@ -22,27 +22,53 @@ async function authedFetch(path: string, init: RequestInit, onExpired: () => voi
   return res;
 }
 
-async function fetchRemote<T>(ns: RemoteNamespace, onExpired: () => void): Promise<T | null> {
+/** `undefined` = the request failed (offline, server error) — distinct from `null` (no data yet). */
+async function fetchRemote<T>(ns: RemoteNamespace, onExpired: () => void): Promise<T | null | undefined> {
   try {
     const res = await authedFetch(`/api/data?ns=${ns}`, { method: 'GET' }, onExpired);
-    if (!res || !res.ok) return null;
+    if (!res) return null;
+    if (!res.ok) return undefined;
     const body = await res.json();
     return (body.value ?? null) as T | null;
   } catch {
-    return null;
+    return undefined;
   }
 }
 
-async function saveRemote<T>(ns: RemoteNamespace, value: T, onExpired: () => void): Promise<void> {
+async function saveRemote<T>(ns: RemoteNamespace, value: T, onExpired: () => void): Promise<boolean> {
   try {
-    await authedFetch(
+    const res = await authedFetch(
       `/api/data?ns=${ns}`,
       { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) },
       onExpired,
     );
+    return !!res?.ok;
   } catch {
-    // best-effort — a later edit will retry the save with fresher data
+    return false;
   }
+}
+
+// ── global sync status (drives the "Saved / Saving… / Offline" indicator) ─────────────────
+export type SyncStatus = 'idle' | 'saving' | 'error';
+const pendingSaves = new Set<RemoteNamespace>();
+const failedNamespaces = new Set<RemoteNamespace>();
+const syncListeners = new Set<() => void>();
+let lastSavedAt: number | null = null;
+
+function emitSync() {
+  for (const l of syncListeners) l();
+}
+
+export function getSyncSnapshot(): { status: SyncStatus; lastSavedAt: number | null } {
+  return {
+    status: pendingSaves.size > 0 ? 'saving' : failedNamespaces.size > 0 ? 'error' : 'idle',
+    lastSavedAt,
+  };
+}
+
+export function subscribeSync(listener: () => void): () => void {
+  syncListeners.add(listener);
+  return () => syncListeners.delete(listener);
 }
 
 function readLegacyLocalValue<T>(legacyKey: string): T | null {
@@ -72,26 +98,73 @@ export function useRemoteState<T>(
 ): [T, (updater: T | ((prev: T) => T)) => void, boolean] {
   const [value, setValueState] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
+  const loadedRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef<T>(initial);
+  const dirtyBeforeLoad = useRef(false);
+
+  const flushSave = useCallback(
+    async (next: T, attempt = 0) => {
+      pendingSaves.add(namespace);
+      emitSync();
+      const ok = await saveRemote(namespace, next, onExpired);
+      // A newer edit may have been queued while this one was in flight; let that one report.
+      if (latest.current !== next) return;
+      pendingSaves.delete(namespace);
+      if (ok) {
+        failedNamespaces.delete(namespace);
+        lastSavedAt = Date.now();
+      } else {
+        failedNamespaces.add(namespace);
+        if (attempt < 5) {
+          saveTimer.current = setTimeout(() => void flushSave(latest.current, attempt + 1), 2000 * 2 ** attempt);
+        }
+      }
+      emitSync();
+    },
+    [namespace, onExpired],
+  );
 
   useEffect(() => {
     let cancelled = false;
-    fetchRemote<T>(namespace, onExpired).then((remote) => {
-      if (cancelled) return;
-      if (remote !== null) {
-        setValueState(remote);
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const load = (attempt: number) => {
+      fetchRemote<T>(namespace, onExpired).then((remote) => {
+        if (cancelled) return;
+        if (remote === undefined) {
+          // Couldn't reach storage. Never treat that as "no data yet" — saving now would
+          // overwrite the user's real cloud data with defaults. Retry instead.
+          failedNamespaces.add(namespace);
+          emitSync();
+          retryTimer = setTimeout(() => load(attempt + 1), Math.min(30000, 1500 * 2 ** attempt));
+          return;
+        }
+        failedNamespaces.delete(namespace);
+        emitSync();
+        if (remote !== null) {
+          // Edits made while offline-before-load are discarded in favour of the stored copy.
+          latest.current = remote;
+          setValueState(remote);
+        } else {
+          const legacy = legacyKey ? readLegacyLocalValue<T>(legacyKey) : null;
+          if (legacy !== null) {
+            latest.current = legacy;
+            setValueState(legacy);
+            void flushSave(legacy);
+          } else if (dirtyBeforeLoad.current) {
+            void flushSave(latest.current);
+          }
+        }
+        loadedRef.current = true;
         setLoaded(true);
-        return;
-      }
-      const legacy = legacyKey ? readLegacyLocalValue<T>(legacyKey) : null;
-      if (legacy !== null) {
-        setValueState(legacy);
-        void saveRemote(namespace, legacy, onExpired);
-      }
-      setLoaded(true);
-    });
+      });
+    };
+    load(0);
+
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [namespace]);
@@ -100,15 +173,33 @@ export function useRemoteState<T>(
     (updater: T | ((prev: T) => T)) => {
       setValueState((prev) => {
         const next = typeof updater === 'function' ? (updater as (prev: T) => T)(prev) : updater;
+        latest.current = next;
+        if (!loadedRef.current) {
+          dirtyBeforeLoad.current = true;
+          return next;
+        }
         if (saveTimer.current) clearTimeout(saveTimer.current);
-        saveTimer.current = setTimeout(() => {
-          void saveRemote(namespace, next, onExpired);
-        }, SAVE_DEBOUNCE_MS);
+        pendingSaves.add(namespace);
+        emitSync();
+        saveTimer.current = setTimeout(() => void flushSave(next), SAVE_DEBOUNCE_MS);
         return next;
       });
     },
-    [namespace, onExpired],
+    [namespace, flushSave],
   );
+
+  useEffect(() => {
+    // Flush a pending debounced save if the tab is being hidden/closed.
+    const onHide = () => {
+      if (document.visibilityState === 'hidden' && saveTimer.current && loadedRef.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+        void flushSave(latest.current);
+      }
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [flushSave]);
 
   return [value, setValue, loaded];
 }

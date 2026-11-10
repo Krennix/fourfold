@@ -70,3 +70,11 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+.login-gate-card { border: 1px solid var(--color-divider); border-radius: var(--radius-xl); width: min(380px, 92vw); }
+.login-gate-mark {
+  width: 56px; height: 56px; display: grid; place-items: center; border-radius: 16px; margin-bottom: -6px;
+  background: linear-gradient(145deg, var(--color-accent-100), var(--color-accent-200)); border: 1px solid var(--color-accent-200);
+}
+.login-gate-brand { letter-spacing: -0.02em; font-weight: 800; }
+.login-gate-copy { color: var(--color-text-muted); }

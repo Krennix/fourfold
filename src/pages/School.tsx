@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { useSchool, WEEKDAYS, type Weekday, type Homework } from '../state/SchoolContext';
+import { parseDue } from '../lib/due';
 import { useSchoology } from '../state/SchoologyContext';
 import { useCanvas } from '../state/CanvasContext';
 import { useClassroom } from '../state/ClassroomContext';
 import { fetchBellSchedule, findNextClassMeeting, findPeriod, isNoSchoolDay, isoToLocalHour, type BellSchedule } from '../lib/harkerBell';
 import { classBadge, mergeHomeworkForClass, type MergedHomeworkItem } from '../lib/homeworkMerge';
+import { useSearchParams } from 'react-router-dom';
+import { HomeworkPanel } from '../components/HomeworkPanel';
 import './School.css';
 
 const SCHOOL_START = 8 + 10 / 60; // 8:10am
@@ -40,8 +43,8 @@ function isSameDate(a: Date, b: Date) {
 
 function fmtDueDisplay(due: string | null) {
   if (!due) return 'No date';
-  const d = new Date(due);
-  if (Number.isNaN(d.getTime())) return 'No date';
+  const d = parseDue(due);
+  if (!d) return 'No date';
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
@@ -57,7 +60,13 @@ export function SchoolPage() {
     () => [...schoologyAssignments, ...canvasAssignments, ...classroomAssignments],
     [schoologyAssignments, canvasAssignments, classroomAssignments],
   );
-  const [openClassId, setOpenClassId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [openClassId, setOpenClassId] = useState<string | null>(() => searchParams.get('class'));
+  useEffect(() => {
+    // `?class=` is a one-shot deep link (e.g. from a homework row on the matrix); drop it once used.
+    if (searchParams.has('class')) setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [showCompleted, setShowCompleted] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
@@ -107,7 +116,11 @@ export function SchoolPage() {
 
   const saveHomework = () => {
     if (!openClassId) return;
-    const title = titleRef.current?.value || 'New assignment';
+    const title = titleRef.current?.value.trim() ?? '';
+    if (!title) {
+      titleRef.current?.focus();
+      return;
+    }
     const description = descriptionRef.current?.value.trim() || undefined;
     const due = dueRef.current?.value || '';
     const priority = (priorityRef.current?.value as Homework['priority']) || 'med';
@@ -293,7 +306,9 @@ export function SchoolPage() {
 
   return (
     <div className="page">
-      <PageHeader kicker="School" title="Class Schedule" actions={<span className="tag tag-outline">Fall term</span>} />
+      <PageHeader kicker="School" title="School" subtitle="Your homework and weekly class schedule. Click a class to see or edit its homework." />
+
+      <HomeworkPanel onOpenClass={setOpenClassId} />
 
       <Widget>
         <div className="widget-head" style={{ justifyContent: 'flex-start', gap: 'var(--space-3)' }}>

@@ -48,6 +48,19 @@ function bearerToken(req: VercelRequest): string | null {
   return header.slice('Bearer '.length);
 }
 
+/**
+ * Calendar events are wall-clock times ("YYYY-M-D" + "HH:MM") with no zone, and
+ * api/_lib/scheduling.ts parses them in the server's local zone. Every other timestamp has to be
+ * read the same way — so drop any UTC "Z"/offset suffix and treat the digits as wall-clock time,
+ * otherwise free-slot search drifts by the user's UTC offset.
+ */
+function wallClock(value: string): Date {
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2})(?::\d{2})?)?/.exec(value.trim());
+  if (!m) return new Date(value);
+  const d = new Date(`${m[1]}T${m[2] ?? '00:00'}:00`);
+  return Number.isNaN(d.getTime()) ? new Date(value) : d;
+}
+
 function executeReadTool(name: string, input: Record<string, unknown>, context: AgentContextPayload): unknown {
   switch (name) {
     case 'get_calendar_events': {
@@ -70,8 +83,8 @@ function executeReadTool(name: string, input: Record<string, unknown>, context: 
     case 'find_free_slots': {
       const durationMin = typeof input.durationMin === 'number' ? input.durationMin : 30;
       const count = typeof input.count === 'number' ? input.count : 1;
-      const after = typeof input.after === 'string' ? new Date(input.after) : new Date(context.now);
-      const before = typeof input.before === 'string' ? new Date(input.before) : undefined;
+      const after = typeof input.after === 'string' ? wallClock(input.after) : wallClock(context.now);
+      const before = typeof input.before === 'string' ? wallClock(input.before) : undefined;
       const slots = findFreeSlots(context.events, durationMin, count, { after, before });
       return slots.map((s) => ({
         date: `${s.getFullYear()}-${s.getMonth()}-${s.getDate()}`,
@@ -123,9 +136,19 @@ async function handleLoopMode(
     messages = [...messages, { role: 'assistant', content: response.content }];
 
     if (response.stop_reason === 'pause_turn') continue;
+    if (response.stop_reason === 'refusal') {
+      // Drop the refused turn so the stored history stays valid for the next message.
+      res.status(200).json({ messages: messages.slice(0, -1), reply: "Sorry — I can't help with that one. Try asking a different way.", done: true });
+      return;
+    }
     if (response.stop_reason !== 'tool_use') {
-      const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
-      res.status(200).json({ messages, reply: textBlock?.text ?? '', done: true });
+      const text = response.content
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('\n')
+        .trim();
+      const reply = text || (response.stop_reason === 'max_tokens' ? 'That answer ran long and got cut off — try a narrower question.' : 'Done.');
+      res.status(200).json({ messages, reply, done: true });
       return;
     }
 
@@ -197,6 +220,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+    res.status(503).json({ error: 'The assistant is not configured on this server (missing ANTHROPIC_API_KEY).' });
+    return;
+  }
+
   try {
     if (mode === 'daily_plan') {
       await handleDailyPlan(context, res);
@@ -211,6 +239,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const message = typeof body.message === 'string' ? body.message : undefined;
     await handleLoopMode(mode, context, message, priorMessages, pendingToolResults, res);
   } catch (err) {
+    if (err instanceof Anthropic.RateLimitError) {
+      res.status(429).json({ error: 'The assistant is busy right now — try again in a minute.' });
+      return;
+    }
+    if (err instanceof Anthropic.AuthenticationError) {
+      res.status(503).json({ error: 'The assistant is misconfigured on this server (invalid API key).' });
+      return;
+    }
+    if (err instanceof Anthropic.APIConnectionError) {
+      res.status(502).json({ error: 'Could not reach the AI service — check your connection and try again.' });
+      return;
+    }
     res.status(500).json({ error: err instanceof Error ? err.message : 'Agent request failed.' });
   }
 }

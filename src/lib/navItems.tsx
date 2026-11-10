@@ -1,14 +1,26 @@
 import type { ReactNode } from 'react';
 
+export type NavGroup = 'Overview' | 'Plan' | 'Track' | 'Life';
+
 export interface NavItem {
   to: string;
   label: string;
   icon: ReactNode;
+  group: NavGroup;
+  /** Second key of the "g <key>" go-to shortcut. */
+  shortcut?: string;
+  /** Extra words the command palette matches on. */
+  keywords?: string;
 }
+
+export const NAV_GROUPS: NavGroup[] = ['Overview', 'Plan', 'Track', 'Life'];
 
 export const navItems: NavItem[] = [
   {
     to: '/',
+    group: 'Overview',
+    shortcut: 'h',
+    keywords: 'dashboard today start',
     label: 'Home',
     icon: (
       <>
@@ -19,6 +31,9 @@ export const navItems: NavItem[] = [
   },
   {
     to: '/matrix',
+    group: 'Plan',
+    shortcut: 'm',
+    keywords: 'tasks eisenhower priorities todo',
     label: 'Matrix',
     icon: (
       <>
@@ -31,6 +46,9 @@ export const navItems: NavItem[] = [
   },
   {
     to: '/habits',
+    group: 'Track',
+    shortcut: 'b',
+    keywords: 'streaks countdowns routines',
     label: 'Habits & Countdowns',
     icon: (
       <>
@@ -41,6 +59,9 @@ export const navItems: NavItem[] = [
   },
   {
     to: '/calendar',
+    group: 'Plan',
+    shortcut: 'c',
+    keywords: 'events schedule week',
     label: 'Calendar',
     icon: (
       <>
@@ -51,6 +72,9 @@ export const navItems: NavItem[] = [
   },
   {
     to: '/friends',
+    group: 'Life',
+    shortcut: 'f',
+    keywords: 'people contacts birthdays',
     label: 'Friends',
     icon: (
       <>
@@ -63,6 +87,9 @@ export const navItems: NavItem[] = [
   },
   {
     to: '/pomodoro',
+    group: 'Track',
+    shortcut: 'p',
+    keywords: 'timer focus spotify',
     label: 'Pomodoro',
     icon: (
       <>
@@ -74,6 +101,9 @@ export const navItems: NavItem[] = [
   },
   {
     to: '/school',
+    group: 'Plan',
+    shortcut: 's',
+    keywords: 'homework classes assignments canvas schoology',
     label: 'School',
     icon: (
       <>
@@ -84,6 +114,9 @@ export const navItems: NavItem[] = [
   },
   {
     to: '/agent',
+    group: 'Overview',
+    shortcut: 'a',
+    keywords: 'ai assistant chat claude plan',
     label: 'Assistant',
     icon: (
       <>
