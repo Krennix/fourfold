@@ -4,6 +4,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // `bun run dev:api` serves the api/ functions locally; outside it, /api just 404s as before.
+  server: {
+    proxy: {
+      '/api': { target: `http://127.0.0.1:${process.env.DEV_API_PORT ?? 3001}`, changeOrigin: false, xfwd: true },
+    },
+  },
   plugins: [
     react(),
     VitePWA({

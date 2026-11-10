@@ -32,15 +32,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const key = `fourfold:${email}:${ns}`;
 
-  if (req.method === 'GET') {
-    const value = await redis.get(key);
-    res.status(200).json({ value: value ?? null });
-    return;
-  }
+  try {
+    if (req.method === 'GET') {
+      const value = await redis.get(key);
+      res.status(200).json({ value: value ?? null });
+      return;
+    }
 
-  if (req.method === 'PUT') {
-    await redis.set(key, req.body ?? null);
-    res.status(200).json({ ok: true });
+    if (req.method === 'PUT') {
+      await redis.set(key, req.body ?? null);
+      res.status(200).json({ ok: true });
+      return;
+    }
+  } catch {
+    // Most often a missing/misconfigured KV_REST_API_URL/TOKEN — report it as JSON instead of
+    // letting the function crash with an opaque 500 page.
+    res.status(503).json({ error: 'Storage is unavailable right now.' });
     return;
   }
 

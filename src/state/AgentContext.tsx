@@ -36,6 +36,8 @@ interface AgentContextValue {
   dailyPlan: DailyPlanItem[] | null;
   isPlanning: boolean;
   generateDailyPlan: () => Promise<void>;
+  /** Last daily-plan failure (e.g. the assistant isn't configured), cleared on retry. */
+  planError: string | null;
   acceptPlanItem: (item: DailyPlanItem) => Promise<void>;
   dismissPlanItem: (item: DailyPlanItem) => void;
   clearDailyPlan: () => void;
@@ -46,6 +48,15 @@ interface AgentContextValue {
 }
 
 const AgentContext = createContext<AgentContextValue | null>(null);
+
+/** Local wall-clock time as ISO without an offset (e.g. "2026-11-10T14:05:00"), plus the zone for
+ * the model's benefit — calendar events are wall-clock too, so the server must not see UTC. */
+function localIsoString(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  const iso = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00`;
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
+  return `${iso} (${weekday}, local time)`;
+}
 
 function flagKey(flag: WatchdogFlag): string {
   return `${flag.title}::${flag.detail}`;
@@ -67,6 +78,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const [isThinking, setIsThinking] = useState(false);
   const [dailyPlan, setDailyPlan] = useRemoteState<DailyPlanItem[] | null>('dailyPlan', null, handleSessionExpired);
   const [isPlanning, setIsPlanning] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
   const [watchdogFlags, setWatchdogFlags] = useState<WatchdogFlag[]>([]);
   const [dismissedFlags, setDismissedFlags] = useRemoteState<string[]>('watchdogDismissed', [], handleSessionExpired);
 
@@ -76,7 +88,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       events: calendar.events,
       tasks: matrix.tasks,
       assignments,
-      now: now.toISOString(),
+      now: localIsoString(now),
     };
   }, [calendar.events, matrix.tasks, assignments]);
 
@@ -126,8 +138,11 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const generateDailyPlan = useCallback(async () => {
     setIsPlanning(true);
     try {
+      setPlanError(null);
       const plan = await generateDailyPlanRequest(buildContext(), handleSessionExpired);
       setDailyPlan(plan);
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : 'Could not plan your day.');
     } finally {
       setIsPlanning(false);
     }
@@ -155,8 +170,12 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const clearDailyPlan = useCallback(() => setDailyPlan(null), [setDailyPlan]);
 
   const checkWatchdog = useCallback(async () => {
-    const flags = await runWatchdogRequest(buildContext(), handleSessionExpired);
-    setWatchdogFlags(flags);
+    try {
+      const flags = await runWatchdogRequest(buildContext(), handleSessionExpired);
+      setWatchdogFlags(flags);
+    } catch {
+      // Background check — the assistant may simply not be configured; stay quiet.
+    }
   }, [buildContext, handleSessionExpired]);
 
   const dismissFlag = useCallback(
@@ -173,6 +192,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       value={{
         chatMessages,
         isThinking,
+        planError,
         sendChatMessage,
         dailyPlan,
         isPlanning,
