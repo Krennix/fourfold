@@ -1,14 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Redis } from '@upstash/redis';
 import { verifySession } from './_lib/session.js';
-import { parseIcsEvents } from './_lib/ics.js';
 import { fetchCanvasAssignments } from './_lib/canvasApi.js';
-import { fetchSchoologyAssignmentsViaApi, schoologyApiConfigured } from './_lib/schoologyApi.js';
-import { fetchClassroomAssignments } from './_lib/classroomApi.js';
-import { getRefreshToken } from './_lib/googleTokens.js';
-import { refreshAccessToken } from './_lib/googleOAuth.js';
+import { schoologyApiConfigured } from './_lib/schoologyApi.js';
+import { fetchAllAssignments, fetchSchoologyAssignments, isHttpUrl, normalizeIcsUrl, type StoredCanvas, type StoredSchoology } from './_lib/lmsAssignments.js';
 import { generateApiToken, getApiToken, resolveApiToken, revokeApiToken } from './_lib/apiTokens.js';
-import type { LmsAssignment } from './_lib/lmsShared.js';
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL ?? '',
@@ -19,46 +15,6 @@ function bearerToken(req: VercelRequest): string | null {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) return null;
   return header.slice('Bearer '.length);
-}
-
-/** Calendar apps hand out `webcal://` links as an alias for the same feed over https. */
-function normalizeIcsUrl(value: string): string {
-  return value.replace(/^webcal:\/\//i, 'https://');
-}
-
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-interface StoredSchoology {
-  icsUrl?: string;
-  apiKey?: string;
-  apiSecret?: string;
-}
-
-async function fetchIcsAssignments(icsUrl: string): Promise<LmsAssignment[]> {
-  const res = await fetch(icsUrl, { headers: { Accept: 'text/calendar, text/plain' } });
-  if (!res.ok) throw new Error(`Feed returned ${res.status}`);
-  const text = await res.text();
-  return parseIcsEvents(text)
-    .map((e): LmsAssignment => ({ ...e, points: null, url: null, source: 'schoology' }))
-    .sort((a, b) => a.due.localeCompare(b.due));
-}
-
-/** Prefers the authenticated Schoology API (has `points`) when the account has personal API
- * credentials saved and the server has an app-level consumer key/secret configured; otherwise
- * falls back to the .ics feed, which never carries points. */
-async function fetchSchoologyAssignments(stored: StoredSchoology): Promise<LmsAssignment[]> {
-  if (stored.apiKey && stored.apiSecret && schoologyApiConfigured()) {
-    return fetchSchoologyAssignmentsViaApi(stored.apiKey, stored.apiSecret);
-  }
-  if (stored.icsUrl) return fetchIcsAssignments(stored.icsUrl);
-  return [];
 }
 
 async function handleSchoology(req: VercelRequest, res: VercelResponse, email: string) {
@@ -116,11 +72,6 @@ async function handleSchoology(req: VercelRequest, res: VercelResponse, email: s
   }
 
   res.status(405).json({ error: 'Method not allowed' });
-}
-
-interface StoredCanvas {
-  baseUrl?: string;
-  token?: string;
 }
 
 async function handleCanvas(req: VercelRequest, res: VercelResponse, email: string) {
@@ -182,52 +133,19 @@ async function handleCanvas(req: VercelRequest, res: VercelResponse, email: stri
   res.status(405).json({ error: 'Method not allowed' });
 }
 
-/** First linked Google account's Classroom assignments, refreshing a server-side access token
- * from the stored refresh token — unlike src/lib/googleClassroom.ts (called from the browser
- * with a client-minted token), this runs with no browser at all, e.g. from an unattended
- * personal-API-token fetch. Silently returns nothing if no Google account is linked, its refresh
- * token was revoked, or it never granted the Classroom scope — homework should still come back
- * from whichever other sources are configured. */
-async function fetchClassroomAssignmentsForAccount(email: string): Promise<LmsAssignment[]> {
-  const stored = (await redis.get<{ accounts?: { email: string }[] }>(`fourfold:${email}:googleCalendars`)) ?? {};
-  const googleEmail = stored.accounts?.[0]?.email;
-  if (!googleEmail) return [];
-
-  const refreshToken = await getRefreshToken(email, googleEmail);
-  if (!refreshToken) return [];
-
-  try {
-    const { accessToken } = await refreshAccessToken(refreshToken);
-    return await fetchClassroomAssignments(accessToken);
-  } catch {
-    // Revoked/expired refresh token, missing Classroom scope, or a Classroom API error — any of
-    // these just means no Classroom assignments this time, not a failure of the whole request.
-    return [];
-  }
-}
-
 async function handleHomework(req: VercelRequest, res: VercelResponse, email: string) {
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
-  const [storedSchoology, storedCanvas] = await Promise.all([
-    redis.get<StoredSchoology>(`fourfold:${email}:schoology`),
-    redis.get<StoredCanvas>(`fourfold:${email}:canvas`),
-  ]);
-
-  const [schoology, canvas, classroom] = await Promise.all([
-    fetchSchoologyAssignments(storedSchoology ?? {}).catch(() => []),
-    storedCanvas?.baseUrl && storedCanvas.token ? fetchCanvasAssignments(storedCanvas.baseUrl, storedCanvas.token).catch(() => []) : [],
-    fetchClassroomAssignmentsForAccount(email),
-  ]);
+  const all = await fetchAllAssignments(email);
 
   const daysAhead = Number(req.query.days) || 14;
   const windowStart = Date.now() - 24 * 60 * 60 * 1000; // include anything overdue by <1 day
   const windowEnd = Date.now() + daysAhead * 24 * 60 * 60 * 1000;
 
-  const assignments = [...schoology, ...canvas, ...classroom]
+  const assignments = all
     .filter((a) => {
       const t = new Date(a.due).getTime();
       return !Number.isNaN(t) && t >= windowStart && t <= windowEnd;

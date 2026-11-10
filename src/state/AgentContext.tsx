@@ -2,6 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useAuth } from './AuthContext';
 import { useCalendarEvents } from './CalendarContext';
 import { useMatrix } from './MatrixContext';
+import { useSchool } from './SchoolContext';
+import { useHabits } from './HabitsContext';
+import { useCountdowns } from './CountdownsContext';
+import { useAllHomework, homeworkRef } from '../lib/useQuadrantHomework';
 import { useSchoology } from './SchoologyContext';
 import { useCanvas } from './CanvasContext';
 import { useClassroom } from './ClassroomContext';
@@ -66,6 +70,10 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const { handleSessionExpired } = useAuth();
   const calendar = useCalendarEvents();
   const matrix = useMatrix();
+  const school = useSchool();
+  const homework = useAllHomework();
+  const habits = useHabits();
+  const countdowns = useCountdowns();
   const { assignments: schoologyAssignments } = useSchoology();
   const { assignments: canvasAssignments } = useCanvas();
   const { assignments: classroomAssignments } = useClassroom();
@@ -84,13 +92,31 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
   const buildContext = useCallback((): AgentContextPayload => {
     const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
     return {
       events: calendar.events,
+      homework: homework.map((h) => ({
+        id: homeworkRef(h),
+        title: h.title,
+        due: h.due,
+        done: h.done,
+        priority: h.priorityLabel ?? null,
+        class: h.className,
+        source: h.source,
+        quadrant: h.quad,
+      })),
+      habits: habits.habits.map((h) => ({ id: h.id, name: h.name, doneToday: h.done, streak: h.streak })),
+      countdowns: countdowns.countdowns.map((c) => {
+        const next = new Date(now.getFullYear(), c.month - 1, c.day);
+        if (next < new Date(now.getFullYear(), now.getMonth(), now.getDate())) next.setFullYear(next.getFullYear() + 1);
+        const days = Math.round((next.getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
+        return { id: c.id, name: c.name, date: `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`, daysUntil: days };
+      }),
       tasks: matrix.tasks,
       assignments,
       now: localIsoString(now),
     };
-  }, [calendar.events, matrix.tasks, assignments]);
+  }, [calendar.events, matrix.tasks, assignments, homework, habits.habits, countdowns.countdowns]);
 
   // Re-render at least once a minute so `todayKey` below notices a local-midnight rollover
   // even if the tab is just sitting open with nothing else triggering a render.
@@ -124,7 +150,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       appendChatMessage({ role: 'user', text });
       setIsThinking(true);
       try {
-        const reply = await runAgentLoop('chat', text, buildContext(), { calendar, matrix }, handleSessionExpired);
+        const reply = await runAgentLoop('chat', text, buildContext(), { calendar, matrix, school, homework, habits, countdowns }, handleSessionExpired);
         if (reply) appendChatMessage({ role: 'assistant', text: reply });
       } catch (err) {
         appendChatMessage({ role: 'assistant', text: `Something went wrong: ${err instanceof Error ? err.message : String(err)}` });
@@ -132,7 +158,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         setIsThinking(false);
       }
     },
-    [appendChatMessage, buildContext, calendar, matrix, handleSessionExpired],
+    [appendChatMessage, buildContext, calendar, matrix, school, homework, habits, countdowns, handleSessionExpired],
   );
 
   const generateDailyPlan = useCallback(async () => {
@@ -151,13 +177,13 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const acceptPlanItem = useCallback(
     async (item: DailyPlanItem) => {
       if (item.sourceType === 'task') {
-        await executeWriteTool({ id: '', name: 'schedule_task', input: { quadrant: findTaskQuad(matrix.tasks, item.sourceId), taskId: item.sourceId, time: item.time } }, { calendar, matrix });
+        await executeWriteTool({ id: '', name: 'schedule_task', input: { quadrant: findTaskQuad(matrix.tasks, item.sourceId), taskId: item.sourceId, time: item.time } }, { calendar, matrix, school, homework, habits, countdowns });
       } else if (item.sourceType !== 'event') {
         await calendar.addEvent(dateKeyForToday(), item.title, item.time, item.durationMin);
       }
       setDailyPlan((prev) => (prev ? prev.filter((p) => p !== item) : prev));
     },
-    [calendar, matrix, setDailyPlan],
+    [calendar, matrix, school, homework, habits, countdowns, setDailyPlan],
   );
 
   const dismissPlanItem = useCallback(

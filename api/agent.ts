@@ -7,7 +7,7 @@ import { toolsForMode, systemPromptForMode, DAILY_PLAN_SCHEMA, WATCHDOG_SCHEMA, 
 
 const MODEL = 'claude-sonnet-5';
 const MAX_ITERATIONS = 6;
-const READ_ONLY_TOOLS = new Set(['get_calendar_events', 'get_tasks', 'get_assignments', 'find_free_slots']);
+const READ_ONLY_TOOLS = new Set(['get_calendar_events', 'get_tasks', 'get_assignments', 'get_homework', 'get_habits', 'get_countdowns', 'find_free_slots']);
 
 interface AgentTask {
   id: string;
@@ -27,7 +27,22 @@ interface AgentAssignment {
   allDay: boolean;
 }
 
+interface AgentHomework {
+  id: string;
+  title: string;
+  due: string | null;
+  done: boolean;
+  priority: string | null;
+  class: string | null;
+  source: string;
+  quadrant: string;
+}
+
 interface AgentContextPayload {
+  /** Homework/habits/countdowns are optional so older clients keep working. */
+  homework?: AgentHomework[];
+  habits?: { id: string; name: string; doneToday: boolean; streak: number }[];
+  countdowns?: { id: string; name: string; date: string; daysUntil: number }[];
   events: AgentCalEvent[];
   tasks: Record<'q1' | 'q2' | 'q3' | 'q4', AgentTask[]>;
   assignments: AgentAssignment[];
@@ -80,6 +95,18 @@ function executeReadTool(name: string, input: Record<string, unknown>, context: 
       const dueBefore = typeof input.dueBefore === 'string' ? input.dueBefore : null;
       return context.assignments.filter((a) => !dueBefore || a.due < dueBefore);
     }
+    case 'get_homework': {
+      const includeDone = input.includeDone === true;
+      const dueBefore = typeof input.dueBefore === 'string' ? input.dueBefore : null;
+      const cls = typeof input.class === 'string' ? input.class.trim().toLowerCase() : null;
+      return (context.homework ?? []).filter(
+        (h) => (includeDone || !h.done) && (!dueBefore || (h.due !== null && h.due <= dueBefore)) && (!cls || (h.class ?? '').toLowerCase() === cls),
+      );
+    }
+    case 'get_habits':
+      return context.habits ?? [];
+    case 'get_countdowns':
+      return context.countdowns ?? [];
     case 'find_free_slots': {
       const durationMin = typeof input.durationMin === 'number' ? input.durationMin : 30;
       const count = typeof input.count === 'number' ? input.count : 1;

@@ -35,6 +35,28 @@ export const READ_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'get_homework',
+    description: "Get the user's homework — typed in or imported from Schoology/Canvas/Classroom — with its class, due date, priority and the Eisenhower quadrant it lands in.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        includeDone: { type: 'boolean', description: 'Include completed homework. Defaults to false.' },
+        dueBefore: { type: 'string', description: 'Inclusive "YYYY-MM-DD"; only return homework due on or before this date (overdue items are included).' },
+        class: { type: 'string', description: 'Only this class (name or id).' },
+      },
+    },
+  },
+  {
+    name: 'get_habits',
+    description: "Get the user's habits with whether each is done today and its current streak.",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_countdowns',
+    description: "Get the user's countdowns (birthdays, deadlines, holidays) with days remaining.",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
     name: 'find_free_slots',
     description: 'Find open calendar slots of a given duration, avoiding existing events. Use this instead of reasoning about times manually.',
     input_schema: {
@@ -128,6 +150,52 @@ export const WRITE_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'add_homework',
+    description: 'Add a homework assignment to one of the user\'s classes.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        class: { type: 'string', description: 'Class name or id, as listed by get_homework / the context.' },
+        title: { type: 'string' },
+        due: { type: 'string', description: '"YYYY-MM-DD", optional.' },
+        priority: { type: 'string', enum: ['high', 'med', 'low'], description: 'Defaults to med.' },
+      },
+      required: ['class', 'title'],
+    },
+  },
+  {
+    name: 'set_homework_done',
+    description: 'Mark a homework item done or not done, by its id from get_homework.',
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' }, done: { type: 'boolean', description: 'Defaults to true.' } },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'set_habit_done',
+    description: "Check a habit off (or un-check it) for today, by its id from get_habits.",
+    input_schema: {
+      type: 'object',
+      properties: { id: { type: 'string' }, done: { type: 'boolean', description: 'Defaults to true.' } },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'create_countdown',
+    description: 'Add a countdown to a yearly date.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        month: { type: 'number', description: '1-12.' },
+        day: { type: 'number', description: '1-31.' },
+        type: { type: 'string', enum: ['birthday', 'holiday', 'anniversary', 'deadline', 'event'] },
+      },
+      required: ['name', 'month', 'day'],
+    },
+  },
+  {
     name: 'mark_task_done',
     description: 'Toggle a task done/not-done.',
     input_schema: {
@@ -157,7 +225,7 @@ export function systemPromptForMode(mode: AgentMode): string {
   const base = `You are Fourfold's scheduling assistant. The user's current date/time is given at the start of their message. All calendar dates use the format "YYYY-M-D" with a 0-based month (e.g. "2026-8-7" is September 7, 2026). Times are "HH:MM" 24-hour. All times — including the current time and any ISO date-times you pass to tools — are the user's local wall-clock time; never add a UTC offset or "Z". Always use find_free_slots to find open time rather than reasoning about conflicts yourself. Events and tasks may have "locked": true, meaning the user has marked them fixed/"set in stone" — never move, reschedule, or delete a locked item (the app will refuse the action anyway); if asked to change one, tell the user it's locked and that they need to unlock it in the Calendar/Matrix UI first. Locked items still count as busy time when finding free slots for other things.`;
   switch (mode) {
     case 'chat':
-      return `${base} Help the user manage their calendar, tasks, and assignments via natural language. Take action with tools when asked; ask for clarification if a request is ambiguous. Keep replies brief.`;
+      return `${base} Help the user manage their calendar, tasks, homework, habits and countdowns via natural language. Homework lands on the Eisenhower matrix by priority (high = always Do first) and urgency (overdue or due within 2 days). Take action with tools when asked; ask for clarification if a request is ambiguous. Keep replies brief.`;
     case 'auto_schedule':
       return `${base} You are scheduling one specific task the user just created. Consider its priority quadrant, due date, and duration estimate, then use find_free_slots and create_event to book the best slot. Prefer sooner slots for urgent/important (q1) tasks and slots well before the deadline in general. Respond with a one-sentence confirmation of what you booked.`;
     case 'daily_plan':

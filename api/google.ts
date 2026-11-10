@@ -11,7 +11,7 @@ import {
   revokeGoogleToken,
 } from './_lib/googleOAuth.js';
 import { consumeOAuthNonce, createOAuthNonce, deleteRefreshToken, getRefreshToken, setRefreshToken } from './_lib/googleTokens.js';
-import { parseIcsCalendarEvents, type IcsCalendarEvent } from './_lib/ics.js';
+import { fetchAllIcsFeeds, isStoredFeed, loadStoredFeeds, type StoredFeed } from './_lib/icsFeeds.js';
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL ?? '',
@@ -257,62 +257,6 @@ function isHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-interface StoredFeed {
-  id: string;
-  label: string;
-  url: string;
-  color?: string;
-}
-
-function isStoredFeed(value: unknown): value is StoredFeed {
-  if (!value || typeof value !== 'object') return false;
-  const f = value as Record<string, unknown>;
-  return (
-    typeof f.id === 'string' &&
-    typeof f.label === 'string' &&
-    typeof f.url === 'string' &&
-    (f.color === undefined || typeof f.color === 'string')
-  );
-}
-
-/** Old single-feed shape (`{ icsUrl }`), from before multiple feeds were supported — migrated
- * to a one-item `feeds` list on first read so existing users don't lose their saved feed. */
-interface LegacyStored {
-  icsUrl?: string;
-}
-
-async function loadStoredFeeds(key: string): Promise<StoredFeed[]> {
-  const stored = (await redis.get<{ feeds?: unknown[] } & LegacyStored>(key)) ?? null;
-  if (!stored) return [];
-  if (Array.isArray(stored.feeds)) return stored.feeds.filter(isStoredFeed);
-  if (stored.icsUrl) return [{ id: 'legacy', label: 'Google Calendar', url: stored.icsUrl }];
-  return [];
-}
-
-async function fetchIcsEvents(icsUrl: string): Promise<IcsCalendarEvent[]> {
-  const res = await fetch(icsUrl, { headers: { Accept: 'text/calendar, text/plain' } });
-  if (!res.ok) throw new Error(`Feed returned ${res.status}`);
-  const text = await res.text();
-  return parseIcsCalendarEvents(text).sort((a, b) => a.startISO.localeCompare(b.startISO));
-}
-
-interface FeedResult extends StoredFeed {
-  events: IcsCalendarEvent[];
-  error?: string;
-}
-
-async function fetchAllIcsFeeds(feeds: StoredFeed[]): Promise<FeedResult[]> {
-  return Promise.all(
-    feeds.map(async (feed) => {
-      try {
-        return { ...feed, events: await fetchIcsEvents(feed.url) };
-      } catch {
-        return { ...feed, events: [], error: 'Could not reach that calendar feed.' };
-      }
-    }),
-  );
 }
 
 /** Read-only backup path for Google Calendar: instead of the OAuth link (which needs a working

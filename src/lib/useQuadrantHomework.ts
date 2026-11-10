@@ -42,6 +42,11 @@ export function homeworkQuadrantReason(item: Pick<MergedHomeworkItem, 'source' |
   return pri ? `${pri} priority, ${when}` : `Imported assignment, ${when}`;
 }
 
+/** Stable id shared with the public API (/api/v1/homework) and the assistant: "manual:<class>:<n>" or "<source>:<uid>". */
+export function homeworkRef(h: Pick<MergedHomeworkItem, 'source' | 'homeworkId' | 'uid'> & { classId: string | null }): string {
+  return h.source === 'manual' ? `manual:${h.classId}:${h.homeworkId}` : `${h.source}:${h.uid}`;
+}
+
 export interface HomeworkEntry extends MergedHomeworkItem {
   /** Class this belongs to, or null for an imported assignment that didn't match any class. */
   classId: string | null;

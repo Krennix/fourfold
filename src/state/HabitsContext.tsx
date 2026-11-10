@@ -33,7 +33,7 @@ function overallStreak(habits: { history: string[] }[]): number {
   return streak;
 }
 
-interface HabitsContextValue {
+export interface HabitsContextValue {
   habits: Habit[];
   addHabit: (name: string, time: string | null, quote: string | null) => void;
   removeHabit: (id: string) => void;
