@@ -1,175 +1,287 @@
 import { useState } from 'react';
 import { Widget, PageHeader } from '../components/Widget';
 import { TaskDialog } from '../components/TaskDialog';
+import { TaskRow } from '../components/TaskRow';
+import { Icon } from '../components/Icon';
+import { ContextMenu, type ContextMenuItem } from '../components/ContextMenu';
 import { useAutoSchedule } from '../lib/useAutoSchedule';
-import { useMatrix, type QuadKey } from '../state/MatrixContext';
+import { parseQuickAdd } from '../lib/quickAdd';
+import { daysUntil } from '../lib/due';
+import { useMatrix, type QuadKey, type Task } from '../state/MatrixContext';
 import { useSchool } from '../state/SchoolContext';
-import { useQuadrantHomework } from '../lib/useQuadrantHomework';
+import { useUI } from '../state/UIContext';
+import { useQuadrantHomework, type HomeworkTaskRow } from '../lib/useQuadrantHomework';
 import './Matrix.css';
 
-const QUAD_CONFIG: { key: QuadKey; numeral: string; label: string; sub: string; badgeStyle: React.CSSProperties }[] = [
-  { key: 'q1', numeral: 'I', label: 'Urgent & Important', sub: 'Do first', badgeStyle: { background: 'var(--color-accent-800)', color: 'var(--color-bg)' } },
-  { key: 'q2', numeral: 'II', label: 'Not Urgent & Important', sub: 'Schedule', badgeStyle: { background: 'var(--color-accent-500)', color: 'var(--color-bg)' } },
-  { key: 'q3', numeral: 'III', label: 'Urgent & Not Important', sub: 'Delegate', badgeStyle: { background: 'var(--color-accent-300)', color: 'var(--color-accent-800)' } },
-  { key: 'q4', numeral: 'IV', label: 'Not Urgent & Not Important', sub: 'Eliminate', badgeStyle: { background: 'var(--color-neutral-300)', color: 'var(--color-neutral-800)' } },
+const QUAD_CONFIG: { key: QuadKey; numeral: string; label: string; sub: string; hint: string }[] = [
+  { key: 'q1', numeral: 'I', label: 'Do first', sub: 'Urgent & important', hint: 'Deadlines and crises — handle these today.' },
+  { key: 'q2', numeral: 'II', label: 'Schedule', sub: 'Important, not urgent', hint: 'Goals and deep work — block time for these.' },
+  { key: 'q3', numeral: 'III', label: 'Delegate', sub: 'Urgent, not important', hint: 'Interruptions — hand off or batch them.' },
+  { key: 'q4', numeral: 'IV', label: 'Eliminate', sub: 'Neither', hint: 'Distractions — drop these when you can.' },
 ];
 
+type Row = (Task & { source: 'matrix' }) | HomeworkTaskRow;
+type SortMode = 'manual' | 'due';
+
+function sortRows(rows: Row[], mode: SortMode): Row[] {
+  if (mode === 'manual') return rows;
+  return [...rows].sort((a, b) => {
+    const da = a.dueDate ? (daysUntil(a.dueDate) ?? 9999) : 9999;
+    const db = b.dueDate ? (daysUntil(b.dueDate) ?? 9999) : 9999;
+    return da - db;
+  });
+}
+
 export function MatrixPage() {
-  const { tasks, addTask, removeTask, toggleDone, scheduleTask, unscheduleTask, toggleTaskLocked } = useMatrix();
+  const { tasks, removeTask, toggleDone, scheduleTask, unscheduleTask, toggleTaskLocked, moveTask, restoreTask, addTask } = useMatrix();
   const { toggleHomework, toggleSchoologyHomeworkDone } = useSchool();
+  const { toast } = useUI();
   const homeworkRows = useQuadrantHomework();
   const autoSchedule = useAutoSchedule();
-  const [open, setOpen] = useState<Record<QuadKey, boolean>>({ q1: true, q2: true, q3: true, q4: true });
+  const [showDone, setShowDone] = useState<Record<QuadKey, boolean>>({ q1: false, q2: false, q3: false, q4: false });
   const [dialogQuad, setDialogQuad] = useState<QuadKey | null>(null);
+  const [drafts, setDrafts] = useState<Record<QuadKey, string>>({ q1: '', q2: '', q3: '', q4: '' });
+  const [menu, setMenu] = useState<{ x: number; y: number; quad: QuadKey; task: Task } | null>(null);
+  const [dragOver, setDragOver] = useState<QuadKey | null>(null);
+  const [hideHomework, setHideHomework] = useState(() => localStorage.getItem('matrix.hideHomework') === '1');
+  const [sortMode, setSortMode] = useState<SortMode>(() => (localStorage.getItem('matrix.sort') === 'due' ? 'due' : 'manual'));
 
-  const toggleOpen = (qkey: QuadKey) => setOpen((s) => ({ ...s, [qkey]: !s[qkey] }));
-
-  const openDialog = (qkey: QuadKey) => setDialogQuad(qkey);
-
-  const scheduleNow = async (qkey: QuadKey, id: string, title: string, durationMin: number | null) => {
-    const scheduled = await autoSchedule({ title, dueDate: null, durationMin: durationMin ?? 30, link: null });
-    if (scheduled.time) scheduleTask(qkey, id, scheduled.time);
+  const persist = (k: string, v: string) => {
+    try {
+      localStorage.setItem(k, v);
+    } catch {
+      // ignore
+    }
   };
+
+  const scheduleNow = async (qkey: QuadKey, t: Task) => {
+    const scheduled = await autoSchedule({ title: t.title, dueDate: t.dueDate, durationMin: t.durationMin ?? 30, link: null });
+    if (scheduled.time) {
+      scheduleTask(qkey, t.id, scheduled.time);
+      toast({ message: `Booked “${t.title}” at ${scheduled.time}`, tone: 'success' });
+    } else {
+      toast({ message: 'No free slot found before the due date', tone: 'error' });
+    }
+  };
+
+  const toggleRow = (quad: QuadKey, t: Row) => {
+    if (t.source !== 'homework') {
+      toggleDone(quad, t.id);
+      if (!t.done) toast({ message: `Completed “${t.title}”`, tone: 'success', action: { label: 'Undo', onClick: () => toggleDone(quad, t.id) } });
+      return;
+    }
+    if (t.hwId !== undefined) toggleHomework(t.classId, t.hwId);
+    else toggleSchoologyHomeworkDone(t.uid!);
+  };
+
+  const deleteTask = (quad: QuadKey, t: Task) => {
+    removeTask(quad, t.id);
+    toast({ message: `Deleted “${t.title}”`, action: { label: 'Undo', onClick: () => restoreTask(quad, t) } });
+  };
+
+  const submitDraft = async (quad: QuadKey) => {
+    const text = drafts[quad].trim();
+    if (!text) return;
+    const parsed = parseQuickAdd(text);
+    if (!parsed.title) return;
+    setDrafts((d) => ({ ...d, [quad]: '' }));
+    const scheduled = parsed.durationMin ? await autoSchedule({ title: parsed.title, dueDate: parsed.dueDate, durationMin: parsed.durationMin, link: null }) : { link: null, time: null };
+    addTask(quad, { title: parsed.title, dueDate: parsed.dueDate, durationMin: parsed.durationMin, time: scheduled.time ?? parsed.time, link: scheduled.link });
+  };
+
+  const menuItems: ContextMenuItem[] = menu
+    ? [
+        ...(!menu.task.locked
+          ? QUAD_CONFIG.filter((q) => q.key !== menu.quad).map((q) => ({
+              label: `Move to ${q.label}`,
+              icon: <span className="qdot" style={{ background: `var(--${q.key})` }} />,
+              onClick: () => moveTask(menu.quad, q.key, menu.task.id),
+            }))
+          : []),
+        ...(!menu.task.locked && !menu.task.done
+          ? [
+              menu.task.time
+                ? { label: `Unschedule (${menu.task.time})`, icon: <Icon name="clock" />, onClick: () => unscheduleTask(menu.quad, menu.task.id) }
+                : { label: 'Find a time & schedule', icon: <Icon name="clock" />, onClick: () => void scheduleNow(menu.quad, menu.task) },
+            ]
+          : []),
+        {
+          label: menu.task.locked ? 'Unlock' : 'Lock in place',
+          icon: <Icon name={menu.task.locked ? 'unlock' : 'lock'} />,
+          onClick: () => toggleTaskLocked(menu.quad, menu.task.id),
+        },
+        ...(!menu.task.locked ? [{ label: 'Delete', danger: true, icon: <Icon name="trash" />, onClick: () => deleteTask(menu.quad, menu.task) }] : []),
+      ]
+    : [];
+
+  const allRows = QUAD_CONFIG.flatMap((q) => [...tasks[q.key], ...(hideHomework ? [] : homeworkRows[q.key])]);
+  const openCount = allRows.filter((t) => !t.done).length;
+  const overdueCount = allRows.filter((t) => !t.done && t.dueDate && (daysUntil(t.dueDate) ?? 0) < 0).length;
+  const doneCount = allRows.filter((t) => t.done).length;
 
   return (
     <div className="page">
       <PageHeader
         kicker="Prioritize"
         title="Eisenhower Matrix"
+        subtitle={
+          <>
+            {openCount} open{overdueCount > 0 && <> · <span style={{ color: 'var(--color-danger)', fontWeight: 600 }}>{overdueCount} overdue</span></>}
+            {doneCount > 0 && <> · {doneCount} done</>}
+            <span className="matrix-tip"> · Drag tasks between quadrants</span>
+          </>
+        }
         actions={
-          <button className="btn btn-primary" type="button" onClick={() => openDialog('q1')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
-            Add task
-          </button>
+          <>
+            <label className="seg" title="Sort tasks">
+              {(['manual', 'due'] as SortMode[]).map((m) => (
+                <span className="seg-opt" key={m}>
+                  <input type="radio" name="matrix-sort" checked={sortMode === m} onChange={() => { setSortMode(m); persist('matrix.sort', m); }} />
+                  {m === 'manual' ? 'Added' : 'Due date'}
+                </span>
+              ))}
+            </label>
+            <button
+              className={`btn btn-secondary${hideHomework ? '' : ' is-on'}`}
+              type="button"
+              onClick={() => {
+                setHideHomework((v) => !v);
+                persist('matrix.hideHomework', hideHomework ? '0' : '1');
+              }}
+              aria-pressed={!hideHomework}
+              title="Show homework from the School tab"
+            >
+              <Icon name="book" />
+              {hideHomework ? 'Show homework' : 'Hide homework'}
+            </button>
+            <button className="btn btn-primary" type="button" onClick={() => setDialogQuad('q1')}>
+              <Icon name="plus" />
+              Add task
+            </button>
+          </>
         }
       />
 
       <div className="matrix-grid">
         {QUAD_CONFIG.map((q) => {
-          const combined = [...tasks[q.key].map((t) => ({ ...t, source: 'matrix' as const })), ...homeworkRows[q.key]];
-          const activeTasks = combined.filter((t) => !t.done);
-          const completedTasks = combined.filter((t) => t.done);
-          const isOpen = open[q.key];
-
-          const toggle = (t: (typeof combined)[number]) => {
-            if (t.source !== 'homework') return toggleDone(q.key, t.id);
-            return t.hwId !== undefined ? toggleHomework(t.classId, t.hwId) : toggleSchoologyHomeworkDone(t.uid!);
-          };
+          const combined: Row[] = [...tasks[q.key].map((t) => ({ ...t, source: 'matrix' as const })), ...(hideHomework ? [] : homeworkRows[q.key])];
+          const active = sortRows(combined.filter((t) => !t.done), sortMode);
+          const completed = combined.filter((t) => t.done);
 
           return (
-            <Widget key={q.key}>
-              <div className="qhead">
-                <span className="qbadge" style={q.badgeStyle}>{q.numeral}</span>
-                <span className="qlabel">{q.label}</span>
-                <span className="qsub">{q.sub}</span>
-              </div>
-
-              {activeTasks.map((t) => (
-                <div className="task-row" key={t.id}>
-                  <div className={`tcheck${t.done ? ' done' : ''}`} onClick={() => toggle(t)}>
-                    {t.done && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+            <Widget
+              key={q.key}
+              className={`quad-card quad-${q.key}${dragOver === q.key ? ' drag-over' : ''}`}
+            >
+              <div
+                className="quad-drop"
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types.includes('application/x-fourfold-task')) {
+                    e.preventDefault();
+                    setDragOver(q.key);
+                  }
+                }}
+                onDragLeave={(e) => {
+                  if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDragOver(null);
+                }}
+                onDrop={(e) => {
+                  setDragOver(null);
+                  const raw = e.dataTransfer.getData('application/x-fourfold-task');
+                  if (!raw) return;
+                  const { from, id } = JSON.parse(raw) as { from: QuadKey; id: string };
+                  moveTask(from, q.key, id);
+                }}
+              >
+                <div className="qhead">
+                  <span className="qbadge">{q.numeral}</span>
+                  <div className="qtitles">
+                    <span className="qlabel">{q.label}</span>
+                    <span className="qsub">{q.sub}</span>
                   </div>
-                  <span className={`ttitle${t.done ? ' done' : ''}`} title={'description' in t ? t.description || undefined : undefined}>{t.title}</span>
-                  <span className="tmeta">
-                    {t.durationMin && <span className="tag tag-neutral">{t.durationMin < 60 ? `${t.durationMin}m` : `${Math.floor(t.durationMin / 60)}h${t.durationMin % 60 ? ` ${t.durationMin % 60}m` : ''}`}</span>}
-                    {t.dueDate && <span className="tag tag-outline">Due {t.dueDate}</span>}
-                    {t.source !== 'homework' && t.time && (
-                      <span
-                        className="tag tag-accent"
-                        style={{ cursor: t.locked ? 'default' : 'pointer' }}
-                        title={t.locked ? 'Locked — unlock to change' : 'Click to unschedule'}
-                        onClick={() => !t.locked && unscheduleTask(q.key, t.id)}
-                      >
-                        {t.time}
-                      </span>
-                    )}
-                    {t.source !== 'homework' && !t.time && !t.locked && (
-                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => scheduleNow(q.key, t.id, t.title, t.durationMin)} type="button">+ Schedule</button>
-                    )}
-                    <span className="tag tag-neutral">{t.listTag}</span>
-                    {t.source === 'homework' ? (
-                      <span className="tag tag-outline" title="Managed on the School tab">Homework</span>
-                    ) : (
-                      <>
-                        <button
-                          className="btn btn-icon"
-                          type="button"
-                          onClick={() => toggleTaskLocked(q.key, t.id)}
-                          aria-label={t.locked ? `Unlock ${t.title}` : `Lock ${t.title} in place`}
-                          title={t.locked ? 'Locked — set in stone. Click to unlock.' : 'Lock in place'}
-                        >
-                          {t.locked ? (
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
-                          ) : (
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 7.5-2" /></svg>
-                          )}
-                        </button>
-                        {!t.locked && (
-                          <button className="btn btn-icon" type="button" onClick={() => removeTask(q.key, t.id)} aria-label={`Remove ${t.title}`}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </span>
+                  <span className="qcount">{active.length}</span>
                 </div>
-              ))}
 
-              {activeTasks.length === 0 && completedTasks.length === 0 && (
-                <div className="empty-msg">No tasks</div>
-              )}
+                <div className="qlist">
+                  {active.map((t) => (
+                    <TaskRow
+                      key={t.id}
+                      task={t}
+                      color={`var(--${q.key})`}
+                      onToggle={() => toggleRow(q.key, t)}
+                      draggable={t.source !== 'homework' && !t.locked}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('application/x-fourfold-task', JSON.stringify({ from: q.key, id: t.id }));
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onMenu={t.source !== 'homework' ? (x, y) => setMenu({ x, y, quad: q.key, task: t }) : undefined}
+                      actions={
+                        t.source !== 'homework' && !t.locked && !t.time ? (
+                          <button className="btn btn-icon" type="button" title="Find a time & schedule" aria-label={`Schedule “${t.title}”`} onClick={() => void scheduleNow(q.key, t)}>
+                            <Icon name="clock" />
+                          </button>
+                        ) : undefined
+                      }
+                    />
+                  ))}
+                  {active.length === 0 && (
+                    <div className="qempty">
+                      <span>{completed.length > 0 ? 'All clear here.' : q.hint}</span>
+                    </div>
+                  )}
+                </div>
 
-              {completedTasks.length > 0 && (
-                <>
-                  <div className="completed-head" onClick={() => toggleOpen(q.key)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}><path d="m6 9 6 6 6-6" /></svg>
-                    Completed {completedTasks.length}
+                <form
+                  className="qadd"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void submitDraft(q.key);
+                  }}
+                >
+                  <Icon name="plus" />
+                  <input
+                    value={drafts[q.key]}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [q.key]: e.target.value }))}
+                    placeholder="Add a task… (try “fri 30m”)"
+                    aria-label={`Add a task to ${q.label}`}
+                  />
+                  {drafts[q.key].trim() && (
+                    <span className="qadd-chips">
+                      {parseQuickAdd(drafts[q.key]).chips.filter((c) => c.kind !== 'quad').map((c) => (
+                        <span className="tag tag-accent" key={c.label}>{c.label}</span>
+                      ))}
+                    </span>
+                  )}
+                  <button type="button" className="btn btn-icon" title="More options" aria-label={`Add a detailed task to ${q.label}`} onClick={() => setDialogQuad(q.key)}>
+                    <Icon name="more" strokeWidth={2.5} />
+                  </button>
+                </form>
+
+                {completed.length > 0 && (
+                  <div className="qdone">
+                    <button type="button" className="completed-head" onClick={() => setShowDone((s) => ({ ...s, [q.key]: !s[q.key] }))} aria-expanded={showDone[q.key]}>
+                      <Icon name="chevron-down" strokeWidth={2.2} className={showDone[q.key] ? '' : 'rot'} />
+                      Completed · {completed.length}
+                    </button>
+                    {showDone[q.key] &&
+                      completed.map((t) => (
+                        <TaskRow
+                          key={t.id}
+                          task={t}
+                          compact
+                          color={`var(--${q.key})`}
+                          onToggle={() => toggleRow(q.key, t)}
+                          onMenu={t.source !== 'homework' ? (x, y) => setMenu({ x, y, quad: q.key, task: t }) : undefined}
+                        />
+                      ))}
                   </div>
-                  <div style={{ display: isOpen ? 'flex' : 'none', flexDirection: 'column' }}>
-                    {completedTasks.map((t) => (
-                      <div className="task-row" key={t.id}>
-                        <div className="tcheck done" onClick={() => toggle(t)}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-                        </div>
-                        <span className="ttitle done">{t.title}</span>
-                        <span className="tmeta">
-                          <span className="tag tag-neutral">{t.listTag}</span>
-                          {t.source === 'homework' ? (
-                            <span className="tag tag-outline" title="Managed on the School tab">Homework</span>
-                          ) : (
-                            <>
-                              <button
-                                className="btn btn-icon"
-                                type="button"
-                                onClick={() => toggleTaskLocked(q.key, t.id)}
-                                aria-label={t.locked ? `Unlock ${t.title}` : `Lock ${t.title} in place`}
-                                title={t.locked ? 'Locked — set in stone. Click to unlock.' : 'Lock in place'}
-                              >
-                                {t.locked ? (
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
-                                ) : (
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 7.5-2" /></svg>
-                                )}
-                              </button>
-                              {!t.locked && (
-                                <button className="btn btn-icon" type="button" onClick={() => removeTask(q.key, t.id)} aria-label={`Remove ${t.title}`}>
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              <button className="btn btn-ghost qaddbtn" onClick={() => openDialog(q.key)} type="button">+ Add task</button>
+                )}
+              </div>
             </Widget>
           );
         })}
       </div>
+
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
 
       {dialogQuad && (
         <TaskDialog

@@ -1,0 +1,51 @@
+.task-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 8px; margin: 0 -8px;
+  border-radius: var(--radius-md);
+  min-height: 44px;
+}
+.task-row:hover { background: var(--color-hover); }
+.task-row[draggable='true'] { cursor: grab; }
+.task-row[draggable='true']:active { cursor: grabbing; }
+.task-row.compact { min-height: 38px; padding-block: 6px; }
+
+.tcheck {
+  --check-color: var(--color-accent);
+  width: 20px; height: 20px; flex: none; padding: 0;
+  display: grid; place-items: center; cursor: pointer;
+  border: 1.75px solid color-mix(in srgb, var(--check-color) 55%, var(--color-neutral-400));
+  border-radius: 50%; background: transparent; color: transparent;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.15s;
+}
+.tcheck:hover { border-color: var(--check-color); background: color-mix(in srgb, var(--check-color) 10%, transparent); color: color-mix(in srgb, var(--check-color) 60%, transparent); }
+.tcheck.done { background: var(--check-color); border-color: var(--check-color); color: #fff; animation: check-pop 0.25s var(--ease-out); }
+.tcheck svg { width: 12px; height: 12px; }
+@keyframes check-pop { 0% { transform: scale(0.8); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+
+.task-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ttitle {
+  font-size: 14px; line-height: 1.35; color: var(--color-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: flex; align-items: center; gap: 5px;
+}
+.tlock { width: 13px; height: 13px; flex: none; color: var(--color-text-muted); }
+.is-done .ttitle { text-decoration: line-through; color: var(--color-text-muted); }
+
+.tmeta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tdue, .tchip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; line-height: 1.4; font-weight: 500; color: var(--color-text-muted);
+}
+.tdue svg, .tchip svg { width: 12px; height: 12px; }
+.tchip { padding: 0 6px; border-radius: var(--radius-full); background: var(--color-neutral-100); }
+.tchip-time { background: var(--color-accent-100); color: var(--color-accent-700); }
+.tchip-hw { background: var(--color-accent-2-100); color: var(--color-accent-2-700); }
+.tdue-overdue { color: var(--color-danger); font-weight: 600; }
+.tdue-today { color: var(--color-warning); font-weight: 600; }
+.tdue-soon { color: var(--color-accent); }
+
+.task-actions { display: flex; align-items: center; gap: 2px; flex: none; opacity: 0; transition: opacity 0.12s; }
+.task-row:hover .task-actions, .task-row:focus-within .task-actions { opacity: 1; }
+.task-actions .btn-icon { width: 28px; height: 28px; min-height: 28px; }
+.task-actions .btn-icon svg { width: 16px; height: 16px; }
+@media (hover: none) { .task-actions { opacity: 1; } }

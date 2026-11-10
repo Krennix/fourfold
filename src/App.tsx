@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar, MobileTabBar } from './components/Sidebar';
+import { UIProvider } from './state/UIContext';
 import { LoginGate } from './components/LoginGate';
 import { AuthProvider } from './state/AuthContext';
 import { ThemeProvider } from './state/ThemeContext';
@@ -51,8 +52,9 @@ function App() {
             <AgentProvider>
             <NotificationsProvider>
               <BrowserRouter>
+              <UIProvider>
                 <Sidebar />
-                <main className="content">
+                <main className="content" id="main">
                   <Routes>
                     <Route path="/" element={<HomePage />} />
                     <Route path="/matrix" element={<MatrixPage />} />
@@ -65,8 +67,11 @@ function App() {
                     <Route path="/agent" element={<AgentPage />} />
                     <Route path="/school" element={<SchoolPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </main>
+                <MobileTabBar />
+              </UIProvider>
               </BrowserRouter>
             </NotificationsProvider>
             </AgentProvider>
