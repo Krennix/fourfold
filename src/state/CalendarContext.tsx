@@ -1,4 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { useRemoteState } from '../lib/remoteStore';
+import { useAuth } from './AuthContext';
 import { useGoogleAuth, type LinkedAccount } from './GoogleAuthContext';
 import { useGoogleIcs, type GoogleIcsEvent } from './GoogleIcsContext';
 import { GoogleAuthError, deleteEvent, insertEvent, listEvents, updateEvent as patchGoogleEvent, type GoogleCalendarEvent } from '../lib/googleCalendar';
@@ -130,44 +132,32 @@ export interface CalendarContextValue {
 
 const CalendarContext = createContext<CalendarContextValue | null>(null);
 
-function loadLocalEvents(): CalEvent[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // ignore malformed storage
-  }
-  return [];
+interface CalendarMeta {
+  /** `eventKey`s (or bare ids, for pre-multi-calendar locks) of locked events. */
+  locked: string[];
+  colors: Record<string, string>;
+  icsOverrides: Record<string, IcsOverride>;
 }
 
-function loadLockedKeys(): Set<string> {
+const EMPTY_META: CalendarMeta = { locked: [], colors: {}, icsOverrides: {} };
+
+function readJson<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(LOCKED_STORAGE_KEY);
-    if (raw) return new Set(JSON.parse(raw));
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw) as T;
   } catch {
     // ignore malformed storage
   }
-  return new Set();
+  return fallback;
 }
 
-function loadEventColors(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(COLORS_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // ignore malformed storage
-  }
-  return {};
-}
-
-function loadIcsOverrides(): Record<string, IcsOverride> {
-  try {
-    const raw = localStorage.getItem(ICS_OVERRIDES_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // ignore malformed storage
-  }
-  return {};
+/** One-time import of the per-device lock/colour/ICS-override keys this replaced; null when there's nothing to import. */
+function loadLegacyMeta(): CalendarMeta | null {
+  const locked = readJson<string[]>(LOCKED_STORAGE_KEY, []);
+  const colors = readJson<Record<string, string>>(COLORS_STORAGE_KEY, {});
+  const icsOverrides = readJson<Record<string, IcsOverride>>(ICS_OVERRIDES_STORAGE_KEY, {});
+  if (locked.length === 0 && Object.keys(colors).length === 0 && Object.keys(icsOverrides).length === 0) return null;
+  return { locked, colors, icsOverrides };
 }
 
 function googleEventToCalEvent(
@@ -241,11 +231,28 @@ function googleDestinationsFor(accounts: LinkedAccount[]): GoogleDestination[] {
 export function CalendarProvider({ children }: { children: ReactNode }) {
   const { accounts, getAccessToken } = useGoogleAuth();
   const { events: icsEvents } = useGoogleIcs();
-  const [localEvents, setLocalEvents] = useState<CalEvent[]>(loadLocalEvents);
+  const { handleSessionExpired } = useAuth();
+  // Events created in FourFold itself, plus locks/colours/ICS edits, are stored in the user's
+  // cloud storage (not just this browser) so every device — and the public API at /api/v1 and
+  // the assistant — sees the same calendar. Old localStorage data is imported once.
+  const [localEvents, setLocalEvents] = useRemoteState<CalEvent[]>('calendar', [], handleSessionExpired, STORAGE_KEY);
+  const [meta, setMeta] = useRemoteState<CalendarMeta>('calendarMeta', EMPTY_META, handleSessionExpired, loadLegacyMeta);
   const [googleEvents, setGoogleEvents] = useState<CalEvent[]>([]);
-  const [lockedKeys, setLockedKeys] = useState<Set<string>>(loadLockedKeys);
-  const [eventColors, setEventColors] = useState<Record<string, string>>(loadEventColors);
-  const [icsOverrides, setIcsOverrides] = useState<Record<string, IcsOverride>>(loadIcsOverrides);
+  const lockedKeys = useMemo(() => new Set(meta.locked), [meta.locked]);
+  const eventColors = meta.colors;
+  const icsOverrides = meta.icsOverrides;
+  const setLockedKeys = useCallback(
+    (update: (prev: Set<string>) => Set<string>) => setMeta((m) => ({ ...m, locked: [...update(new Set(m.locked))] })),
+    [setMeta],
+  );
+  const setEventColors = useCallback(
+    (update: (prev: Record<string, string>) => Record<string, string>) => setMeta((m) => ({ ...m, colors: update(m.colors) })),
+    [setMeta],
+  );
+  const setIcsOverrides = useCallback(
+    (update: (prev: Record<string, IcsOverride>) => Record<string, IcsOverride>) => setMeta((m) => ({ ...m, icsOverrides: update(m.icsOverrides) })),
+    [setMeta],
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -254,38 +261,6 @@ export function CalendarProvider({ children }: { children: ReactNode }) {
     () => icsEvents.map((ev) => icsEventToCalEvent(ev, icsOverrides)).filter((e): e is CalEvent => e !== null),
     [icsEvents, icsOverrides],
   );
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(localEvents));
-    } catch {
-      // storage unavailable — state still works for this session
-    }
-  }, [localEvents]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(LOCKED_STORAGE_KEY, JSON.stringify([...lockedKeys]));
-    } catch {
-      // storage unavailable — state still works for this session
-    }
-  }, [lockedKeys]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(ICS_OVERRIDES_STORAGE_KEY, JSON.stringify(icsOverrides));
-    } catch {
-      // storage unavailable — state still works for this session
-    }
-  }, [icsOverrides]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(COLORS_STORAGE_KEY, JSON.stringify(eventColors));
-    } catch {
-      // storage unavailable — state still works for this session
-    }
-  }, [eventColors]);
 
   const setEventColor = useCallback((id: string, color: string, source?: EventSource) => {
     const event = [...googleEvents, ...localEvents, ...mappedIcsEvents].find((e) => matchesSource(e, id, source));

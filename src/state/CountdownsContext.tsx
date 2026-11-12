@@ -13,7 +13,7 @@ export interface Countdown {
   friendId?: string; // present = this countdown is birthday-synced from a Friend
 }
 
-interface CountdownsContextValue {
+export interface CountdownsContextValue {
   countdowns: Countdown[];
   addCountdown: (name: string, month: number, day: number, type: CountdownType, friendId?: string) => Countdown;
   updateCountdown: (id: string, name: string, month: number, day: number, type: CountdownType, friendId?: string) => void;

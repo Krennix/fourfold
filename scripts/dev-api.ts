@@ -60,6 +60,14 @@ for (const file of readdirSync(join(root, 'api'))) {
 // Mirror vercel.json's rewrites for the legacy flat endpoint names.
 const vercelConfig = (await import(join(root, 'vercel.json'))).default as { rewrites: { source: string; destination: string }[] };
 function rewrite(url: URL): URL {
+  // /api/v1/<anything> → /api/v1?path=<anything> (vercel.json does this on Vercel)
+  const v1 = /^\/api\/v1(?:\/(.*))?$/.exec(url.pathname);
+  if (v1) {
+    const dest = new URL('/api/v1', url.origin);
+    url.searchParams.forEach((v, k) => dest.searchParams.set(k, v));
+    dest.searchParams.set('path', v1[1] ?? '');
+    return dest;
+  }
   for (const r of vercelConfig.rewrites) {
     if (r.source === url.pathname && r.destination.startsWith('/api/')) {
       const dest = new URL(r.destination, url.origin);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getStoredSession } from '../state/AuthContext';
 
-export type RemoteNamespace = 'school' | 'habits' | 'matrix' | 'countdowns' | 'agentChat' | 'dailyPlan' | 'watchdogDismissed' | 'friends';
+export type RemoteNamespace = 'school' | 'habits' | 'matrix' | 'countdowns' | 'agentChat' | 'dailyPlan' | 'watchdogDismissed' | 'friends' | 'calendar' | 'calendarMeta';
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -94,7 +94,7 @@ export function useRemoteState<T>(
   namespace: RemoteNamespace,
   initial: T,
   onExpired: () => void,
-  legacyKey?: string,
+  legacyKey?: string | (() => T | null),
 ): [T, (updater: T | ((prev: T) => T)) => void, boolean] {
   const [value, setValueState] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
@@ -102,6 +102,8 @@ export function useRemoteState<T>(
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<T>(initial);
   const dirtyBeforeLoad = useRef(false);
+  /** Bumped on every local edit, so an in-flight refresh never clobbers a newer change. */
+  const editSeq = useRef(0);
 
   const flushSave = useCallback(
     async (next: T, attempt = 0) => {
@@ -147,7 +149,7 @@ export function useRemoteState<T>(
           latest.current = remote;
           setValueState(remote);
         } else {
-          const legacy = legacyKey ? readLegacyLocalValue<T>(legacyKey) : null;
+          const legacy = typeof legacyKey === 'function' ? legacyKey() : legacyKey ? readLegacyLocalValue<T>(legacyKey) : null;
           if (legacy !== null) {
             latest.current = legacy;
             setValueState(legacy);
@@ -174,6 +176,7 @@ export function useRemoteState<T>(
       setValueState((prev) => {
         const next = typeof updater === 'function' ? (updater as (prev: T) => T)(prev) : updater;
         latest.current = next;
+        editSeq.current++;
         if (!loadedRef.current) {
           dirtyBeforeLoad.current = true;
           return next;
@@ -181,12 +184,40 @@ export function useRemoteState<T>(
         if (saveTimer.current) clearTimeout(saveTimer.current);
         pendingSaves.add(namespace);
         emitSync();
-        saveTimer.current = setTimeout(() => void flushSave(next), SAVE_DEBOUNCE_MS);
+        saveTimer.current = setTimeout(() => {
+          saveTimer.current = null;
+          void flushSave(next);
+        }, SAVE_DEBOUNCE_MS);
         return next;
       });
     },
     [namespace, flushSave],
   );
+
+  // Pick up changes made elsewhere (another device, the public API, an assistant run) when the tab
+  // regains focus and once a minute while visible — but only when this tab has nothing unsaved,
+  // so a refresh can never overwrite or be overwritten by an edit in progress.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== 'visible' || !loadedRef.current) return;
+      if (saveTimer.current || pendingSaves.has(namespace)) return;
+      const seq = editSeq.current;
+      void fetchRemote<T>(namespace, onExpired).then((remote) => {
+        if (remote == null || seq !== editSeq.current || saveTimer.current || pendingSaves.has(namespace)) return;
+        if (JSON.stringify(remote) === JSON.stringify(latest.current)) return;
+        latest.current = remote;
+        setValueState(remote);
+      });
+    };
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    const timer = window.setInterval(refresh, 60_000);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+      window.clearInterval(timer);
+    };
+  }, [namespace, onExpired]);
 
   useEffect(() => {
     // Flush a pending debounced save if the tab is being hidden/closed.

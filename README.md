@@ -45,11 +45,55 @@ built with React, TypeScript, and Vite, backed by Vercel serverless functions.
   Calendar sync), plus (optionally) a school bell-schedule integration
   (`src/lib/harkerBell.ts` talks to a public Harker Middle School API — swap
   this out or remove it if your school doesn't have an equivalent). A
-  personal API token (Settings → Account & Data) exposes the same merged,
-  upcoming homework read-only to outside tools — e.g. so an AI assistant can
-  pull it into a daily briefing — via `GET /api/lms?action=homework`.
+  personal API token (Settings → Personal API access) opens the
+  [public API](#public-api) to outside tools.
+- **Public API** — read *and write* your calendar, tasks, homework, habits and
+  countdowns from scripts, automations or an AI assistant. See
+  [Public API](#public-api).
 - **Scheduling agent** — an Anthropic-powered assistant (`api/agent.ts`) that
-  can help auto-schedule tasks/habits into free calendar time.
+  can read and change your calendar, tasks, homework, habits and countdowns,
+  plan your day, and auto-schedule tasks into free calendar time.
+
+## Public API
+
+Generate a token in **Settings → Personal API access** and send it as
+`Authorization: Bearer <token>`. Everything below reads and writes the same data
+the app shows (a signed-in session token works too). Dates are `YYYY-MM-DD`,
+times are 24-hour `HH:MM`, in the timezone given by `?tz=` (an IANA name such as
+`America/Los_Angeles`; default UTC). Errors are `{ "error": "…" }` with a
+sensible status (`400` bad input, `401` auth, `404`, `423` item is locked).
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" "https://your-app.vercel.app/api/v1/summary?tz=America/Los_Angeles"
+curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"class":"Chemistry","title":"Lab report","due":"2026-11-20","priority":"high"}' \
+  "https://your-app.vercel.app/api/v1/homework"
+```
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /api/v1` | Lists every endpoint |
+| `GET /summary` | Today at a glance: events, overdue/due-today tasks, homework, habits, countdowns |
+| `GET /events?from=&to=` | Calendar events from FourFold, linked Google calendars and ICS feeds (≤ 92 days) |
+| `POST /events` | `{title, date, startTime?, durationMin?\|endTime?, allDay?, description?, location?, calendar?}` — `calendar` is `local` (default), `google`, or an id from `GET /calendars` |
+| `GET/PATCH/DELETE /events/:id` | `PATCH` takes the same fields plus `{locked, color}`. ICS events are read-only upstream, so edits and deletes are local overrides, as in the app |
+| `GET /calendars` | Calendars events can be written to |
+| `GET/POST /tasks` | Matrix tasks. `GET ?quadrant=q1..q4&status=open\|done\|all&due_before=` · `POST {title, quadrant?, dueDate?, durationMin?, description?}` |
+| `GET/PATCH/DELETE /tasks/:id` | `PATCH {title, done, dueDate, quadrant, time, durationMin, locked, …}` |
+| `GET/POST /homework` | Homework from the app *and* Schoology/Canvas/Classroom, each with its class and matrix quadrant. `GET ?status=&class=&quadrant=&days=` · `POST {class, title, due?, priority?}` |
+| `GET/PATCH/DELETE /homework/:id` | `PATCH {done, title, due, priority}`. Imported assignments only accept `{done}` |
+| `GET /classes` | Your classes |
+| `GET/POST /habits`, `GET/PATCH/DELETE /habits/:id` | Habits with today's status and streak. `PATCH {done: true\|false, date?}` checks off or un-checks a day |
+| `GET/POST /countdowns`, `GET/PATCH/DELETE /countdowns/:id` | Countdowns with `daysUntil` |
+| `GET /friends` | Friends (read-only) |
+
+Locked tasks and events ("set in stone") refuse edits and deletes with `423`
+until you `PATCH {"locked": false}`. The older
+`GET /api/lms?action=homework` endpoint keeps working.
+
+Calling from a sandboxed tool (for example a scheduled AI run)? The sandbox's
+network allowlist must include your FourFold domain, or the request is blocked
+before it ever reaches the app.
 
 ## Tech stack
 
@@ -216,7 +260,7 @@ offline (stored data resets when the process restarts).
 - `bun run preview` — preview the production build locally
 - `bun run dev:api` — run the `api/` functions locally without `vercel dev`
 - `bun run test:api` — end-to-end smoke test of every API endpoint (auth,
-  data sync, API tokens, LMS routing, all assistant modes) against an
+  data sync, API tokens, the public `/api/v1`, LMS routing, all assistant modes) against an
   in-memory Redis and a fake Anthropic endpoint — no credentials needed
 
 ## Deployment

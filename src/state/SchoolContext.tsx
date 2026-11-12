@@ -95,7 +95,7 @@ interface StoredState {
   classKeywords: Record<string, string[]>;
 }
 
-interface SchoolContextValue extends StoredState {
+export interface SchoolContextValue extends StoredState {
   addClass: (c: Omit<SchoolClass, 'id'>) => void;
   updateClass: (id: string, c: Omit<SchoolClass, 'id'>) => void;
   removeClass: (id: string) => void;

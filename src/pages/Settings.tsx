@@ -64,7 +64,6 @@ function NavVisibilitySettings() {
 
 function ExportImportSettings() {
   const { email } = useAuth();
-  const [includeLocal, setIncludeLocal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<FourFoldExport | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -74,7 +73,7 @@ function ExportImportSettings() {
     if (!email) return;
     setBusy(true);
     try {
-      downloadJson(`fourfold-export-${new Date().toISOString().slice(0, 10)}.json`, await exportAllData(email, includeLocal));
+      downloadJson(`fourfold-export-${new Date().toISOString().slice(0, 10)}.json`, await exportAllData(email));
     } finally {
       setBusy(false);
     }
@@ -113,13 +112,9 @@ function ExportImportSettings() {
         <h4>Export &amp; import data</h4>
       </div>
       <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-        Export downloads a JSON backup of your habits, matrix tasks, countdowns, school data, and assistant history.
+        Export downloads a JSON backup of your calendar events, habits, matrix tasks, countdowns, school data, and assistant history.
         It never includes your sign-in session or your Google/Schoology feed links.
       </p>
-      <label className="toggle-row">
-        <input type="checkbox" checked={includeLocal} onChange={(e) => setIncludeLocal(e.target.checked)} />
-        <span>Also include this device's local (unsynced) calendar events</span>
-      </label>
       <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
         <button className="btn btn-primary" type="button" onClick={() => void handleExport()} disabled={busy}>
           Export JSON
@@ -308,7 +303,10 @@ function ApiTokenSettings() {
     setStatus('ready');
   };
 
-  const homeworkUrl = `${window.location.origin}/api/lms?action=homework`;
+  const baseUrl = `${window.location.origin}/api/v1`;
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const summaryUrl = `${baseUrl}/summary?tz=${encodeURIComponent(timeZone)}`;
+  const example = `curl -H "Authorization: Bearer ${token ?? '<token>'}" \\\n  "${summaryUrl}"`;
 
   const copy = (value: string) => {
     void navigator.clipboard.writeText(value).then(() => {
@@ -328,9 +326,10 @@ function ApiTokenSettings() {
         )}
       </div>
       <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-        A long-lived token for reading your upcoming homework (Schoology/Canvas/Classroom, merged) from outside the
-        app — e.g. so Claude can pull it into a daily brief. Unlike your sign-in session, this doesn't expire on its
-        own; revoke it any time to cut off access immediately.
+        A long-lived token that lets scripts, automations and AI assistants read <strong>and change</strong> your
+        calendar events, tasks, homework, habits and countdowns from outside the app — e.g. so Claude can pull
+        today's summary into a daily brief or add homework for you. Treat it like a password: anyone with it can
+        edit your data. It doesn't expire on its own; revoke it any time to cut off access immediately.
       </p>
       {token ? (
         <>
@@ -340,13 +339,20 @@ function ApiTokenSettings() {
             <button className="btn btn-ghost" type="button" onClick={generate} disabled={status === 'loading'}>Regenerate</button>
           </div>
           <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-            Give Claude both this token and the URL below (as an <code>Authorization: Bearer &lt;token&gt;</code>{' '}
-            header):
+            Send the token as an <code>Authorization: Bearer &lt;token&gt;</code> header. Start with{' '}
+            <code>GET {baseUrl}</code> — it lists every endpoint (<code>/summary</code>, <code>/events</code>,{' '}
+            <code>/tasks</code>, <code>/homework</code>, <code>/habits</code>, <code>/countdowns</code>,{' '}
+            <code>/friends</code>). Add <code>?tz=</code> so "today" and times use your timezone.
           </p>
           <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input className="input" type="text" readOnly style={{ flex: 1, minWidth: 240, fontFamily: 'monospace' }} value={homeworkUrl} />
-            <button className="btn btn-secondary" type="button" onClick={() => copy(homeworkUrl)}>Copy</button>
+            <input className="input" type="text" readOnly style={{ flex: 1, minWidth: 240, fontFamily: 'monospace' }} value={summaryUrl} />
+            <button className="btn btn-secondary" type="button" onClick={() => copy(summaryUrl)}>Copy URL</button>
+            <button className="btn btn-secondary" type="button" onClick={() => copy(example)}>Copy curl</button>
           </div>
+          <p className="text-muted" style={{ fontSize: 12, margin: 0 }}>
+            The server running the request must be allowed to reach <code>{window.location.host}</code> — some
+            sandboxed tools block unknown domains by default.
+          </p>
         </>
       ) : (
         <button className="btn btn-primary" type="button" onClick={generate} disabled={status === 'loading'}>

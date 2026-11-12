@@ -8,6 +8,9 @@ export type AgentMode = 'chat' | 'daily_plan' | 'auto_schedule' | 'watchdog';
 
 export interface AgentContextPayload {
   events: CalEvent[];
+  homework: { id: string; title: string; due: string | null; done: boolean; priority: string | null; class: string | null; source: string; quadrant: string }[];
+  habits: { id: string; name: string; doneToday: boolean; streak: number }[];
+  countdowns: { id: string; name: string; date: string; daysUntil: number }[];
   tasks: Record<QuadKey, Task[]>;
   assignments: SchoologyAssignment[];
   now: string;

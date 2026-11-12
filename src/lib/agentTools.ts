@@ -1,5 +1,9 @@
 import type { CalendarContextValue } from '../state/CalendarContext';
 import type { MatrixContextValue, QuadKey } from '../state/MatrixContext';
+import type { SchoolContextValue } from '../state/SchoolContext';
+import type { HabitsContextValue } from '../state/HabitsContext';
+import type { CountdownsContextValue } from '../state/CountdownsContext';
+import { homeworkRef, type HomeworkEntry } from './useQuadrantHomework';
 
 export interface AgentToolCall {
   id: string;
@@ -10,6 +14,10 @@ export interface AgentToolCall {
 export interface AgentToolDeps {
   calendar: CalendarContextValue;
   matrix: MatrixContextValue;
+  school: SchoolContextValue;
+  homework: HomeworkEntry[];
+  habits: HabitsContextValue;
+  countdowns: CountdownsContextValue;
 }
 
 function isQuadKey(v: unknown): v is QuadKey {
@@ -23,7 +31,7 @@ function findTask(matrix: MatrixContextValue, quadrant: QuadKey, taskId: string)
 /** Executes a write tool Claude requested against the real app state. Read tools are executed server-side. */
 export async function executeWriteTool(call: AgentToolCall, deps: AgentToolDeps): Promise<unknown> {
   const { input } = call;
-  const { calendar, matrix } = deps;
+  const { calendar, matrix, school, homework, habits, countdowns } = deps;
 
   switch (call.name) {
     case 'create_event': {
@@ -85,6 +93,42 @@ export async function executeWriteTool(call: AgentToolCall, deps: AgentToolDeps)
     case 'mark_task_done': {
       if (!isQuadKey(input.quadrant)) return { error: 'Invalid quadrant.' };
       matrix.toggleDone(input.quadrant, String(input.taskId));
+      return { ok: true };
+    }
+    case 'add_homework': {
+      const ref = String(input.class ?? '').trim().toLowerCase();
+      const cls = school.classes.find((c) => c.id.toLowerCase() === ref || c.name.trim().toLowerCase() === ref);
+      if (!cls) return { error: `Unknown class "${input.class}". Known classes: ${school.classes.map((c) => c.name).join(', ') || 'none set up yet'}.` };
+      const title = String(input.title ?? '').trim();
+      if (!title) return { error: 'A title is required.' };
+      const due = typeof input.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.due) ? input.due : '';
+      const priority = input.priority === 'high' || input.priority === 'low' ? input.priority : 'med';
+      school.addHomework(cls.id, { title, due, priority });
+      return { ok: true, class: cls.name };
+    }
+    case 'set_homework_done': {
+      const item = homework.find((h) => homeworkRef(h) === String(input.id));
+      if (!item) return { error: 'No such homework. Use an id from get_homework.' };
+      const done = input.done !== false;
+      if (item.done === done) return { ok: true, note: 'Already in that state.' };
+      if (item.source === 'manual' && item.classId && item.homeworkId !== undefined) school.toggleHomework(item.classId, item.homeworkId);
+      else if (item.uid) school.toggleSchoologyHomeworkDone(item.uid);
+      return { ok: true };
+    }
+    case 'set_habit_done': {
+      const habit = habits.habits.find((h) => h.id === String(input.id));
+      if (!habit) return { error: 'No such habit. Use an id from get_habits.' };
+      const done = input.done !== false;
+      if (habit.done !== done) habits.toggleHabit(habit.id);
+      return { ok: true };
+    }
+    case 'create_countdown': {
+      const month = Number(input.month);
+      const day = Number(input.day);
+      if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(day) || day < 1 || day > 31) return { error: 'Invalid month/day.' };
+      const types = ['birthday', 'holiday', 'anniversary', 'deadline', 'event'] as const;
+      const type = types.find((t) => t === input.type) ?? 'event';
+      countdowns.addCountdown(String(input.name ?? '').trim() || 'Countdown', month, day, type);
       return { ok: true };
     }
     default:

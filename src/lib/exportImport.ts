@@ -10,6 +10,8 @@ export const EXPORTABLE_NAMESPACES: RemoteNamespace[] = [
   'dailyPlan',
   'watchdogDismissed',
   'friends',
+  'calendar',
+  'calendarMeta',
 ];
 
 export interface FourFoldExport {
@@ -17,10 +19,11 @@ export interface FourFoldExport {
   exportedAt: string;
   email: string;
   data: Partial<Record<RemoteNamespace, unknown>>;
+  /** Only present in exports from before calendar events synced to the cloud. */
   localCalendarEvents?: unknown;
 }
 
-export async function exportAllData(email: string, includeLocalCalendar: boolean): Promise<FourFoldExport> {
+export async function exportAllData(email: string): Promise<FourFoldExport> {
   const session = getStoredSession();
   const entries = await Promise.all(
     EXPORTABLE_NAMESPACES.map(async (ns) => {
@@ -31,13 +34,6 @@ export async function exportAllData(email: string, includeLocalCalendar: boolean
   );
   const data = Object.fromEntries(entries) as Partial<Record<RemoteNamespace, unknown>>;
   const result: FourFoldExport = { version: 1, exportedAt: new Date().toISOString(), email, data };
-  if (includeLocalCalendar) {
-    try {
-      result.localCalendarEvents = JSON.parse(localStorage.getItem('fourfold.calendar.v1') ?? 'null');
-    } catch {
-      // ignore malformed/unavailable storage
-    }
-  }
   return result;
 }
 
@@ -70,11 +66,12 @@ export async function importAllData(imported: FourFoldExport): Promise<void> {
       });
     }),
   );
-  if (imported.localCalendarEvents !== undefined) {
-    try {
-      localStorage.setItem('fourfold.calendar.v1', JSON.stringify(imported.localCalendarEvents));
-    } catch {
-      // ignore storage errors (private browsing, quota, etc.)
-    }
+  // Exports from before events synced to the cloud carry them separately; restore them into the cloud calendar.
+  if (imported.localCalendarEvents !== undefined && !('calendar' in imported.data) && Array.isArray(imported.localCalendarEvents)) {
+    await fetch('/api/data?ns=calendar', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.token}` },
+      body: JSON.stringify(imported.localCalendarEvents),
+    });
   }
 }
