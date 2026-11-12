@@ -7,11 +7,12 @@ import type { QuadKey } from '../state/MatrixContext';
  *   "Study chem in 3 days 1h30m #q2"
  *
  * Recognised (anywhere in the text, case-insensitive):
- *   priority  !1 … !4, #q1 … #q4, or "!!" (= urgent & important)
+ *   priority  !1 … !4, #q1 … #q4, "!!" or "asap", or "urgent" as the last word (= urgent & important)
  *   due date  today, tonight, tomorrow/tmr, mon…sun (next occurrence), this/next fri, next week,
  *             in N days / in a week, YYYY-MM-DD, M/D, "nov 20" / "20 nov", "the 16th", eod
  *             (a leading "due", "due on", "by"… is swallowed with it)
- *   time      3pm, 3:30pm, 15:00, @noon, at 9 (with an am/pm or "at"; a bare 1–6 means pm)
+ *   time      in 2 hours, 3pm, 3:30pm, 15:00, @noon, at 9 (with an am/pm or "at"; a bare 1–6 means pm)
+ *             this weekend, eow; "tomorrow morning" / "this evening" pick a rough time
  *   duration  30m, 45min, 1h, 1.5h, 1h30m, "for 2 hours", "half an hour"
  * Whatever's left over becomes the title, minus casual filler ("ohh yah", "is due", "or smth").
  */
@@ -122,7 +123,18 @@ export function parseQuickAdd(input: string, now = new Date()): ParsedQuickAdd {
     quadSet = true;
   });
   if (!quadSet) take(/\s!!(?=\s)/, () => { quad = 'q1'; quadSet = true; });
+  if (!quadSet) take(/\s(?:asap|urgent)(?=\s*$)|\sasap(?=\s)/i, () => { quad = 'q1'; quadSet = true; });
   if (quadSet) chips.push({ kind: 'quad', label: QUAD_SHORT[quad] });
+
+  // relative time — "in 2 hours", "in 30 min" (before duration, which would otherwise claim "2 hours")
+  take(/\s(?:due\s+)?in\s+(\d+(?:\.\d+)?|an?|half\s+an)\s*(hours?|hrs?|h|minutes?|mins?|m)(?=\s)/i, (m) => {
+    const n = /^\d/.test(m[1]) ? parseFloat(m[1]) : m[1].toLowerCase().startsWith('half') ? 0.5 : 1;
+    const mins = Math.round(n * (m[2].toLowerCase().startsWith('h') ? 60 : 1));
+    // Round up to the next 5 minutes so the booked slot looks intentional.
+    const when = new Date(Math.ceil((now.getTime() + mins * 60000) / 300000) * 300000);
+    time = `${pad(when.getHours())}:${pad(when.getMinutes())}`;
+    dueDate = isoDate(when);
+  });
 
   // duration (before time, so "1h" isn't read as an hour-of-day)
   take(/\s(?:for\s+)?(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?)(?:\s*(\d+)\s*(?:m|min|mins|minutes?))?(?=\s)/i, (m) => {
@@ -180,6 +192,8 @@ export function parseQuickAdd(input: string, now = new Date()): ParsedQuickAdd {
   });
   if (!dueDate) take(new RegExp(`\\s${DUE_PREFIX}(?:tomorrow|tmr|tmrw)(?=\\s)`, 'i'), () => setDate(addDays(now, 1)));
   if (!dueDate) take(new RegExp(`\\s${DUE_PREFIX}next\\s+week(?=\\s)`, 'i'), () => setDate(addDays(now, 7)));
+  if (!dueDate) take(new RegExp(`\\s${DUE_PREFIX}(?:this\\s+weekend|the\\s+weekend)(?=\\s)`, 'i'), () => setDate(addDays(now, (6 - now.getDay() + 7) % 7)));
+  if (!dueDate) take(new RegExp(`\\s${DUE_PREFIX}(?:eow|end\\s+of\\s+(?:the\\s+)?week)(?=\\s)`, 'i'), () => setDate(addDays(now, (5 - now.getDay() + 7) % 7)));
   if (!dueDate) {
     take(new RegExp(`\\s${DUE_PREFIX}in\\s+(\\d+|an?|one|two|three|four|five|six)\\s+(day|days|week|weeks)(?=\\s)`, 'i'), (m) => {
       const n = /^\d+$/.test(m[1]) ? Number(m[1]) : SMALL_NUMBERS[m[1].toLowerCase()];
@@ -244,8 +258,18 @@ export function parseQuickAdd(input: string, now = new Date()): ParsedQuickAdd {
   take(/\s(?:by\s+)?(?:eod|cob|end\s+of\s+(?:the\s+)?day)(?=\s)/i, () => {
     if (!dueDate) setDate(now);
   });
-  // A bare time with no date means today.
-  if (time && !dueDate) dueDate = isoDate(now);
+  // "tomorrow morning", "this evening" — a rough time for the day part (never overrides an explicit one).
+  take(/\s(?:(this)\s+)?(?:in\s+the\s+)?(morning|afternoon|evening|night)(?=\s)/i, (m) => {
+    if (!dueDate && !m[1]) return false;
+    if (!dueDate) setDate(now);
+    if (!time) time = { morning: '09:00', afternoon: '15:00', evening: '19:00', night: '20:00' }[m[2].toLowerCase() as 'morning'];
+  });
+  // A bare time with no date means today — or tomorrow, if that time has already passed.
+  if (time && !dueDate) {
+    const [h, mi] = (time as string).split(':').map(Number);
+    const passed = h * 60 + mi <= now.getHours() * 60 + now.getMinutes();
+    dueDate = isoDate(passed ? addDays(now, 1) : now);
+  }
   if (dueDate) chips.push({ kind: 'date', label: friendlyDate(dueDate, now) });
   if (time) chips.push({ kind: 'time', label: friendlyTime(time) });
 
@@ -259,6 +283,7 @@ export function parseQuickAdd(input: string, now = new Date()): ParsedQuickAdd {
     }
   }
   title = title.trim();
+  if (title) title = title[0].toUpperCase() + title.slice(1);
   // Order chips: quad, date, time, duration
   const order = { quad: 0, date: 1, time: 2, duration: 3 } as const;
   chips.sort((a, b) => order[a.kind] - order[b.kind]);
