@@ -53,12 +53,18 @@ export interface HomeworkEntry extends MergedHomeworkItem {
   className: string;
   quad: QuadKey;
   reason: string;
+  /** Stable homework ref (see homeworkRef). */
+  ref: string;
+  /** Where the rules would put it if you hadn't dragged it somewhere else. */
+  autoQuad: QuadKey;
+  /** True when the user pinned it to `quad` by dragging. */
+  moved: boolean;
 }
 
 /** Every homework item — typed-in homework plus assignments imported from Schoology, Canvas and
  * Google Classroom — including imported ones that couldn't be matched to a class. */
 export function useAllHomework(): HomeworkEntry[] {
-  const { classes, homework, schoologyDone, classMappings, classKeywords } = useSchool();
+  const { classes, homework, schoologyDone, classMappings, classKeywords, quadOverrides } = useSchool();
   const { assignments: schoologyAssignments } = useSchoology();
   const { assignments: canvasAssignments } = useCanvas();
   const { assignments: classroomAssignments } = useClassroom();
@@ -66,13 +72,23 @@ export function useAllHomework(): HomeworkEntry[] {
   return useMemo(() => {
     const assignments = [...schoologyAssignments, ...canvasAssignments, ...classroomAssignments];
     const out: HomeworkEntry[] = [];
-    const decorate = (item: MergedHomeworkItem, classId: string | null, className: string): HomeworkEntry => ({
-      ...item,
-      classId,
-      className,
-      quad: homeworkQuadrant(item),
-      reason: homeworkQuadrantReason(item),
-    });
+    const decorate = (item: MergedHomeworkItem, classId: string | null, className: string): HomeworkEntry => {
+      const ref = homeworkRef({ ...item, classId });
+      const autoQuad = homeworkQuadrant(item);
+      const pinned = quadOverrides[ref];
+      // An override that matches the automatic placement is a no-op; treat it as not moved.
+      const moved = !!pinned && pinned !== autoQuad;
+      return {
+        ...item,
+        classId,
+        className,
+        ref,
+        autoQuad,
+        moved,
+        quad: moved ? pinned : autoQuad,
+        reason: moved ? 'Moved here by you' : homeworkQuadrantReason(item),
+      };
+    };
     for (const c of classes) {
       for (const item of mergeHomeworkForClass(c.id, homework[c.id] || [], assignments, classes, classMappings, classKeywords, schoologyDone)) {
         out.push(decorate(item, c.id, c.name));
@@ -103,7 +119,7 @@ export function useAllHomework(): HomeworkEntry[] {
       );
     }
     return out;
-  }, [classes, homework, schoologyDone, classMappings, classKeywords, schoologyAssignments, canvasAssignments, classroomAssignments]);
+  }, [classes, homework, schoologyDone, classMappings, classKeywords, quadOverrides, schoologyAssignments, canvasAssignments, classroomAssignments]);
 }
 
 export interface HomeworkTaskRow {
@@ -121,6 +137,10 @@ export interface HomeworkTaskRow {
   description?: string;
   /** Why it's in this quadrant, e.g. "Medium priority, due within 2 days". */
   reason: string;
+  ref: string;
+  /** Quadrant the rules would pick; dropping it back here clears a manual move. */
+  autoQuad: QuadKey;
+  moved: boolean;
 }
 
 /** Homework grouped into the Eisenhower quadrant implied by its priority and due date. */
@@ -143,6 +163,9 @@ export function useQuadrantHomework(): Record<QuadKey, HomeworkTaskRow[]> {
         time: null,
         description: hw.description,
         reason: hw.reason,
+        ref: hw.ref,
+        autoQuad: hw.autoQuad,
+        moved: hw.moved,
       });
     }
     return rows;

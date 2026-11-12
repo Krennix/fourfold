@@ -208,6 +208,8 @@ interface StoredSchool {
   schoologyDone?: Record<string, boolean>;
   classMappings?: Record<string, string>;
   classKeywords?: Record<string, string[]>;
+  /** Homework the user dragged to another quadrant, keyed by homework id ("manual:<class>:<n>" or "<source>:<uid>"). */
+  quadOverrides?: Record<string, QuadKey>;
   [k: string]: unknown;
 }
 
@@ -383,6 +385,12 @@ interface HwOut {
   quadrantName: string;
 }
 
+/** The quadrant the user dragged this homework to, if any. */
+function pinnedQuad(school: StoredSchool, id: string): QuadKey | null {
+  const q = school.quadOverrides?.[id];
+  return q && (QUADS as readonly string[]).includes(q) ? q : null;
+}
+
 async function buildHomework(ctx: Ctx, school: StoredSchool): Promise<HwOut[]> {
   const classes = school.classes ?? [];
   const classById = new Map(classes.map((c) => [c.id, c]));
@@ -392,7 +400,7 @@ async function buildHomework(ctx: Ctx, school: StoredSchool): Promise<HwOut[]> {
     const cls = classById.get(classId);
     for (const hw of items) {
       const due = dueToIso(hw.due, ctx.tz);
-      const quadrant = homeworkQuadrant({ manualPriority: hw.priority, dueIso: due }, ctx.today);
+      const quadrant = pinnedQuad(school, `manual:${classId}:${hw.id}`) ?? homeworkQuadrant({ manualPriority: hw.priority, dueIso: due }, ctx.today);
       out.push({
         id: `manual:${classId}:${hw.id}`,
         title: hw.title,
@@ -415,7 +423,7 @@ async function buildHomework(ctx: Ctx, school: StoredSchool): Promise<HwOut[]> {
     const due = dueToIso(a.due, ctx.tz);
     const classId = matchAssignmentToClass(a, classes, school.classMappings ?? {}, school.classKeywords ?? {});
     const cls = classId ? classById.get(classId) : undefined;
-    const quadrant = homeworkQuadrant({ icsPriority: a.priority, dueIso: due }, ctx.today);
+    const quadrant = pinnedQuad(school, `${a.source}:${a.uid}`) ?? homeworkQuadrant({ icsPriority: a.priority, dueIso: due }, ctx.today);
     out.push({
       id: `${a.source}:${a.uid}`,
       title: a.title,

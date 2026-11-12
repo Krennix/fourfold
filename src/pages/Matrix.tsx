@@ -21,6 +21,8 @@ const QUAD_CONFIG: { key: QuadKey; numeral: string; label: string; sub: string; 
   { key: 'q4', numeral: 'IV', label: 'Eliminate', sub: 'Neither', hint: 'Distractions — drop these when you can.' },
 ];
 
+const DRAG_TYPE = 'application/x-fourfold-task';
+
 type Row = (Task & { source: 'matrix' }) | HomeworkTaskRow;
 type SortMode = 'manual' | 'due';
 
@@ -36,7 +38,7 @@ function sortRows(rows: Row[], mode: SortMode): Row[] {
 export function MatrixPage() {
   const { tasks, removeTask, toggleDone, scheduleTask, unscheduleTask, toggleTaskLocked, moveTask, restoreTask, addTask, updateTask } = useMatrix();
   const navigate = useNavigate();
-  const { toggleHomework, toggleSchoologyHomeworkDone } = useSchool();
+  const { toggleHomework, toggleSchoologyHomeworkDone, setHomeworkQuad } = useSchool();
   const { toast } = useUI();
   const homeworkRows = useQuadrantHomework();
   const autoSchedule = useAutoSchedule();
@@ -44,7 +46,7 @@ export function MatrixPage() {
   const [dialogQuad, setDialogQuad] = useState<QuadKey | null>(null);
   const [drafts, setDrafts] = useState<Record<QuadKey, string>>({ q1: '', q2: '', q3: '', q4: '' });
   const [editing, setEditing] = useState<{ quad: QuadKey; task: Task } | null>(null);
-  const [hwMenu, setHwMenu] = useState<{ x: number; y: number; row: HomeworkTaskRow } | null>(null);
+  const [hwMenu, setHwMenu] = useState<{ x: number; y: number; quad: QuadKey; row: HomeworkTaskRow } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; quad: QuadKey; task: Task } | null>(null);
   const [dragOver, setDragOver] = useState<QuadKey | null>(null);
   const [hideHomework, setHideHomework] = useState(() => localStorage.getItem('matrix.hideHomework') === '1');
@@ -67,6 +69,29 @@ export function MatrixPage() {
       toast({ message: 'No free slot found before the due date', tone: 'error' });
     }
   };
+
+  /** Moves any row to another quadrant. Matrix tasks move for real; homework is pinned there (or unpinned when it goes back where the rules would put it). */
+  const moveRow = (from: QuadKey, to: QuadKey, t: Row) => {
+    if (from === to) return;
+    if (t.source !== 'homework') {
+      moveTask(from, to, t.id);
+      return;
+    }
+    setHomeworkQuad(t.ref, to === t.autoQuad ? null : to);
+    toast({
+      message: to === t.autoQuad ? `“${t.title}” is back to its automatic spot` : `Moved “${t.title}” to ${QUAD_CONFIG.find((q) => q.key === to)!.label}`,
+      action: { label: 'Undo', onClick: () => setHomeworkQuad(t.ref, from === t.autoQuad ? null : from) },
+    });
+  };
+
+  /** Every row can be picked up, except tasks you've locked in place. */
+  const dragProps = (quad: QuadKey, t: Row) => ({
+    draggable: t.source === 'homework' || !t.locked,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ from: quad, id: t.id }));
+      e.dataTransfer.effectAllowed = 'move';
+    },
+  });
 
   const toggleRow = (quad: QuadKey, t: Row) => {
     if (t.source !== 'homework') {
@@ -182,7 +207,7 @@ export function MatrixPage() {
               <div
                 className="quad-drop"
                 onDragOver={(e) => {
-                  if (e.dataTransfer.types.includes('application/x-fourfold-task')) {
+                  if (e.dataTransfer.types.includes(DRAG_TYPE)) {
                     e.preventDefault();
                     setDragOver(q.key);
                   }
@@ -192,10 +217,12 @@ export function MatrixPage() {
                 }}
                 onDrop={(e) => {
                   setDragOver(null);
-                  const raw = e.dataTransfer.getData('application/x-fourfold-task');
+                  const raw = e.dataTransfer.getData(DRAG_TYPE);
                   if (!raw) return;
                   const { from, id } = JSON.parse(raw) as { from: QuadKey; id: string };
-                  moveTask(from, q.key, id);
+                  const task = tasks[from].find((t) => t.id === id);
+                  const row: Row | undefined = task ? { ...task, source: 'matrix' } : homeworkRows[from].find((t) => t.id === id);
+                  if (row) moveRow(from, q.key, row);
                 }}
               >
                 <div className="qhead">
@@ -214,12 +241,8 @@ export function MatrixPage() {
                       task={t}
                       color={`var(--${q.key})`}
                       onToggle={() => toggleRow(q.key, t)}
-                      draggable={t.source !== 'homework' && !t.locked}
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('application/x-fourfold-task', JSON.stringify({ from: q.key, id: t.id }));
-                        e.dataTransfer.effectAllowed = 'move';
-                      }}
-                      onMenu={t.source !== 'homework' ? (x, y) => setMenu({ x, y, quad: q.key, task: t }) : (x, y) => setHwMenu({ x, y, row: t })}
+                      {...dragProps(q.key, t)}
+                      onMenu={t.source !== 'homework' ? (x, y) => setMenu({ x, y, quad: q.key, task: t }) : (x, y) => setHwMenu({ x, y, quad: q.key, row: t })}
                       onOpen={t.source !== 'homework' ? () => setEditing({ quad: q.key, task: t }) : undefined}
                       extraMeta={t.source === 'homework' ? <span className="treason" title="Why it's in this quadrant">{t.reason}</span> : undefined}
                       actions={
@@ -278,7 +301,8 @@ export function MatrixPage() {
                           compact
                           color={`var(--${q.key})`}
                           onToggle={() => toggleRow(q.key, t)}
-                          onMenu={t.source !== 'homework' ? (x, y) => setMenu({ x, y, quad: q.key, task: t }) : undefined}
+                          {...dragProps(q.key, t)}
+                          onMenu={t.source !== 'homework' ? (x, y) => setMenu({ x, y, quad: q.key, task: t }) : (x, y) => setHwMenu({ x, y, quad: q.key, row: t })}
                         />
                       ))}
                   </div>
@@ -297,6 +321,14 @@ export function MatrixPage() {
           onClose={() => setHwMenu(null)}
           items={[
             { label: hwMenu.row.classId ? `Open in School (${hwMenu.row.listTag})` : 'Open homework list', icon: <Icon name="book" />, onClick: () => navigate(hwMenu.row.classId ? `/school?class=${hwMenu.row.classId}` : '/school') },
+            ...QUAD_CONFIG.filter((q) => q.key !== hwMenu.quad).map((q) => ({
+              label: `Move to ${q.label}`,
+              icon: <span className="qdot" style={{ background: `var(--${q.key})` }} />,
+              onClick: () => moveRow(hwMenu.quad, q.key, hwMenu.row),
+            })),
+            ...(hwMenu.row.moved
+              ? [{ label: 'Reset to automatic', icon: <Icon name="refresh" />, onClick: () => moveRow(hwMenu.quad, hwMenu.row.autoQuad, hwMenu.row) }]
+              : []),
           ]}
         />
       )}
