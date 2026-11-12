@@ -11,7 +11,8 @@ built with React, TypeScript, and Vite, backed by Vercel serverless functions.
   **focus list** of overdue / due-soon / "Do first" work you can check off
   in place, a timeline of today's events and scheduled tasks with a "now"
   marker, plus habits, focus timer, assistant and countdowns.
-- **Quick add with natural language** — type `Essay tomorrow 3pm 45m !1` and
+- **Quick add with natural language** — type `Essay tomorrow 3pm 45m !1` — or
+  loosely, `ohh yah essay outline is due on monday @ 5pm or smth` — and
   FourFold fills in the due date, books the time on your calendar (or finds a
   free slot for a time estimate) and files it in the right quadrant.
   Available from Home, every Matrix quadrant, the command palette (`N`) and

@@ -15,7 +15,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:api": "bun scripts/api-smoke.ts"
+    "test:api": "bun scripts/api-smoke.ts",
+    "test:quickadd": "bun scripts/quickadd-test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
