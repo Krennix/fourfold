@@ -8,11 +8,12 @@ import type { QuadKey } from '../state/MatrixContext';
  *
  * Recognised (anywhere in the text, case-insensitive):
  *   priority  !1 … !4, #q1 … #q4, or "!!" (= urgent & important)
- *   due date  today, tonight, tomorrow/tmr, mon…sun (next occurrence), next week, in N days,
- *             YYYY-MM-DD, M/D, "nov 20" / "20 nov"
- *   time      3pm, 3:30pm, 15:00, at 9 (with an am/pm or "at")
- *   duration  30m, 45min, 1h, 1.5h, 1h30m, "for 2 hours"
- * Whatever's left over becomes the title.
+ *   due date  today, tonight, tomorrow/tmr, mon…sun (next occurrence), this/next fri, next week,
+ *             in N days / in a week, YYYY-MM-DD, M/D, "nov 20" / "20 nov", "the 16th", eod
+ *             (a leading "due", "due on", "by"… is swallowed with it)
+ *   time      3pm, 3:30pm, 15:00, @noon, at 9 (with an am/pm or "at"; a bare 1–6 means pm)
+ *   duration  30m, 45min, 1h, 1.5h, 1h30m, "for 2 hours", "half an hour"
+ * Whatever's left over becomes the title, minus casual filler ("ohh yah", "is due", "or smth").
  */
 export interface ParsedQuickAdd {
   title: string;
@@ -75,14 +76,34 @@ export function formatDuration(min: number): string {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+/** Leading "due"/"by"/"on"… that belongs to a date, so it's consumed along with it. */
+const DUE_PREFIX = '(?:(?:(?:is|are)\\s+)?due\\s+)?(?:(?:on|by|before|until|till|for)\\s+)?';
+
+const SMALL_NUMBERS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+
+/** Casual lead-ins that carry no meaning ("ohh yah", "remember to", "so"). */
+const LEADING_FILLER = /^(?:(?:o+h+|a+h+|u+m+|u+h+|h+m+|ya+h+|yea+h*|yep|yup|ok(?:ay)?|so|hey|btw|also|and|then|remember to|don'?t forget to|need to|gotta|have to|i need to)[\s,]+)+/i;
+/** Hedging that trails a casual entry ("or smth", "i think", "ish"). */
+const TRAILING_FILLER = /(?:[\s,]+(?:or\s+)?(?:smth|something|sth|idk|maybe|ish|whatever|lol|i\s+think|i\s+guess|or\s+so))+$/i;
+/** Connector words left dangling once the date/time was lifted out ("essay outline is due"). */
+const DANGLING = /(?:[\s,]+(?:is|are|due|on|by|at|for|the|this|next|before|until|till|@))+$/i;
+
+/** 1–6 → pm, 7–11 → am: nobody means a 3 a.m. deadline when they type "@3". */
+function guessHour(h: number, raw: string): number {
+  if (raw.startsWith('0') || h < 1 || h > 6) return h;
+  return h + 12;
+}
+
 export function parseQuickAdd(input: string, now = new Date()): ParsedQuickAdd {
-  let text = ` ${input} `;
+  // Commas/semicolons glued to a word ("monday, 3pm") would defeat the word-boundary checks below.
+  let text = ` ${input.replace(/[,;](?=\s|$)/g, ' $&').replace(/\.+\s*$/, '')} `;
   const chips: ParsedQuickAdd['chips'] = [];
   let quad: QuadKey = 'q2';
   let quadSet = false;
   let dueDate: string | null = null;
   let time: string | null = null;
   let durationMin: number | null = null;
+  let extracted = false;
 
   // Uses the *last* match, so a leading word ("Monday standup notes mon") stays in the title.
   const take = (re: RegExp, fn: (m: RegExpMatchArray) => boolean | void) => {
@@ -92,6 +113,7 @@ export function parseQuickAdd(input: string, now = new Date()): ParsedQuickAdd {
     if (!m || m.index === undefined) return;
     if (fn(m) === false) return;
     text = `${text.slice(0, m.index)} ${text.slice(m.index + m[0].length)}`;
+    extracted = true;
   };
 
   // priority
@@ -111,10 +133,15 @@ export function parseQuickAdd(input: string, now = new Date()): ParsedQuickAdd {
       durationMin = Number(m[1]);
     });
   }
+  if (durationMin === null) {
+    take(/\s(?:for\s+)?(half\s+(?:an?\s+)?hour|an?\s+hour)(?=\s)/i, (m) => {
+      durationMin = m[1].toLowerCase().startsWith('half') ? 30 : 60;
+    });
+  }
   if (durationMin) chips.push({ kind: 'duration', label: formatDuration(durationMin) });
 
   // explicit time
-  take(/\s(?:at\s+|@\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?=\s)/i, (m) => {
+  take(/\s(?:due\s+)?(?:(?:at|by)\s+|@\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?=\s)/i, (m) => {
     let h = Number(m[1]) % 12;
     if (m[3].toLowerCase() === 'pm') h += 12;
     const mm = m[2] ? Number(m[2]) : 0;
@@ -122,11 +149,16 @@ export function parseQuickAdd(input: string, now = new Date()): ParsedQuickAdd {
     time = `${pad(h)}:${pad(mm)}`;
   });
   if (!time) {
+    take(/\s(?:at|by)\s+(noon|midnight)(?=\s)|\s@\s*(noon|midnight)(?=\s)/i, (m) => {
+      time = (m[1] ?? m[2]).toLowerCase() === 'noon' ? '12:00' : '23:59';
+    });
+  }
+  if (!time) {
     take(/\s(?:at\s+|@\s*)(\d{1,2})(?::(\d{2}))?(?=\s)/i, (m) => {
       const h = Number(m[1]);
       const mm = m[2] ? Number(m[2]) : 0;
       if (h > 23 || mm > 59) return false;
-      time = `${pad(h)}:${pad(mm)}`;
+      time = `${pad(guessHour(h, m[1]))}:${pad(mm)}`;
     });
   }
   if (!time) {
@@ -134,34 +166,47 @@ export function parseQuickAdd(input: string, now = new Date()): ParsedQuickAdd {
       const h = Number(m[1]);
       const mm = Number(m[2]);
       if (h > 23 || mm > 59) return false;
-      time = `${pad(h)}:${pad(mm)}`;
+      time = `${pad(guessHour(h, m[1]))}:${pad(mm)}`;
     });
   }
 
-  // date
+  // date — each form also swallows a leading "due", "due on", "by"…
   const setDate = (d: Date) => {
     dueDate = isoDate(d);
   };
-  take(/\s(today|tod|tonight)(?=\s)/i, (m) => {
+  take(new RegExp(`\\s${DUE_PREFIX}(today|tod|tonight)(?=\\s)`, 'i'), (m) => {
     setDate(now);
     if (m[1].toLowerCase() === 'tonight' && !time) time = '20:00';
   });
-  if (!dueDate) take(/\s(tomorrow|tmr|tmrw)(?=\s)/i, () => setDate(addDays(now, 1)));
-  if (!dueDate) take(/\snext\s+week(?=\s)/i, () => setDate(addDays(now, 7)));
-  if (!dueDate) take(/\sin\s+(\d+)\s+(day|days|week|weeks)(?=\s)/i, (m) => setDate(addDays(now, Number(m[1]) * (m[2].startsWith('week') ? 7 : 1))));
+  if (!dueDate) take(new RegExp(`\\s${DUE_PREFIX}(?:tomorrow|tmr|tmrw)(?=\\s)`, 'i'), () => setDate(addDays(now, 1)));
+  if (!dueDate) take(new RegExp(`\\s${DUE_PREFIX}next\\s+week(?=\\s)`, 'i'), () => setDate(addDays(now, 7)));
   if (!dueDate) {
-    take(/\s(?:on\s+|by\s+|next\s+)?(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)(?:day|nesday|urday|sday)?(?=\s)/i, (m) => {
-      const idx = WEEKDAYS.indexOf(m[1].slice(0, 3).toLowerCase());
+    take(new RegExp(`\\s${DUE_PREFIX}in\\s+(\\d+|an?|one|two|three|four|five|six)\\s+(day|days|week|weeks)(?=\\s)`, 'i'), (m) => {
+      const n = /^\d+$/.test(m[1]) ? Number(m[1]) : SMALL_NUMBERS[m[1].toLowerCase()];
+      setDate(addDays(now, n * (m[2].toLowerCase().startsWith('week') ? 7 : 1)));
+    });
+  }
+  if (!dueDate) {
+    // "next fri" = that day in the calendar week after this one (weeks start Monday);
+    // "this fri" = the coming one, today included; a bare weekday never means today.
+    take(new RegExp(`\\s${DUE_PREFIX}(?:(next|this)\\s+)?(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)(?:day|nesday|urday|sday)?(?=\\s)`, 'i'), (m) => {
+      const idx = WEEKDAYS.indexOf(m[2].slice(0, 3).toLowerCase());
+      const which = m[1]?.toLowerCase();
+      if (which === 'next') {
+        const toNextMonday = (8 - now.getDay()) % 7 || 7;
+        setDate(addDays(now, toNextMonday + ((idx + 6) % 7)));
+        return;
+      }
       let diff = (idx - now.getDay() + 7) % 7;
-      if (diff === 0) diff = 7;
+      if (diff === 0 && which !== 'this') diff = 7;
       setDate(addDays(now, diff));
     });
   }
   if (!dueDate) {
-    take(/\s(\d{4})-(\d{2})-(\d{2})(?=\s)/, (m) => setDate(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))));
+    take(new RegExp(`\\s${DUE_PREFIX}(\\d{4})-(\\d{2})-(\\d{2})(?=\\s)`), (m) => setDate(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))));
   }
   if (!dueDate) {
-    take(/\s(\d{1,2})\/(\d{1,2})(?=\s)/, (m) => {
+    take(new RegExp(`\\s${DUE_PREFIX}(\\d{1,2})/(\\d{1,2})(?=\\s)`), (m) => {
       const mo = Number(m[1]) - 1;
       const day = Number(m[2]);
       if (mo > 11 || day > 31 || day < 1) return false;
@@ -172,8 +217,8 @@ export function parseQuickAdd(input: string, now = new Date()): ParsedQuickAdd {
   }
   if (!dueDate) {
     const monthRe = MONTHS.join('|');
-    const byMonthDay = new RegExp(`\\s(?:on\\s+|by\\s+)?(${monthRe})[a-z]*\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?=\\s)`, 'i');
-    const byDayMonth = new RegExp(`\\s(?:on\\s+|by\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthRe})[a-z]*\\.?(?=\\s)`, 'i');
+    const byMonthDay = new RegExp(`\\s${DUE_PREFIX}(${monthRe})[a-z]*\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?=\\s)`, 'i');
+    const byDayMonth = new RegExp(`\\s${DUE_PREFIX}(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(${monthRe})[a-z]*\\.?(?=\\s)`, 'i');
     const apply = (monthName: string, dayStr: string) => {
       const mo = MONTHS.indexOf(monthName.slice(0, 3).toLowerCase());
       const day = Number(dayStr);
@@ -185,12 +230,35 @@ export function parseQuickAdd(input: string, now = new Date()): ParsedQuickAdd {
     take(byMonthDay, (m) => apply(m[1], m[2]));
     if (!dueDate) take(byDayMonth, (m) => apply(m[2], m[1]));
   }
+  if (!dueDate) {
+    // "the 16th" — the next time that day-of-month comes around (today counts).
+    take(new RegExp(`\\s${DUE_PREFIX}the\\s+(\\d{1,2})(?:st|nd|rd|th)(?=\\s)`, 'i'), (m) => {
+      const day = Number(m[1]);
+      if (day < 1 || day > 31) return false;
+      let d = new Date(now.getFullYear(), now.getMonth(), day);
+      if (d < addDays(now, 0)) d = new Date(now.getFullYear(), now.getMonth() + 1, day);
+      setDate(d);
+    });
+  }
+  // "eod" / "end of day" adds nothing but "today" when no other date was given.
+  take(/\s(?:by\s+)?(?:eod|cob|end\s+of\s+(?:the\s+)?day)(?=\s)/i, () => {
+    if (!dueDate) setDate(now);
+  });
   // A bare time with no date means today.
   if (time && !dueDate) dueDate = isoDate(now);
   if (dueDate) chips.push({ kind: 'date', label: friendlyDate(dueDate, now) });
   if (time) chips.push({ kind: 'time', label: friendlyTime(time) });
 
-  const title = text.replace(/\s+/g, ' ').trim();
+  let title = text.replace(/\s+/g, ' ').replace(/\s+([,;])/g, '$1').trim();
+  title = title.replace(LEADING_FILLER, '');
+  // Only trim connectors when something was lifted out — otherwise "Log on" is just "Log on".
+  if (extracted) {
+    for (let prev = ''; prev !== title; ) {
+      prev = title;
+      title = title.replace(TRAILING_FILLER, '').replace(DANGLING, '').replace(/[\s,;]+$/, '');
+    }
+  }
+  title = title.trim();
   // Order chips: quad, date, time, duration
   const order = { quad: 0, date: 1, time: 2, duration: 3 } as const;
   chips.sort((a, b) => order[a.kind] - order[b.kind]);
