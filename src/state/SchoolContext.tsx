@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { useRemoteState } from '../lib/remoteStore';
 import { useAuth } from './AuthContext';
+import type { QuadKey } from './MatrixContext';
 
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
 export type Weekday = (typeof WEEKDAYS)[number];
@@ -93,6 +94,8 @@ interface StoredState {
   classMappings: Record<string, string>;
   /** Free-text keywords per class id; a Schoology assignment matches a class if its title/description contains one. */
   classKeywords: Record<string, string[]>;
+  /** Homework the user dragged to a different matrix quadrant, keyed by homework ref (see homeworkRef). */
+  quadOverrides: Record<string, QuadKey>;
 }
 
 export interface SchoolContextValue extends StoredState {
@@ -111,6 +114,8 @@ export interface SchoolContextValue extends StoredState {
   toggleSchoologyHomeworkDone: (uid: string) => void;
   setClassMapping: (category: string, classId: string | null) => void;
   setClassKeywords: (classId: string, keywords: string[]) => void;
+  /** Pins a piece of homework to a quadrant, or (null) puts it back to automatic placement. */
+  setHomeworkQuad: (ref: string, quad: QuadKey | null) => void;
 }
 
 const SchoolContext = createContext<SchoolContextValue | null>(null);
@@ -128,6 +133,7 @@ const DEFAULT_STATE: StoredState = {
   schoologyDone: {},
   classMappings: {},
   classKeywords: {},
+  quadOverrides: {},
 };
 
 export function SchoolProvider({ children }: { children: ReactNode }) {
@@ -225,6 +231,15 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const setHomeworkQuad: SchoolContextValue['setHomeworkQuad'] = (ref, quad) => {
+    setState((s) => {
+      const quadOverrides = { ...(s.quadOverrides ?? {}) };
+      if (quad) quadOverrides[ref] = quad;
+      else delete quadOverrides[ref];
+      return { ...s, quadOverrides };
+    });
+  };
+
   const normalizedHomework = (() => {
     const homework = state.homework ?? {};
     const out: Record<string, Homework[]> = {};
@@ -244,8 +259,9 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
         schoologyDone: state.schoologyDone ?? {},
         classMappings: state.classMappings ?? {},
         classKeywords: state.classKeywords ?? {},
+        quadOverrides: state.quadOverrides ?? {},
         addClass, updateClass, removeClass, addPreset, updatePreset, removePreset, setOverride, setShowBreaks,
-        addHomework, updateHomework, toggleHomework, removeHomework, toggleSchoologyHomeworkDone, setClassMapping, setClassKeywords,
+        addHomework, updateHomework, toggleHomework, removeHomework, toggleSchoologyHomeworkDone, setClassMapping, setClassKeywords, setHomeworkQuad,
       }}
     >
       {children}
