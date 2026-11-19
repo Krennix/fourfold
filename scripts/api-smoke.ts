@@ -326,8 +326,109 @@ try {
   const summary = await v1('/summary');
   check('summary covers today', summary.status === 200 && summary.body.date === today && summary.body.homework.open >= 1 && summary.body.countdowns.length === 1 && 'doneToday' in summary.body.habits, summary.body);
   check('malformed body is a 400, not a crash', (await call(`/api/v1/tasks?tz=${TZ}`, { method: 'POST', token: apiTok, json: ['not', 'an', 'object'] })).status === 400);
+  console.log('MCP server /api/mcp');
+  let rpcId = 0;
+  const rpc = (method: string, params?: unknown, tok: string | null = apiTok, path = `/api/mcp?tz=${TZ}`) =>
+    call(path, { method: 'POST', token: tok ?? undefined, json: { jsonrpc: '2.0', id: ++rpcId, method, ...(params !== undefined ? { params } : {}) } });
+  /** Calls a tool and returns the parsed JSON payload (or the error text) plus the isError flag. */
+  const tool = async (name: string, args: Record<string, unknown> = {}) => {
+    const r = await rpc('tools/call', { name, arguments: args });
+    const text: string = r.body.result?.content?.[0]?.text ?? '';
+    let data: any = text;
+    try { data = JSON.parse(text); } catch { /* error text */ }
+    return { data, isError: !!r.body.result?.isError, rpcError: r.body.error, raw: r };
+  };
+
+  const noAuth = await fetch(`${BASE}/api/mcp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }) });
+  check('mcp requires auth (401 + WWW-Authenticate)', noAuth.status === 401 && (noAuth.headers.get('www-authenticate') ?? '').startsWith('Bearer'));
+  check('mcp accepts a signed-in session token too', (await rpc('ping', undefined, token)).body.result !== undefined);
+  check('mcp rejects a bad token', (await rpc('ping', undefined, 'ff_nope')).status === 401);
+  check('mcp GET is not allowed', (await call('/api/mcp', { token: apiTok })).status === 405);
+  check('mcp rejects a non-JSON body', (await call('/api/mcp', { method: 'POST', token: apiTok, body: 'hello', headers: undefined } as any)).status === 400);
+  const init = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'smoke', version: '0' } });
+  check('initialize negotiates the protocol and advertises tools', init.body.result?.protocolVersion === '2025-06-18' && !!init.body.result.capabilities.tools && init.body.result.serverInfo.name === 'fourfold', init.body);
+  check('initialize falls back for unknown protocol versions', (await rpc('initialize', { protocolVersion: '1999-01-01' })).body.result?.protocolVersion === '2025-06-18');
+  const notif = await call('/api/mcp', { method: 'POST', token: apiTok, json: { jsonrpc: '2.0', method: 'notifications/initialized' } });
+  check('notifications get 202 and no body', notif.status === 202);
+  check('ping works', (await rpc('ping')).body.result !== undefined);
+  check('unknown method is a JSON-RPC error', (await rpc('resources/list')).body.error?.code === -32601);
+
+  const listed = (await rpc('tools/list')).body.result.tools as any[];
+  const names = listed.map((x) => x.name);
+  check('tools/list exposes the read and write tools', ['get_due', 'get_today', 'list_tasks', 'list_homework', 'list_events', 'create_task', 'update_task', 'create_homework', 'update_homework', 'set_habit_done'].every((n) => names.includes(n)), names);
+  check('every tool has an object schema and annotations', listed.every((x) => x.inputSchema.type === 'object' && x.annotations && typeof x.description === 'string' && x.description.length > 10));
+  check('read tools are flagged read-only, deletes destructive', listed.find((x) => x.name === 'get_due').annotations.readOnlyHint === true && listed.find((x) => x.name === 'delete_task').annotations.destructiveHint === true);
+  check('batches are answered in order', ((await call('/api/mcp', { method: 'POST', token: apiTok, json: [{ jsonrpc: '2.0', id: 'a', method: 'ping' }, { jsonrpc: '2.0', method: 'notifications/initialized' }, { jsonrpc: '2.0', id: 'b', method: 'ping' }] })).body as any[]).map((r) => r.id).join() === 'a,b');
+
+  // Fresh, deterministic data: today = TZ's today; a task + homework at each of overdue / today / soon / far.
+  const mkTask = (title: string, dueDate: string | null, quadrant = 'q2') => tool('create_task', { title, dueDate, quadrant });
+  const overdueTask = await mkTask('MCP overdue task', plus(-2), 'q1');
+  check('create_task via MCP', !overdueTask.isError && overdueTask.data.task.title === 'MCP overdue task' && overdueTask.data.task.dueDate === plus(-2), overdueTask.data);
+  await mkTask('MCP today task', today);
+  const soonTask = await mkTask('MCP soon task', plus(3));
+  await mkTask('MCP far task', plus(30));
+  await mkTask('MCP undated task', null);
+  check('stored in the app\'s format', (await dataOf('matrix')).q1.some((x: any) => x.title === 'MCP overdue task' && x.dueDate === plus(-2)));
+  const mkHw = (cls: string, title: string, due: string, priority = 'med') => tool('create_homework', { class: cls, title, due, priority });
+  const hwSoon = await mkHw('Chemistry', 'MCP chem lab', plus(1));
+  check('create_homework via MCP picks the quadrant', !hwSoon.isError && hwSoon.data.homework.class.id === 'chem' && hwSoon.data.homework.quadrant === 'q1', hwSoon.data);
+  await mkHw('calc', 'MCP overdue pset', plus(-1));
+  await mkHw('calc', 'MCP far reading', plus(40), 'low');
+
+  const due = await tool('get_due', { days: 7 });
+  const titles: string[] = due.data.items.map((i: any) => i.title);
+  check('get_due merges tasks and homework in due-date order, overdue first', titles.filter((x) => x.startsWith('MCP')).join('|') === ['MCP overdue task', 'MCP overdue pset', 'MCP today task', 'MCP chem lab', 'MCP soon task'].join('|') && due.data.items.every((i: any, n: number, all: any[]) => n === 0 || all[n - 1].due <= i.due), titles);
+  check('get_due excludes far-off and undated items', !titles.includes('MCP far task') && !titles.includes('MCP far reading') && !titles.includes('MCP undated task'), titles);
+  const byTitle = (n: string) => due.data.items.find((i: any) => i.title === n);
+  check('get_due flags overdue and counts days', byTitle('MCP overdue task').overdue === true && byTitle('MCP overdue task').daysUntil === -2 && byTitle('MCP today task').daysUntil === 0 && byTitle('MCP soon task').overdue === false, due.data.items);
+  check('get_due labels kind, class and quadrant', byTitle('MCP chem lab').type === 'homework' && byTitle('MCP chem lab').class === 'Chemistry' && byTitle('MCP chem lab').quadrant === 'q1' && byTitle('MCP soon task').type === 'task', byTitle('MCP chem lab'));
+  check('get_due counts add up', due.data.counts.total === due.data.items.length && due.data.counts.tasks + due.data.counts.homework === due.data.counts.total && due.data.counts.overdue >= 2 && due.data.today === today, due.data.counts);
+  check('get_due days window narrows', !(await tool('get_due', { days: 0 })).data.items.some((i: any) => i.title === 'MCP soon task'));
+  check('get_due can drop overdue items', !(await tool('get_due', { days: 7, include_overdue: false })).data.items.some((i: any) => i.overdue));
+  check('get_due can include far items with a long window', (await tool('get_due', { days: 60 })).data.items.some((i: any) => i.title === 'MCP far reading'));
+
+  const lt = await tool('list_tasks', { quadrant: 'q1' });
+  check('list_tasks filters by quadrant', lt.data.tasks.length >= 1 && lt.data.tasks.every((x: any) => x.quadrant === 'q1'), lt.data);
+  check('list_tasks due_before', (await tool('list_tasks', { due_before: plus(0) })).data.tasks.every((x: any) => x.dueDate && x.dueDate <= plus(0)));
+  check('list_homework filters by days', (await tool('list_homework', { days: 2 })).data.homework.every((x: any) => x.due <= plus(2)));
+  check('list_classes / list_calendars / list_countdowns / list_friends / list_habits', (await tool('list_classes')).data.classes.length === 2 && (await tool('list_calendars')).data.calendars[0].id === 'local' && (await tool('list_countdowns')).data.countdowns.length === 1 && (await tool('list_friends')).data.friends[0].name === 'Sam' && Array.isArray((await tool('list_habits')).data.habits));
+
+  const done = await tool('update_task', { id: soonTask.data.task.id, done: true });
+  check('update_task completes a task', done.data.task.done === true, done.data);
+  check('completed tasks leave get_due', !(await tool('get_due', { days: 7 })).data.items.some((i: any) => i.title === 'MCP soon task') && (await tool('get_due', { days: 7, include_done: true })).data.items.some((i: any) => i.title === 'MCP soon task'));
+  const hwDone = await tool('update_homework', { id: hwSoon.data.homework.id, done: true });
+  check('update_homework completes homework', hwDone.data.homework.done === true && !(await tool('get_due')).data.items.some((i: any) => i.title === 'MCP chem lab'), hwDone.data);
+  const cleared = await tool('update_task', { id: overdueTask.data.task.id, dueDate: null });
+  check('update_task clears a due date with null', cleared.data.task.dueDate === null && !(await tool('get_due')).data.items.some((i: any) => i.title === 'MCP overdue task'), cleared.data);
+
+  await tool('update_task', { id: overdueTask.data.task.id, locked: true });
+  const lockedEdit = await tool('update_task', { id: overdueTask.data.task.id, title: 'nope' });
+  check('locked task: error comes back in the tool result, not as a protocol error', lockedEdit.isError && /locked/.test(lockedEdit.data) && !lockedEdit.rpcError, lockedEdit);
+  check('locked task refuses delete', (await tool('delete_task', { id: overdueTask.data.task.id })).isError);
+  await tool('update_task', { id: overdueTask.data.task.id, locked: false });
+  check('delete_task', (await tool('delete_task', { id: overdueTask.data.task.id })).data.ok === true);
+
+  const ev = await tool('create_event', { title: 'MCP study', date: plus(2), startTime: '15:00', durationMin: 45 });
+  check('create_event', ev.data.event?.endTime === '15:45', ev.data);
+  check('list_events sees it', (await tool('list_events', { from: plus(2), to: plus(2) })).data.events.some((e: any) => e.id === ev.data.event.id));
+  check('update_event reschedules', (await tool('update_event', { id: ev.data.event.id, startTime: '16:00' })).data.event.startTime === '16:00');
+  check('delete_event', (await tool('delete_event', { id: ev.data.event.id })).data.ok === true);
+
+  const unknownTool = await tool('no_such_tool');
+  check('unknown tool is an invalid-params error', unknownTool.rpcError?.code === -32602, unknownTool.rpcError);
+  const hab = await call(`/api/v1/habits?tz=${TZ}`, { method: 'POST', token: apiTok, json: { name: 'MCP habit' } });
+  const habId = hab.body.habit.id;
+  check('set_habit_done checks off, defaulting to true', (await tool('set_habit_done', { id: habId })).data.habit.doneToday === true && (await tool('set_habit_done', { id: habId, done: false })).data.habit.doneToday === false);
+  check('today snapshot', (await tool('get_today')).data.date === today);
+  check('timezone argument overrides the connection default', (await tool('get_due', { timezone: 'Pacific/Kiritimati' })).data.timezone === 'Pacific/Kiritimati');
+  check('missing required argument is reported', (await tool('create_task', {})).isError);
+  check('unknown argument is reported (not silently ignored)', (await tool('create_task', { title: 'x', colour: 'red' })).data.includes?.('Unknown argument'));
+  check('bad date is a tool error with a hint', /date like/.test((await tool('create_task', { title: 'x', dueDate: 'tomorrow' })).data));
+  check('REST and MCP see the same data', (await v1('/tasks')).body.tasks.some((x: any) => x.title === 'MCP today task'));
+
   await call('/api/lms?action=apiToken', { method: 'DELETE', token });
   check('revoked token stops working on v1', (await v1('/tasks')).status === 401);
+  check('revoked token stops working on MCP', (await rpc('tools/list')).status === 401);
 } catch (err) {
   failures++;
   console.error(err);

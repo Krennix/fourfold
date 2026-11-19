@@ -307,6 +307,8 @@ function ApiTokenSettings() {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const summaryUrl = `${baseUrl}/summary?tz=${encodeURIComponent(timeZone)}`;
   const example = `curl -H "Authorization: Bearer ${token ?? '<token>'}" \\\n  "${summaryUrl}"`;
+  const mcpUrl = `${window.location.origin}/api/mcp?tz=${encodeURIComponent(timeZone)}`;
+  const mcpCommand = `claude mcp add --transport http fourfold "${mcpUrl}" \\\n  --header "Authorization: Bearer ${token ?? '<token>'}"`;
 
   const copy = (value: string) => {
     void navigator.clipboard.writeText(value).then(() => {
@@ -348,6 +350,17 @@ function ApiTokenSettings() {
             <input className="input" type="text" readOnly style={{ flex: 1, minWidth: 240, fontFamily: 'monospace' }} value={summaryUrl} />
             <button className="btn btn-secondary" type="button" onClick={() => copy(summaryUrl)}>Copy URL</button>
             <button className="btn btn-secondary" type="button" onClick={() => copy(example)}>Copy curl</button>
+          </div>
+          <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
+            <strong>Prefer an AI assistant?</strong> FourFold is also an MCP server — connect it once and Claude can
+            ask for everything due (tasks and homework together), today's snapshot, your calendar and habits, and add
+            or check things off, with no scripting. In Claude Code:
+          </p>
+          <pre className="text-muted" style={{ fontSize: 12, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace' }}>{mcpCommand}</pre>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input className="input" type="text" readOnly style={{ flex: 1, minWidth: 240, fontFamily: 'monospace' }} value={mcpUrl} />
+            <button className="btn btn-secondary" type="button" onClick={() => copy(mcpUrl)}>Copy MCP URL</button>
+            <button className="btn btn-secondary" type="button" onClick={() => copy(mcpCommand)}>Copy command</button>
           </div>
           <p className="text-muted" style={{ fontSize: 12, margin: 0 }}>
             The server running the request must be allowed to reach <code>{window.location.host}</code> — some
