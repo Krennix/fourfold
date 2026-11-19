@@ -30,7 +30,11 @@ export default defineConfig({
           { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,ico}'] },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        // OAuth sign-in for assistants navigates to /oauth/authorize (a server redirect) — don't serve index.html for it.
+        navigateFallbackDenylist: [/^\/api\//, /^\/oauth\//, /^\/\.well-known\//],
+      },
     }),
   ],
 })

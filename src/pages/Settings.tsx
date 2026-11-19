@@ -310,6 +310,15 @@ function ApiTokenSettings() {
   const mcpUrl = `${window.location.origin}/api/mcp?tz=${encodeURIComponent(timeZone)}`;
   const mcpCommand = `claude mcp add --transport http fourfold "${mcpUrl}" \\\n  --header "Authorization: Bearer ${token ?? '<token>'}"`;
 
+  const [disconnected, setDisconnected] = useState(false);
+  const disconnectAssistants = async () => {
+    const session = getStoredSession();
+    if (!session) return handleSessionExpired();
+    const res = await fetch('/api/oauth?action=revoke', { method: 'POST', headers: { Authorization: `Bearer ${session.token}` } });
+    if (res.status === 401) return handleSessionExpired();
+    setDisconnected(res.ok);
+  };
+
   const copy = (value: string) => {
     void navigator.clipboard.writeText(value).then(() => {
       setCopied(true);
@@ -352,15 +361,20 @@ function ApiTokenSettings() {
             <button className="btn btn-secondary" type="button" onClick={() => copy(example)}>Copy curl</button>
           </div>
           <p className="text-muted" style={{ fontSize: 12.5, margin: 0 }}>
-            <strong>Prefer an AI assistant?</strong> FourFold is also an MCP server — connect it once and Claude can
-            ask for everything due (tasks and homework together), today's snapshot, your calendar and habits, and add
-            or check things off, with no scripting. In Claude Code:
+            <strong>Prefer an AI assistant?</strong> FourFold is also an MCP server — connect it once and Claude or
+            Gemini can ask for everything due (tasks and homework together), today's snapshot, your calendar and
+            habits, and add or check things off, with no scripting. In claude.ai or Claude Desktop, add{' '}
+            <code>{mcpUrl}</code> under <em>Settings → Connectors → Add custom connector</em> and approve the sign-in.
+            In Claude Code:
           </p>
           <pre className="text-muted" style={{ fontSize: 12, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace' }}>{mcpCommand}</pre>
           <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
             <input className="input" type="text" readOnly style={{ flex: 1, minWidth: 240, fontFamily: 'monospace' }} value={mcpUrl} />
             <button className="btn btn-secondary" type="button" onClick={() => copy(mcpUrl)}>Copy MCP URL</button>
             <button className="btn btn-secondary" type="button" onClick={() => copy(mcpCommand)}>Copy command</button>
+            <button className="btn btn-ghost" type="button" onClick={disconnectAssistants} title="Signs out every assistant connected through the approve-in-browser flow">
+              {disconnected ? 'Assistants disconnected' : 'Disconnect assistants'}
+            </button>
           </div>
           <p className="text-muted" style={{ fontSize: 12, margin: 0 }}>
             The server running the request must be allowed to reach <code>{window.location.host}</code> — some

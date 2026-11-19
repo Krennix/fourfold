@@ -62,22 +62,54 @@ built with React, TypeScript, and Vite, backed by Vercel serverless functions.
 
 FourFold is an [MCP](https://modelcontextprotocol.io) server at `/api/mcp`, so an
 AI assistant can use your data directly instead of you wiring up REST calls.
-Generate a token in **Settings → Personal API access** (the same token the REST
-API uses), then connect:
+Pick whichever way your assistant supports — two ways to sign in:
+
+- **Approve in the browser (OAuth).** Give the assistant just the URL; it opens
+  FourFold's sign-in, you click **Allow**, done. No token to copy, and **Settings →
+  Disconnect assistants** signs them all out. Assistants get an MCP-only token that
+  expires hourly and refreshes itself.
+- **Paste a token.** Generate one in **Settings → Personal API access** (the same
+  token the REST API uses) and send it as `Authorization: Bearer <token>`.
+
+`?tz=` — an IANA timezone such as `America/Los_Angeles` — sets what "today" means;
+every tool also takes an optional `timezone`. Settings shows these snippets with
+your URL and token already filled in.
+
+**Claude (claude.ai and Claude Desktop)** — *Settings → Connectors → Add custom
+connector*, name it FourFold, and paste
+`https://your-app.vercel.app/api/mcp?tz=America/Los_Angeles`. Leave the advanced
+client-id/secret fields empty (FourFold registers itself), then approve the
+sign-in. Works on the web, desktop and mobile once added.
+
+**Claude Code**
 
 ```bash
-# Claude Code
 claude mcp add --transport http fourfold \
   "https://your-app.vercel.app/api/mcp?tz=America/Los_Angeles" \
   --header "Authorization: Bearer $TOKEN"
 ```
 
-Any other client that speaks MCP over Streamable HTTP and lets you set a header
-works the same way (for clients that only run local servers, bridge with
-`npx mcp-remote <url> --header "Authorization: Bearer $TOKEN"`). `?tz=` — an IANA
-timezone — sets what "today" means; every tool also takes an optional `timezone`.
-It authenticates with the personal token, not OAuth, so it can't be added through
-claude.ai's *Custom connectors* UI.
+**Gemini CLI** — add to `~/.gemini/settings.json`, then run `/mcp` to check it
+says connected:
+
+```json
+{
+  "mcpServers": {
+    "fourfold": {
+      "httpUrl": "https://your-app.vercel.app/api/mcp?tz=America/Los_Angeles",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+(Leave out `headers` to use the browser sign-in instead. The tools' schemas stick
+to the subset of JSON Schema Gemini accepts.) The consumer Gemini web/mobile app
+can't add custom MCP servers — Gemini CLI is the supported route.
+
+Any other MCP client that speaks Streamable HTTP works the same way; for ones that
+only run local servers, bridge with
+`npx mcp-remote <url> --header "Authorization: Bearer $TOKEN"`.
 
 Then just ask: *"what's due this week?"*, *"add chem lab report due Friday to
 my homework"*, *"check off my reading habit"*.
@@ -98,6 +130,14 @@ validation, "set in stone" locking and quadrant rules are identical. Problems
 (a locked item, a bad date, an unknown id) come back as a readable tool error the
 model can act on, not a protocol failure. The server is stateless — no sessions,
 no streaming.
+
+OAuth details (for the curious): `/api/oauth` implements OAuth 2.1 with PKCE (S256
+only), dynamic client registration (public clients; redirect URIs must be https or
+localhost) and refresh tokens, advertised through
+`/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`.
+Registration is open, so the **Allow** screen shows who is asking and where they'll
+be sent — only approve a connection you just started. Codes are single-use and
+every token is HMAC-signed with `SESSION_SECRET`, so no extra setup is needed.
 
 ## Public API
 

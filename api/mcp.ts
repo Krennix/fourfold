@@ -3,14 +3,16 @@ import { verifySession } from './_lib/session.js';
 import { resolveApiToken } from './_lib/apiTokens.js';
 import { HttpError, makeCtx, route, type Ctx } from './_lib/fourfold.js';
 import { addDaysIso, diffDays } from './_lib/domain.js';
+import { resourceMetadataUrl, verifyAccessToken } from './_lib/oauth.js';
 
 /**
  * FourFold MCP server — lets an AI assistant (Claude Code, Claude Desktop, any MCP client) read and
  * change your homework, tasks, calendar, habits and countdowns directly, instead of scripting the
  * REST API. Endpoint: POST /api/mcp (MCP "Streamable HTTP" transport, stateless, JSON responses).
  *
- * Auth is the same as the REST API: `Authorization: Bearer <token>` — a personal API token
- * (Settings → Personal API access) or a signed-in session token. The timezone comes from `?tz=`
+ * Auth: `Authorization: Bearer <token>` — a personal API token (Settings → Personal API access), a
+ * signed-in session token, or an OAuth access token (api/oauth.ts — how claude.ai connectors and
+ * OAuth-capable clients connect without pasting a token). The timezone comes from `?tz=`
  * (or an `X-Timezone` header, IANA name, default UTC) and can be overridden per tool call with the
  * `timezone` argument.
  *
@@ -44,8 +46,8 @@ interface Tool {
 }
 
 const str = (description: string, extra: JsonSchema = {}): JsonSchema => ({ type: 'string', description, ...extra });
-const date = (description: string): JsonSchema => str(description, { pattern: '^\\d{4}-\\d{2}-\\d{2}$' });
-const time = (description: string): JsonSchema => str(description, { pattern: '^\\d{2}:\\d{2}$' });
+const date = (description: string): JsonSchema => str(`${description} Format YYYY-MM-DD.`);
+const time = (description: string): JsonSchema => str(`${description} Format HH:MM, 24-hour.`);
 const int = (description: string, min?: number, max?: number): JsonSchema => ({ type: 'integer', description, ...(min !== undefined ? { minimum: min } : {}), ...(max !== undefined ? { maximum: max } : {}) });
 const bool = (description: string): JsonSchema => ({ type: 'boolean', description });
 const quadrant = (description: string): JsonSchema => str(description, { enum: ['q1', 'q2', 'q3', 'q4'] });
@@ -194,21 +196,21 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'update_task',
-    description: 'Change a task: mark it done, retitle, set/clear its due date (null clears), move it to another quadrant, lock/unlock it.',
+    description: 'Change a task: mark it done, retitle, set or clear its due date ("" clears), move it to another quadrant, lock/unlock it.',
     properties: {
       ...idArg('task'),
       done: bool('Completed or not.'),
       title: str('New title.'),
       quadrant: quadrant('Move to this quadrant.'),
-      dueDate: { type: ['string', 'null'], description: 'YYYY-MM-DD, or null to clear.', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-      time: { type: ['string', 'null'], description: 'HH:MM, or null to clear.' },
-      durationMin: { type: ['integer', 'null'], description: 'Minutes, or null to clear.' },
+      dueDate: str('Due date, YYYY-MM-DD. Pass an empty string "" to clear it.'),
+      time: str('Time of day, HH:MM 24-hour. Pass "" to clear it.'),
+      durationMin: int('Estimated minutes. Pass 0 to clear it.', 0, 1440),
       description: str('Notes.'),
       list: str('List/tag name.'),
       locked: bool('Lock ("set in stone") or unlock.'),
     },
     required: ['id'],
-    run: (a, ctx) => go(ctx(), 'PATCH', 'tasks', needId(a), {}, withoutId(a)),
+    run: (a, ctx) => go(ctx(), 'PATCH', 'tasks', needId(a), {}, { ...withoutId(a), ...(a.durationMin === 0 ? { durationMin: null } : {}) }),
   },
   {
     name: 'delete_task',
@@ -240,7 +242,7 @@ const TOOLS: Tool[] = [
       ...idArg('homework'),
       done: bool('Completed or not.'),
       title: str('New title.'),
-      due: { type: ['string', 'null'], description: 'YYYY-MM-DD, or null to clear.', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+      due: str('Due date, YYYY-MM-DD. Pass an empty string "" to clear it.'),
       priority: str('New priority.', { enum: ['high', 'med', 'low'] }),
       description: str('Notes.'),
     },
@@ -329,7 +331,6 @@ function describeTool(t: Tool) {
         timezone: str('IANA timezone such as "America/Los_Angeles" used for "today" and wall-clock times. Defaults to the connection\'s timezone, else UTC.'),
       },
       ...(t.required?.length ? { required: t.required } : {}),
-      additionalProperties: false,
     },
     annotations: {
       title: t.name.replace(/_/g, ' '),
@@ -436,9 +437,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const token = bearerToken(req);
-    const email = verifySession(token) ?? (token ? await resolveApiToken(token) : null);
+    const email = verifySession(token) ?? (token ? (await resolveApiToken(token)) ?? (await verifyAccessToken(token)) : null);
     if (!email) {
-      res.setHeader('WWW-Authenticate', 'Bearer realm="fourfold"');
+      // resource_metadata (RFC 9728) tells OAuth-capable clients where to start the sign-in flow.
+      res.setHeader('WWW-Authenticate', `Bearer realm="fourfold", resource_metadata="${resourceMetadataUrl(req)}"`);
       res.status(401).json(rpcError(null, INVALID_REQUEST, 'Sign in required — send a FourFold personal API token (Settings → Personal API access) as "Authorization: Bearer <token>".'));
       return;
     }
