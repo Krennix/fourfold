@@ -41,6 +41,30 @@
       "destination": "/api/spotify?action=account"
     },
     {
+      "source": "/.well-known/oauth-protected-resource/:path*",
+      "destination": "/api/oauth?action=resource"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "/api/oauth?action=resource"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "/api/oauth?action=metadata"
+    },
+    {
+      "source": "/oauth/register",
+      "destination": "/api/oauth?action=register"
+    },
+    {
+      "source": "/oauth/authorize",
+      "destination": "/api/oauth?action=authorize"
+    },
+    {
+      "source": "/oauth/token",
+      "destination": "/api/oauth?action=token"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

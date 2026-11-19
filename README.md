@@ -48,12 +48,96 @@ built with React, TypeScript, and Vite, backed by Vercel serverless functions.
   this out or remove it if your school doesn't have an equivalent). A
   personal API token (Settings → Personal API access) opens the
   [public API](#public-api) to outside tools.
-- **Public API** — read *and write* your calendar, tasks, homework, habits and
-  countdowns from scripts, automations or an AI assistant. See
-  [Public API](#public-api).
+- **MCP server** — connect Claude (or any MCP client) to FourFold and ask for
+  everything due — tasks *and* homework in one list — plus today's snapshot,
+  your calendar and habits, and add or check things off. See
+  [MCP server](#mcp-server).
+- **Public API** — the same data over plain REST, for scripts and automations.
+  See [Public API](#public-api).
 - **Scheduling agent** — an Anthropic-powered assistant (`api/agent.ts`) that
   can read and change your calendar, tasks, homework, habits and countdowns,
   plan your day, and auto-schedule tasks into free calendar time.
+
+## MCP server
+
+FourFold is an [MCP](https://modelcontextprotocol.io) server at `/api/mcp`, so an
+AI assistant can use your data directly instead of you wiring up REST calls.
+Pick whichever way your assistant supports — two ways to sign in:
+
+- **Approve in the browser (OAuth).** Give the assistant just the URL; it opens
+  FourFold's sign-in, you click **Allow**, done. No token to copy, and **Settings →
+  Disconnect assistants** signs them all out. Assistants get an MCP-only token that
+  expires hourly and refreshes itself.
+- **Paste a token.** Generate one in **Settings → Personal API access** (the same
+  token the REST API uses) and send it as `Authorization: Bearer <token>`.
+
+`?tz=` — an IANA timezone such as `America/Los_Angeles` — sets what "today" means;
+every tool also takes an optional `timezone`. Settings shows these snippets with
+your URL and token already filled in.
+
+**Claude (claude.ai and Claude Desktop)** — *Settings → Connectors → Add custom
+connector*, name it FourFold, and paste
+`https://your-app.vercel.app/api/mcp?tz=America/Los_Angeles`. Leave the advanced
+client-id/secret fields empty (FourFold registers itself), then approve the
+sign-in. Works on the web, desktop and mobile once added.
+
+**Claude Code**
+
+```bash
+claude mcp add --transport http fourfold \
+  "https://your-app.vercel.app/api/mcp?tz=America/Los_Angeles" \
+  --header "Authorization: Bearer $TOKEN"
+```
+
+**Gemini CLI** — add to `~/.gemini/settings.json`, then run `/mcp` to check it
+says connected:
+
+```json
+{
+  "mcpServers": {
+    "fourfold": {
+      "httpUrl": "https://your-app.vercel.app/api/mcp?tz=America/Los_Angeles",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+(Leave out `headers` to use the browser sign-in instead. The tools' schemas stick
+to the subset of JSON Schema Gemini accepts.) The consumer Gemini web/mobile app
+can't add custom MCP servers — Gemini CLI is the supported route.
+
+Any other MCP client that speaks Streamable HTTP works the same way; for ones that
+only run local servers, bridge with
+`npx mcp-remote <url> --header "Authorization: Bearer $TOKEN"`.
+
+Then just ask: *"what's due this week?"*, *"add chem lab report due Friday to
+my homework"*, *"check off my reading habit"*.
+
+| Tool | What it does |
+| --- | --- |
+| `get_due` | **Start here.** Tasks *and* homework (typed-in + Schoology/Canvas/Classroom) merged into one list, overdue first then by due date, each marked `overdue` / `daysUntil` / quadrant. `days` (default 7), `include_overdue`, `include_done` |
+| `get_today` | Today at a glance: events, overdue/due-today/Do-first tasks, homework, habits left, nearest countdowns |
+| `list_tasks` · `list_homework` · `list_events` | Filtered lists (quadrant, status, class, `due_before`, `days`, `from`/`to`) |
+| `list_habits` · `list_countdowns` · `list_classes` · `list_calendars` · `list_friends` | Everything else, read-only |
+| `create_task` · `update_task` · `delete_task` | Matrix tasks. `update_task` completes, moves quadrant, reschedules, locks |
+| `create_homework` · `update_homework` · `delete_homework` | Homework by class. Imported assignments only accept `done` |
+| `create_event` · `update_event` · `delete_event` | Calendar events (FourFold, Google, or ICS overrides) |
+| `set_habit_done` | Check a habit off (or un-check it) for today or a past day |
+
+Tools run the exact same code as the REST API (`api/_lib/fourfold.ts`), so
+validation, "set in stone" locking and quadrant rules are identical. Problems
+(a locked item, a bad date, an unknown id) come back as a readable tool error the
+model can act on, not a protocol failure. The server is stateless — no sessions,
+no streaming.
+
+OAuth details (for the curious): `/api/oauth` implements OAuth 2.1 with PKCE (S256
+only), dynamic client registration (public clients; redirect URIs must be https or
+localhost) and refresh tokens, advertised through
+`/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`.
+Registration is open, so the **Allow** screen shows who is asking and where they'll
+be sent — only approve a connection you just started. Codes are single-use and
+every token is HMAC-signed with `SESSION_SECRET`, so no extra setup is needed.
 
 ## Public API
 

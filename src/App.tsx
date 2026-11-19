@@ -29,6 +29,7 @@ import { PomodoroPage } from './pages/Pomodoro';
 import { AgentPage } from './pages/Agent';
 import { SchoolPage } from './pages/School';
 import { SettingsPage } from './pages/Settings';
+import { ConnectPage } from './pages/Connect';
 
 function App() {
   return (
@@ -67,6 +68,7 @@ function App() {
                     <Route path="/agent" element={<AgentPage />} />
                     <Route path="/school" element={<SchoolPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/connect" element={<ConnectPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </main>

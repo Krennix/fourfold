@@ -32,9 +32,12 @@ function runRedis(cmd: unknown[]): { result: unknown } | { error: string } {
   switch (name) {
     case 'get':
       return { result: memory.get(String(args[0])) ?? null };
-    case 'set':
+    case 'set': {
+      // Honour NX (set only if absent), which the single-use OAuth codes rely on.
+      if (args.slice(2).some((a) => String(a).toLowerCase() === 'nx') && memory.has(String(args[0]))) return { result: null };
       memory.set(String(args[0]), String(args[1]));
       return { result: 'OK' };
+    }
     case 'del': {
       let n = 0;
       for (const k of args) if (memory.delete(String(k))) n++;
@@ -69,7 +72,9 @@ function rewrite(url: URL): URL {
     return dest;
   }
   for (const r of vercelConfig.rewrites) {
-    if (r.source === url.pathname && r.destination.startsWith('/api/')) {
+    // Exact sources, plus "/prefix/:path*" patterns (e.g. /.well-known/oauth-protected-resource/api/mcp).
+    const matches = r.source.endsWith('/:path*') ? url.pathname.startsWith(r.source.slice(0, -'/:path*'.length) + '/') : r.source === url.pathname;
+    if (matches && r.destination.startsWith('/api/')) {
       const dest = new URL(r.destination, url.origin);
       url.searchParams.forEach((v, k) => dest.searchParams.set(k, v));
       return dest;
